@@ -5,12 +5,21 @@ import { useCallback, useEffect, useRef, useState } from "react"
 const PYODIDE_VERSION = "0.26.4"
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`
 
+const CONTROL_LEN = 2 // Int32Array: [0]=state, [1]=byte length
+const DATA_BYTES = 1 << 16 // 64 KB input buffer
+
+const STATE_WAITING = 0
+const STATE_READY = 1
+const STATE_EOF = 2
+
+export type RunStatus = "loading" | "ready" | "running" | "error"
+export type OutputFn = (text: string, kind: "out" | "err") => void
+
 type PyodideInterface = {
   runPythonAsync: (code: string) => Promise<unknown>
   setStdout: (opts: { batched: (s: string) => void }) => void
   setStderr: (opts: { batched: (s: string) => void }) => void
   setStdin: (opts: { stdin: () => string | null | undefined; autoEOF?: boolean }) => void
-  globals: { get: (k: string) => unknown }
 }
 
 declare global {
@@ -19,17 +28,79 @@ declare global {
   }
 }
 
-export type RunStatus = "loading" | "ready" | "running" | "error"
-
 export function usePyodide() {
-  const pyodideRef = useRef<PyodideInterface | null>(null)
   const [status, setStatus] = useState<RunStatus>("loading")
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [awaitingInput, setAwaitingInput] = useState(false)
+  const [interactive, setInteractive] = useState(false)
+
+  // Worker-mode refs
+  const workerRef = useRef<Worker | null>(null)
+  const controlRef = useRef<Int32Array | null>(null)
+  const dataRef = useRef<Uint8Array | null>(null)
+  const outputRef = useRef<OutputFn | null>(null)
+  const resolveRef = useRef<(() => void) | null>(null)
+
+  // Main-thread fallback ref
+  const pyodideRef = useRef<PyodideInterface | null>(null)
 
   useEffect(() => {
+    const canSAB =
+      typeof SharedArrayBuffer !== "undefined" &&
+      typeof window !== "undefined" &&
+      window.crossOriginIsolated === true
+
     let cancelled = false
 
-    async function load() {
+    if (canSAB) {
+      setInteractive(true)
+      const worker = new Worker("/pyodide-worker.js")
+      workerRef.current = worker
+
+      const controlSAB = new SharedArrayBuffer(CONTROL_LEN * Int32Array.BYTES_PER_ELEMENT)
+      const dataSAB = new SharedArrayBuffer(DATA_BYTES)
+      controlRef.current = new Int32Array(controlSAB)
+      dataRef.current = new Uint8Array(dataSAB)
+
+      worker.onmessage = (e: MessageEvent) => {
+        const m = e.data
+        switch (m.type) {
+          case "ready":
+            setStatus("ready")
+            break
+          case "stdout":
+            outputRef.current?.(m.text, "out")
+            break
+          case "stderr":
+            outputRef.current?.(m.text, "err")
+            break
+          case "input":
+            setAwaitingInput(true)
+            break
+          case "done":
+            setAwaitingInput(false)
+            setStatus("ready")
+            resolveRef.current?.()
+            resolveRef.current = null
+            break
+          case "fatal":
+            setLoadError(m.error || "Failed to load Python runtime")
+            setStatus("error")
+            break
+        }
+      }
+
+      worker.postMessage({ type: "init", control: controlSAB, data: dataSAB })
+
+      return () => {
+        cancelled = true
+        worker.terminate()
+      }
+    }
+
+    // Fallback: run on the main thread and use window.prompt for input().
+    setInteractive(false)
+    async function loadMainThread() {
       try {
         if (!window.loadPyodide) {
           await new Promise<void>((resolve, reject) => {
@@ -51,52 +122,62 @@ export function usePyodide() {
         setStatus("error")
       }
     }
-
-    load()
+    loadMainThread()
     return () => {
       cancelled = true
     }
   }, [])
 
   const run = useCallback(
-    async (
-      code: string,
-      onOutput: (line: string, kind: "out" | "err") => void,
-      stdin?: string,
-    ) => {
-      const pyodide = pyodideRef.current
-      if (!pyodide) return
-      setStatus("running")
-      pyodide.setStdout({ batched: (s) => onOutput(s, "out") })
-      pyodide.setStderr({ batched: (s) => onOutput(s, "err") })
+    (code: string, onOutput: OutputFn): Promise<void> => {
+      // Worker mode: stream output over postMessage, resolve on "done".
+      if (workerRef.current && controlRef.current) {
+        return new Promise<void>((resolve) => {
+          outputRef.current = onOutput
+          resolveRef.current = resolve
+          setStatus("running")
+          workerRef.current!.postMessage({ type: "run", code })
+        })
+      }
 
-      // Feed pre-typed stdin lines first; when exhausted, fall back to an
-      // interactive browser prompt so students can type input on demand.
-      const queued = stdin && stdin.length > 0 ? stdin.replace(/\r\n/g, "\n").split("\n") : []
-      // A trailing newline in the buffer produces one empty element — drop it.
-      if (queued.length > 0 && queued[queued.length - 1] === "") queued.pop()
-      let idx = 0
+      // Fallback: main-thread execution with a blocking prompt for input().
+      const pyodide = pyodideRef.current
+      if (!pyodide) return Promise.resolve()
+      setStatus("running")
+      pyodide.setStdout({ batched: (s) => onOutput(s + "\n", "out") })
+      pyodide.setStderr({ batched: (s) => onOutput(s + "\n", "err") })
       pyodide.setStdin({
+        autoEOF: false,
         stdin: () => {
-          if (idx < queued.length) return queued[idx++]
-          if (typeof window !== "undefined") {
-            const val = window.prompt("Program input (stdin):")
-            return val === null ? undefined : val
-          }
-          return undefined
+          const val = typeof window !== "undefined" ? window.prompt("Program input:") : null
+          return val === null ? null : val + "\n"
         },
       })
-
-      try {
-        await pyodide.runPythonAsync(code)
-      } catch (err) {
-        onOutput(err instanceof Error ? err.message : String(err), "err")
-      } finally {
-        setStatus("ready")
-      }
+      return pyodide
+        .runPythonAsync(code)
+        .catch((err: unknown) => {
+          onOutput((err instanceof Error ? err.message : String(err)) + "\n", "err")
+        })
+        .finally(() => {
+          setStatus("ready")
+        }) as Promise<void>
     },
     [],
   )
 
-  return { status, loadError, run }
+  // Send a line the user typed in the console to the blocked worker.
+  const submitInput = useCallback((text: string) => {
+    const control = controlRef.current
+    const data = dataRef.current
+    if (!control || !data) return
+    const bytes = new TextEncoder().encode(text + "\n")
+    const len = Math.min(bytes.length, data.length)
+    data.set(bytes.subarray(0, len))
+    Atomics.store(control, 1, len)
+    Atomics.store(control, 0, STATE_READY)
+    Atomics.notify(control, 0)
+    setAwaitingInput(false)
+  }, [])
+
+  return { status, loadError, awaitingInput, interactive, run, submitInput }
 }
