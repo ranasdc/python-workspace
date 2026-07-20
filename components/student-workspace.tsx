@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
@@ -322,10 +323,10 @@ function NewFileDialog({ onCreate }: { onCreate: (name: string) => Promise<void>
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file">
-          <Plus className="h-4 w-4" />
-        </Button>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file" />}
+      >
+        <Plus className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -386,7 +387,7 @@ function JoinClassDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogTrigger render={trigger as React.ReactElement} />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Join a class</DialogTitle>

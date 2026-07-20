@@ -17,6 +17,7 @@ const trustedOrigins = [
   process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : undefined,
+  ...(isDev ? ["http://localhost:3000"] : []),
 ].filter(Boolean) as string[]
 
 export const auth = betterAuth({

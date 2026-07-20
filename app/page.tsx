@@ -18,12 +18,10 @@ export default async function HomePage() {
           <span className="text-lg font-semibold">PyClass</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost">
-            <Link href="/sign-in">Sign in</Link>
+          <Button render={<Link href="/sign-in" />} variant="ghost">
+            Sign in
           </Button>
-          <Button asChild>
-            <Link href="/sign-up">Get started</Link>
-          </Button>
+          <Button render={<Link href="/sign-up" />}>Get started</Button>
         </div>
       </header>
 
@@ -40,13 +38,11 @@ export default async function HomePage() {
           teacher&apos;s dashboard, neatly organized by class, student, and file.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button asChild size="lg">
-            <Link href="/sign-up">
-              Start coding <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
+          <Button render={<Link href="/sign-up" />} size="lg">
+            Start coding <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
-          <Button asChild size="lg" variant="outline">
-            <Link href="/sign-in">I already have an account</Link>
+          <Button render={<Link href="/sign-in" />} size="lg" variant="outline">
+            I already have an account
           </Button>
         </div>
 
