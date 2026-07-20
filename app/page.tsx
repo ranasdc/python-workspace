@@ -49,7 +49,17 @@ export default async function HomePage() {
           </Button>
         </div>
 
-        <div className="mt-16 grid w-full gap-4 sm:grid-cols-3">
+        <div className="relative mt-16 w-full">
+          {/* Soft color glows so the frosted-glass blur has something to work with */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-6 -z-10 overflow-hidden"
+          >
+            <div className="absolute left-[8%] top-0 h-48 w-48 rounded-full bg-primary/30 blur-3xl" />
+            <div className="absolute left-1/2 top-10 h-56 w-56 -translate-x-1/2 rounded-full bg-accent/40 blur-3xl" />
+            <div className="absolute right-[8%] bottom-0 h-48 w-48 rounded-full bg-chart-2/30 blur-3xl" />
+          </div>
+          <div className="grid w-full gap-4 sm:grid-cols-3">
           <Card
             image="/images/students.png"
             imageAlt="Illustration of a student writing Python code on a laptop"
@@ -71,6 +81,7 @@ export default async function HomePage() {
             title="Organized"
             desc="Class then Student then File. Always know who wrote what, and when it was last updated."
           />
+          </div>
         </div>
       </section>
 
@@ -95,8 +106,8 @@ function Card({
   imageAlt: string
 }) {
   return (
-    <div className="group flex flex-col items-start gap-3 overflow-hidden rounded-xl border border-border bg-card text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <div className="aspect-[16/10] w-full overflow-hidden bg-secondary">
+    <div className="group flex flex-col items-start gap-3 overflow-hidden rounded-2xl border border-white/20 bg-card/40 text-left shadow-lg ring-1 ring-white/10 backdrop-blur-xl backdrop-saturate-150 transition-all duration-300 hover:-translate-y-1 hover:bg-card/55 hover:shadow-xl">
+      <div className="aspect-[16/10] w-full overflow-hidden bg-secondary/50">
         <Image
           src={image || "/placeholder.svg"}
           alt={imageAlt}
