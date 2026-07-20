@@ -16,6 +16,10 @@ const stdoutDecoder = new TextDecoder()
 const stderrDecoder = new TextDecoder()
 const inputDecoder = new TextDecoder()
 
+// Buffered line the current input() call is consuming, plus a read cursor.
+let inputBuffer = ""
+let inputPos = 0
+
 // state values written by the main thread into control[0]
 const STATE_WAITING = 0
 const STATE_READY = 1
@@ -40,19 +44,33 @@ async function init(controlSAB, dataSAB) {
     },
   })
   pyodide.setStdin({
-    autoEOF: false,
-    stdin: () => {
-      // Ask the main thread for a line, then block until it writes one.
-      Atomics.store(control, 0, STATE_WAITING)
-      self.postMessage({ type: "input" })
-      Atomics.wait(control, 0, STATE_WAITING)
+    // Return whole lines. Pyodide calls read() with our stdin repeatedly; we
+    // hand back one full line (including its trailing "\n") per call, blocking
+    // on the main thread for each new line. Returning a string here is treated
+    // as a complete read chunk, so one typed line satisfies one input() call.
+    read: (buffer) => {
+      // Fetch a fresh line from the main thread if the current one is drained.
+      if (inputPos >= inputBuffer.length) {
+        Atomics.store(control, 0, STATE_WAITING)
+        self.postMessage({ type: "input" })
+        Atomics.wait(control, 0, STATE_WAITING)
 
-      if (Atomics.load(control, 0) === STATE_EOF) return null
-      const len = Atomics.load(control, 1)
-      // Copy out of the SharedArrayBuffer before decoding (TextDecoder cannot
-      // read directly from a shared buffer view).
-      const bytes = dataBuf.slice(0, len)
-      return inputDecoder.decode(bytes)
+        if (Atomics.load(control, 0) === STATE_EOF) return 0 // EOF
+
+        const len = Atomics.load(control, 1)
+        const bytes = dataBuf.slice(0, len)
+        inputBuffer = inputDecoder.decode(bytes)
+        inputPos = 0
+      }
+
+      // Copy as much of the remaining line as fits into Pyodide's buffer.
+      const remaining = inputBuffer.slice(inputPos)
+      const encoded = new TextEncoder().encode(remaining)
+      const n = Math.min(encoded.length, buffer.length)
+      buffer.set(encoded.subarray(0, n))
+      // Advance the cursor by however many characters the bytes represent.
+      inputPos += inputDecoder.decode(encoded.subarray(0, n)).length
+      return n
     },
   })
 
@@ -71,6 +89,8 @@ self.onmessage = async (e) => {
   }
   if (msg.type === "run") {
     if (!pyodide) return
+    inputBuffer = ""
+    inputPos = 0
     try {
       await pyodide.runPythonAsync(msg.code)
     } catch (err) {
