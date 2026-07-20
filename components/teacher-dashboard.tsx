@@ -34,7 +34,6 @@ import {
   BookOpen,
   Check,
   Play,
-  Terminal,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -153,31 +152,25 @@ function ClassDetail({
   })
   const [selected, setSelected] = useState<{ student: TreeStudent; file: TreeFile } | null>(null)
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
-  const [stdin, setStdin] = useState("")
 
-  const { status, loadError, run } = pyodide
+  const { status, loadError, awaitingInput, interactive, run, submitInput } = pyodide
 
   // Clear the previous output whenever the teacher opens a different file.
   useEffect(() => {
     setConsoleLines([])
-    setStdin("")
   }, [selected?.file.id])
 
   async function handleRun() {
     if (!selected) return
-    setConsoleLines([{ text: "Running...", kind: "info" }])
-    const collected: ConsoleLine[] = []
-    await run(
-      selected.file.content,
-      (line, kind) => {
-        collected.push({ text: line, kind })
-        setConsoleLines([...collected])
-      },
-      stdin,
-    )
-    if (collected.length === 0) {
-      setConsoleLines([{ text: "Finished with no output.", kind: "info" }])
-    }
+    setConsoleLines([])
+    await run(selected.file.content, (text, kind) => {
+      setConsoleLines((prev) => [...prev, { text, kind }])
+    })
+  }
+
+  function handleSubmitInput(text: string) {
+    setConsoleLines((prev) => [...prev, { text: text + "\n", kind: "in" }])
+    submitInput(text)
   }
 
   return (
@@ -261,31 +254,18 @@ function ClassDetail({
                 <div className="min-h-0 border-b border-border">
                   <CodeEditor value={selected.file.content} readOnly />
                 </div>
-                <div className="flex min-h-0 flex-col">
-                  <div className="flex flex-col gap-1.5 border-b border-border bg-card px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-                      <Label className="text-xs font-medium text-muted-foreground">
-                        Program input (stdin)
-                      </Label>
-                    </div>
-                    <Textarea
-                      value={stdin}
-                      onChange={(e) => setStdin(e.target.value)}
-                      placeholder="Provide input for input() calls — one value per line."
-                      rows={2}
-                      className="resize-none font-mono text-xs"
-                    />
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <PythonConsole
-                      lines={
-                        loadError
-                          ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                          : consoleLines
-                      }
-                    />
-                  </div>
+                <div className="min-h-0">
+                  <PythonConsole
+                    lines={
+                      loadError
+                        ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
+                        : consoleLines
+                    }
+                    running={status === "running"}
+                    awaitingInput={awaitingInput}
+                    interactive={interactive}
+                    onSubmitInput={handleSubmitInput}
+                  />
                 </div>
               </div>
             </>

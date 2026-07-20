@@ -9,7 +9,6 @@ import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -31,7 +30,6 @@ import {
   Check,
   Users,
   FolderPlus,
-  Terminal,
 } from "lucide-react"
 
 type ClassItem = {
@@ -61,9 +59,8 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
   const [draft, setDraft] = useState("")
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
-  const [stdin, setStdin] = useState("")
 
-  const { status, loadError, run } = usePyodide()
+  const { status, loadError, awaitingInput, interactive, run, submitInput } = usePyodide()
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const filesKey = activeClassId ? ["files", activeClassId] : null
@@ -114,21 +111,18 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
 
   async function handleRun() {
     if (!activeFile) return
-    setConsoleLines([{ text: "Running...", kind: "info" }])
-    const collected: ConsoleLine[] = []
-    await run(
-      draft,
-      (line, kind) => {
-        collected.push({ text: line, kind })
-        setConsoleLines([...collected])
-      },
-      stdin,
-    )
-    if (collected.length === 0) {
-      setConsoleLines([{ text: "Finished with no output.", kind: "info" }])
-    }
+    setConsoleLines([])
+    await run(draft, (text, kind) => {
+      setConsoleLines((prev) => [...prev, { text, kind }])
+    })
     // Ensure latest code is saved right after running
     if (activeFileId) persist(activeFileId, draft)
+  }
+
+  function handleSubmitInput(text: string) {
+    // Echo the typed line into the console, then hand it to the runtime.
+    setConsoleLines((prev) => [...prev, { text: text + "\n", kind: "in" }])
+    submitInput(text)
   }
 
   async function handleCreateFile(name: string) {
@@ -280,31 +274,18 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
               </div>
             )}
           </div>
-          <div className="flex min-h-0 flex-col">
-            <div className="flex flex-col gap-1.5 border-b border-border bg-card px-3 py-2">
-              <div className="flex items-center gap-2">
-                <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Program input (stdin)
-                </Label>
-              </div>
-              <Textarea
-                value={stdin}
-                onChange={(e) => setStdin(e.target.value)}
-                placeholder="Type input for input() calls here — one value per line. If empty, you'll be prompted while the program runs."
-                rows={2}
-                className="resize-none font-mono text-xs"
-              />
-            </div>
-            <div className="min-h-0 flex-1">
-              <PythonConsole
-                lines={
-                  loadError
-                    ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                    : consoleLines
-                }
-              />
-            </div>
+          <div className="min-h-0">
+            <PythonConsole
+              lines={
+                loadError
+                  ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
+                  : consoleLines
+              }
+              running={status === "running"}
+              awaitingInput={awaitingInput}
+              interactive={interactive}
+              onSubmitInput={handleSubmitInput}
+            />
           </div>
         </div>
       </div>
