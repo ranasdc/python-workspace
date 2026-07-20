@@ -9,6 +9,7 @@ type PyodideInterface = {
   runPythonAsync: (code: string) => Promise<unknown>
   setStdout: (opts: { batched: (s: string) => void }) => void
   setStderr: (opts: { batched: (s: string) => void }) => void
+  setStdin: (opts: { stdin: () => string | null | undefined; autoEOF?: boolean }) => void
   globals: { get: (k: string) => unknown }
 }
 
@@ -58,12 +59,34 @@ export function usePyodide() {
   }, [])
 
   const run = useCallback(
-    async (code: string, onOutput: (line: string, kind: "out" | "err") => void) => {
+    async (
+      code: string,
+      onOutput: (line: string, kind: "out" | "err") => void,
+      stdin?: string,
+    ) => {
       const pyodide = pyodideRef.current
       if (!pyodide) return
       setStatus("running")
       pyodide.setStdout({ batched: (s) => onOutput(s, "out") })
       pyodide.setStderr({ batched: (s) => onOutput(s, "err") })
+
+      // Feed pre-typed stdin lines first; when exhausted, fall back to an
+      // interactive browser prompt so students can type input on demand.
+      const queued = stdin && stdin.length > 0 ? stdin.replace(/\r\n/g, "\n").split("\n") : []
+      // A trailing newline in the buffer produces one empty element — drop it.
+      if (queued.length > 0 && queued[queued.length - 1] === "") queued.pop()
+      let idx = 0
+      pyodide.setStdin({
+        stdin: () => {
+          if (idx < queued.length) return queued[idx++]
+          if (typeof window !== "undefined") {
+            const val = window.prompt("Program input (stdin):")
+            return val === null ? undefined : val
+          }
+          return undefined
+        },
+      })
+
       try {
         await pyodide.runPythonAsync(code)
       } catch (err) {

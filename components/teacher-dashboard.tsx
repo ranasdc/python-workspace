@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import useSWR, { mutate } from "swr"
+import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
+import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,6 +33,8 @@ import {
   FolderTree,
   BookOpen,
   Check,
+  Play,
+  Terminal,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -68,6 +72,10 @@ export function TeacherDashboard({
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
   )
+
+  // Load the Python runtime once for the whole dashboard so switching between
+  // student files doesn't re-download Pyodide each time.
+  const pyodide = usePyodide()
 
   const list = classes ?? []
   const activeClass = list.find((c) => c.id === activeClassId) ?? null
@@ -121,7 +129,7 @@ export function TeacherDashboard({
       {/* Class detail */}
       <div className="min-h-0 flex-1 overflow-auto">
         {activeClass ? (
-          <ClassDetail key={activeClass.id} cls={activeClass} />
+          <ClassDetail key={activeClass.id} cls={activeClass} pyodide={pyodide} />
         ) : (
           <EmptyTeacherState onCreated={async (id) => {
             await mutate("teacher-classes")
@@ -133,11 +141,44 @@ export function TeacherDashboard({
   )
 }
 
-function ClassDetail({ cls }: { cls: ClassWithStudents }) {
+function ClassDetail({
+  cls,
+  pyodide,
+}: {
+  cls: ClassWithStudents
+  pyodide: ReturnType<typeof usePyodide>
+}) {
   const { data } = useSWR(["class-tree", cls.id], () => getClassTree(cls.id), {
     revalidateOnFocus: false,
   })
   const [selected, setSelected] = useState<{ student: TreeStudent; file: TreeFile } | null>(null)
+  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  const [stdin, setStdin] = useState("")
+
+  const { status, loadError, run } = pyodide
+
+  // Clear the previous output whenever the teacher opens a different file.
+  useEffect(() => {
+    setConsoleLines([])
+    setStdin("")
+  }, [selected?.file.id])
+
+  async function handleRun() {
+    if (!selected) return
+    setConsoleLines([{ text: "Running...", kind: "info" }])
+    const collected: ConsoleLine[] = []
+    await run(
+      selected.file.content,
+      (line, kind) => {
+        collected.push({ text: line, kind })
+        setConsoleLines([...collected])
+      },
+      stdin,
+    )
+    if (collected.length === 0) {
+      setConsoleLines([{ text: "Finished with no output.", kind: "info" }])
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -191,12 +232,61 @@ function ClassDetail({ cls }: { cls: ClassWithStudents }) {
                   <span className="font-medium">{selected.file.name}</span>
                   <span className="text-muted-foreground">— {selected.student.name}</span>
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  Updated {new Date(selected.file.updatedAt).toLocaleString()}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="hidden text-xs text-muted-foreground sm:inline">
+                    Updated {new Date(selected.file.updatedAt).toLocaleString()}
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={handleRun}
+                    disabled={status === "loading" || status === "running"}
+                  >
+                    {status === "loading" ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
+                      </>
+                    ) : status === "running" ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-1.5 h-4 w-4" /> Run
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <div className="min-h-0 flex-1">
-                <CodeEditor value={selected.file.content} readOnly />
+              <div className="grid min-h-0 flex-1 grid-rows-2">
+                <div className="min-h-0 border-b border-border">
+                  <CodeEditor value={selected.file.content} readOnly />
+                </div>
+                <div className="flex min-h-0 flex-col">
+                  <div className="flex flex-col gap-1.5 border-b border-border bg-card px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        Program input (stdin)
+                      </Label>
+                    </div>
+                    <Textarea
+                      value={stdin}
+                      onChange={(e) => setStdin(e.target.value)}
+                      placeholder="Provide input for input() calls — one value per line."
+                      rows={2}
+                      className="resize-none font-mono text-xs"
+                    />
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <PythonConsole
+                      lines={
+                        loadError
+                          ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
+                          : consoleLines
+                      }
+                    />
+                  </div>
+                </div>
               </div>
             </>
           ) : (
@@ -305,10 +395,10 @@ function CreateClassDialog({ onCreated }: { onCreated: (id: number) => Promise<v
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Create class">
-          <Plus className="h-4 w-4" />
-        </Button>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Create class" />}
+      >
+        <Plus className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
@@ -8,6 +9,7 @@ import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ import {
   Check,
   Users,
   FolderPlus,
+  Terminal,
 } from "lucide-react"
 
 type ClassItem = {
@@ -58,6 +61,7 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
   const [draft, setDraft] = useState("")
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  const [stdin, setStdin] = useState("")
 
   const { status, loadError, run } = usePyodide()
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -112,10 +116,14 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
     if (!activeFile) return
     setConsoleLines([{ text: "Running...", kind: "info" }])
     const collected: ConsoleLine[] = []
-    await run(draft, (line, kind) => {
-      collected.push({ text: line, kind })
-      setConsoleLines([...collected])
-    })
+    await run(
+      draft,
+      (line, kind) => {
+        collected.push({ text: line, kind })
+        setConsoleLines([...collected])
+      },
+      stdin,
+    )
     if (collected.length === 0) {
       setConsoleLines([{ text: "Finished with no output.", kind: "info" }])
     }
@@ -272,13 +280,32 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
               </div>
             )}
           </div>
-          <PythonConsole
-            lines={
-              loadError
-                ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                : consoleLines
-            }
-          />
+          <div className="flex min-h-0 flex-col">
+            <div className="flex flex-col gap-1.5 border-b border-border bg-card px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Program input (stdin)
+                </Label>
+              </div>
+              <Textarea
+                value={stdin}
+                onChange={(e) => setStdin(e.target.value)}
+                placeholder="Type input for input() calls here — one value per line. If empty, you'll be prompted while the program runs."
+                rows={2}
+                className="resize-none font-mono text-xs"
+              />
+            </div>
+            <div className="min-h-0 flex-1">
+              <PythonConsole
+                lines={
+                  loadError
+                    ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
+                    : consoleLines
+                }
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -322,10 +349,10 @@ function NewFileDialog({ onCreate }: { onCreate: (name: string) => Promise<void>
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file">
-          <Plus className="h-4 w-4" />
-        </Button>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file" />}
+      >
+        <Plus className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -386,7 +413,7 @@ function JoinClassDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogTrigger render={trigger as React.ReactElement} />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Join a class</DialogTitle>
