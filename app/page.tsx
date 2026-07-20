@@ -49,19 +49,6 @@ export default async function HomePage() {
           </Button>
         </div>
 
-        <div className="group mt-16 w-full max-w-4xl [perspective:1600px]">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl transition-transform duration-500 ease-out will-change-transform group-hover:[transform:rotateX(4deg)_scale(1.02)]">
-            <Image
-              src="/images/hero-ide.png"
-              alt="A light-themed Python code editor with syntax highlighting and an output console"
-              width={1600}
-              height={1000}
-              priority
-              className="h-auto w-full"
-            />
-          </div>
-        </div>
-
         <div className="mt-16 grid w-full gap-4 sm:grid-cols-3">
           <Card
             image="/images/students.png"
@@ -109,13 +96,13 @@ function Card({
 }) {
   return (
     <div className="group flex flex-col items-start gap-3 overflow-hidden rounded-xl border border-border bg-card text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <div className="w-full overflow-hidden bg-secondary">
+      <div className="flex w-full items-center justify-center overflow-hidden bg-secondary p-4">
         <Image
           src={image || "/placeholder.svg"}
           alt={imageAlt}
           width={600}
           height={400}
-          className="h-40 w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+          className="h-36 w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
         />
       </div>
       <div className="flex flex-col items-start gap-3 p-5">
