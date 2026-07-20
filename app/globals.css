@@ -128,17 +128,17 @@
 }
 
 /*
-  PyCharm "Darcula"-style code editor theme.
+  PyCharm "IntelliJ Light"-style code editor theme on a white background.
   This is an intentionally fixed, specialized editor surface (like a real IDE),
   so it uses its own dedicated palette independent of the app design tokens.
 */
 .pycharm-editor {
-  --pc-bg: #2b2b2b;
-  --pc-gutter-bg: #313335;
-  --pc-gutter-fg: #606366;
-  --pc-text: #a9b7c6;
-  --pc-caret: #ffffff;
-  --pc-selection: #214283;
+  --pc-bg: #ffffff;
+  --pc-gutter-bg: #f7f8fa;
+  --pc-gutter-fg: #adadad;
+  --pc-text: #080808;
+  --pc-caret: #000000;
+  --pc-selection: #a6d2ff;
   background-color: var(--pc-bg);
   font-family: var(--font-mono);
 }
@@ -146,7 +146,7 @@
 .pycharm-gutter {
   background-color: var(--pc-gutter-bg);
   color: var(--pc-gutter-fg);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .pycharm-code {
@@ -165,47 +165,48 @@ textarea.pycharm-code::selection {
   background: var(--pc-selection);
 }
 textarea.pycharm-code::placeholder {
-  color: #808080;
+  color: #9aa0a6;
 }
 
-/* Prism token colors — PyCharm Darcula palette */
+/* Prism token colors — PyCharm / IntelliJ Light palette */
 .code-highlight .token.comment,
 .code-highlight .token.prolog,
 .code-highlight .token.doc-comment {
-  color: #808080;
+  color: #8c8c8c;
   font-style: italic;
 }
 .code-highlight .token.triple-quoted-string,
 .code-highlight .token.string,
 .code-highlight .token.char {
-  color: #6a8759;
+  color: #067d17;
 }
 .code-highlight .token.string-interpolation {
-  color: #a9b7c6;
+  color: #080808;
 }
 .code-highlight .token.number,
 .code-highlight .token.boolean {
-  color: #6897bb;
+  color: #1750eb;
 }
 .code-highlight .token.keyword {
-  color: #cc7832;
+  color: #0033b3;
+  font-weight: 600;
 }
 .code-highlight .token.builtin {
-  color: #8888c6;
+  color: #871094;
 }
 .code-highlight .token.function {
-  color: #ffc66d;
+  color: #00627a;
 }
 .code-highlight .token.class-name {
-  color: #a9b7c6;
+  color: #080808;
   font-weight: 600;
 }
 .code-highlight .token.decorator,
 .code-highlight .token.annotation {
-  color: #bbb529;
+  color: #9e880d;
 }
 .code-highlight .token.operator,
 .code-highlight .token.punctuation {
-  color: #a9b7c6;
+  color: #080808;
   background: transparent;
 }
