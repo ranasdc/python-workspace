@@ -126,3 +126,86 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+  PyCharm "Darcula"-style code editor theme.
+  This is an intentionally fixed, specialized editor surface (like a real IDE),
+  so it uses its own dedicated palette independent of the app design tokens.
+*/
+.pycharm-editor {
+  --pc-bg: #2b2b2b;
+  --pc-gutter-bg: #313335;
+  --pc-gutter-fg: #606366;
+  --pc-text: #a9b7c6;
+  --pc-caret: #ffffff;
+  --pc-selection: #214283;
+  background-color: var(--pc-bg);
+  font-family: var(--font-mono);
+}
+
+.pycharm-gutter {
+  background-color: var(--pc-gutter-bg);
+  color: var(--pc-gutter-fg);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pycharm-code {
+  font-family: var(--font-mono);
+  tab-size: 4;
+  color: var(--pc-text);
+}
+
+/* The editable textarea sits on top: transparent glyphs, visible caret. */
+textarea.pycharm-code {
+  color: transparent;
+  caret-color: var(--pc-caret);
+  background: transparent;
+}
+textarea.pycharm-code::selection {
+  background: var(--pc-selection);
+}
+textarea.pycharm-code::placeholder {
+  color: #808080;
+}
+
+/* Prism token colors — PyCharm Darcula palette */
+.code-highlight .token.comment,
+.code-highlight .token.prolog,
+.code-highlight .token.doc-comment {
+  color: #808080;
+  font-style: italic;
+}
+.code-highlight .token.triple-quoted-string,
+.code-highlight .token.string,
+.code-highlight .token.char {
+  color: #6a8759;
+}
+.code-highlight .token.string-interpolation {
+  color: #a9b7c6;
+}
+.code-highlight .token.number,
+.code-highlight .token.boolean {
+  color: #6897bb;
+}
+.code-highlight .token.keyword {
+  color: #cc7832;
+}
+.code-highlight .token.builtin {
+  color: #8888c6;
+}
+.code-highlight .token.function {
+  color: #ffc66d;
+}
+.code-highlight .token.class-name {
+  color: #a9b7c6;
+  font-weight: 600;
+}
+.code-highlight .token.decorator,
+.code-highlight .token.annotation {
+  color: #bbb529;
+}
+.code-highlight .token.operator,
+.code-highlight .token.punctuation {
+  color: #a9b7c6;
+  background: transparent;
+}
