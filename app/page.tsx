@@ -96,13 +96,13 @@ function Card({
 }) {
   return (
     <div className="group flex flex-col items-start gap-3 overflow-hidden rounded-xl border border-border bg-card text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <div className="flex w-full items-center justify-center overflow-hidden bg-secondary p-4">
+      <div className="aspect-[16/10] w-full overflow-hidden bg-secondary">
         <Image
           src={image || "/placeholder.svg"}
           alt={imageAlt}
           width={600}
           height={400}
-          className="h-36 w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+          className="h-full w-full object-cover object-center transition-transform duration-500 ease-out group-hover:scale-105"
         />
       </div>
       <div className="flex flex-col items-start gap-3 p-5">
