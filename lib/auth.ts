@@ -17,7 +17,9 @@ const trustedOrigins = [
   process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : undefined,
-  ...(isDev ? ["http://localhost:3000"] : []),
+  // The v0 sandbox preview is served from a rotating https://sb-*.vercel.run
+  // host, so trust that wildcard (and localhost) in development.
+  ...(isDev ? ["http://localhost:3000", "https://*.vercel.run"] : []),
 ].filter(Boolean) as string[]
 
 export const auth = betterAuth({
