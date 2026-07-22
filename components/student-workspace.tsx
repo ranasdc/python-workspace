@@ -6,6 +6,7 @@ import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
+import { ErrorHelper } from "@/components/error-helper"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -141,6 +142,14 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
 
   const activeClass = classes.find((c) => c.id === activeClassId) ?? null
 
+  // Collect any stderr output from the last run so we can offer error help.
+  const errorText = consoleLines
+    .filter((l) => l.kind === "err")
+    .map((l) => l.text)
+    .join("")
+    .trim()
+  const showErrorHelper = Boolean(errorText) && status !== "running" && !!activeFileId
+
   if (classes.length === 0) {
     return <EmptyState onJoined={(c) => {
       setClasses([c])
@@ -274,18 +283,28 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
               </div>
             )}
           </div>
-          <div className="min-h-0">
-            <PythonConsole
-              lines={
-                loadError
-                  ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                  : consoleLines
-              }
-              running={status === "running"}
-              awaitingInput={awaitingInput}
-              interactive={interactive}
-              onSubmitInput={handleSubmitInput}
-            />
+          <div className="flex min-h-0 flex-col">
+            <div className="min-h-0 flex-1">
+              <PythonConsole
+                lines={
+                  loadError
+                    ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
+                    : consoleLines
+                }
+                running={status === "running"}
+                awaitingInput={awaitingInput}
+                interactive={interactive}
+                onSubmitInput={handleSubmitInput}
+              />
+            </div>
+            {showErrorHelper && (
+              <ErrorHelper
+                key={`${activeFileId}:${errorText}`}
+                error={errorText}
+                code={draft}
+                fileId={activeFileId!}
+              />
+            )}
           </div>
         </div>
       </div>
