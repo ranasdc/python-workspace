@@ -1,4 +1,5 @@
 import type React from "react"
+import Link from "next/link"
 import { Play, FolderTree, GraduationCap } from "lucide-react"
 import { Logo } from "@/components/logo"
 
@@ -7,7 +8,9 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
     <div className="grid min-h-svh lg:grid-cols-2">
       {/* Brand / feature panel */}
       <div className="relative hidden flex-col justify-between bg-sidebar p-10 lg:flex">
-        <Logo iconClassName="h-10 w-10" textClassName="text-xl" showTagline />
+        <Link href="/">
+          <Logo iconClassName="h-10 w-10" textClassName="text-xl" showTagline />
+        </Link>
 
         <div className="max-w-sm">
           <h2 className="text-3xl font-semibold leading-tight text-balance text-sidebar-foreground">
