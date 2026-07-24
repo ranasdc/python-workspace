@@ -268,6 +268,41 @@ textarea.pycharm-code::placeholder {
   }
 }
 
+/* Gentle floating bob for devices / floating pills. */
+@keyframes pyide-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Marker pen wiggle while the teacher grades. */
+@keyframes pyide-wiggle {
+  0%,
+  100% {
+    transform: rotate(-8deg) translateY(0);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-2px);
+  }
+}
+
+/* Soft pulsing ring for "live" indicators. */
+@keyframes pyide-ping-soft {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pyide-anim * {
     animation: none !important;

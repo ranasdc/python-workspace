@@ -3,9 +3,9 @@
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { CodeTransferAnimation } from "@/components/code-transfer-animation"
+import { FeatureAnimation } from "@/components/feature-animations"
 import {
   Code2,
   Play,
@@ -263,26 +263,9 @@ export function LandingPage() {
                 </ul>
               </Reveal>
 
-              {/* Image */}
+              {/* Interactive animation */}
               <Reveal delay={120} className={flipped ? "md:order-1" : ""}>
-                <div className="group relative">
-                  <div
-                    aria-hidden
-                    className="absolute -inset-4 -z-10 rounded-3xl opacity-60 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
-                    style={{
-                      background: `color-mix(in oklch, var(--${s.accent}) 30%, transparent)`,
-                    }}
-                  />
-                  <div className="overflow-hidden rounded-2xl border border-white/20 bg-card/40 shadow-xl ring-1 ring-white/10 backdrop-blur-xl">
-                    <Image
-                      src={s.image || "/placeholder.svg"}
-                      alt={s.imageAlt}
-                      width={640}
-                      height={420}
-                      className="aspect-[16/10] h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                    />
-                  </div>
-                </div>
+                <FeatureAnimation id={s.id} />
               </Reveal>
             </div>
           </section>
