@@ -11,7 +11,17 @@ function getBaseURL() {
   return process.env.V0_RUNTIME_URL || "http://localhost:3000"
 }
 
+// Custom domains added in Vercel aren't known to Better Auth automatically, so
+// logins from them are rejected as an invalid origin. Set TRUSTED_ORIGINS to a
+// comma-separated list of your custom domain(s) — with the scheme, e.g.
+// "https://www.mycodingbook.com,https://mycodingbook.com" — to allow them.
+const customTrustedOrigins = (process.env.TRUSTED_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean)
+
 const trustedOrigins = [
+  ...customTrustedOrigins,
   process.env.V0_RUNTIME_URL,
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
   process.env.VERCEL_PROJECT_PRODUCTION_URL
