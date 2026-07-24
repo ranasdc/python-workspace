@@ -10,7 +10,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Code2 className="h-5 w-5" />
           </div>
-          <span className="text-lg font-semibold">PyClass</span>
+          <span className="text-lg font-semibold">My Code Pad</span>
         </div>
 
         <div className="max-w-sm">

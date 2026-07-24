@@ -144,7 +144,7 @@ export function LandingPage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Code2 className="h-5 w-5" />
           </div>
-          <span className="text-lg font-semibold">PyClass</span>
+          <span className="text-lg font-semibold">My Code Pad</span>
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
           {sections.map((s) => (
@@ -299,7 +299,7 @@ export function LandingPage() {
       </section>
 
       <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
-        PyClass — Python IDE for classrooms.
+        My Code Pad — Python IDE for classrooms.
       </footer>
     </main>
   )

@@ -27,7 +27,7 @@ export function AppHeader({
           <Code2 className="h-4 w-4" />
         </div>
         <div className="leading-tight">
-          <span className="block text-sm font-semibold">PyClass</span>
+          <span className="block text-sm font-semibold">My Code Pad</span>
           <span className="block text-xs capitalize text-muted-foreground">{role} workspace</span>
         </div>
       </div>

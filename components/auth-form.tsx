@@ -58,7 +58,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <Code2 className="h-6 w-6" />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
-          {mode === "sign-up" ? "Create your PyClass account" : "Welcome back to PyClass"}
+          {mode === "sign-up" ? "Create your My Code Pad account" : "Welcome back to My Code Pad"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground text-pretty">
           {mode === "sign-up"
