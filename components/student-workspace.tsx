@@ -18,8 +18,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { getStudentFiles, createFile, saveFile, deleteFile } from "@/app/actions/files"
+import {
+  getStudentFiles,
+  createFile,
+  saveFile,
+  deleteFile,
+  createStudentFolder,
+  deleteStudentFolder,
+} from "@/app/actions/files"
 import { joinClass } from "@/app/actions/classes"
+import { FileComments } from "@/components/file-comments"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -31,6 +39,12 @@ import {
   Check,
   Users,
   FolderPlus,
+  CheckCircle2,
+  Send,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react"
 
 type ClassItem = {
@@ -45,10 +59,29 @@ type FileItem = {
   id: number
   classId: number
   studentId: string
+  folderId: number | null
   name: string
   content: string
+  status: string
+  markedAt: Date | null
+  assignedByTeacher: boolean
   createdAt: Date
   updatedAt: Date
+}
+
+type FolderItem = {
+  id: number
+  classId: number
+  studentId: string
+  name: string
+  assignedByTeacher: boolean
+  createdAt: Date
+  files: FileItem[]
+}
+
+type FileTree = {
+  folders: FolderItem[]
+  rootFiles: FileItem[]
 }
 
 export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem[] }) {
@@ -65,22 +98,31 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const filesKey = activeClassId ? ["files", activeClassId] : null
-  const { data: files } = useSWR<FileItem[]>(filesKey, () => getStudentFiles(activeClassId!), {
-    revalidateOnFocus: false,
+  const { data: tree } = useSWR<FileTree>(filesKey, () => getStudentFiles(activeClassId!), {
+    revalidateOnFocus: true,
+    // Poll so teacher-distributed files and marking updates show up live.
+    refreshInterval: 6000,
   })
 
-  const activeFile = files?.find((f) => f.id === activeFileId) ?? null
+  // Flatten every file (root + inside folders) for selection lookups.
+  const allFiles: FileItem[] = tree
+    ? [...tree.rootFiles, ...tree.folders.flatMap((f) => f.files)]
+    : []
+  const hasAnyFiles = allFiles.length > 0
 
-  // Select the first file when files load / class changes
+  const activeFile = allFiles.find((f) => f.id === activeFileId) ?? null
+
+  // Select the first available file when data loads / class changes
   useEffect(() => {
-    if (files && files.length > 0 && !files.some((f) => f.id === activeFileId)) {
-      setActiveFileId(files[0].id)
+    if (!tree) return
+    if (hasAnyFiles && !allFiles.some((f) => f.id === activeFileId)) {
+      setActiveFileId(allFiles[0].id)
     }
-    if (files && files.length === 0) {
+    if (!hasAnyFiles) {
       setActiveFileId(null)
       setDraft("")
     }
-  }, [files, activeFileId])
+  }, [tree, activeFileId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load the active file's content into the editor draft
   useEffect(() => {
@@ -126,18 +168,31 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
     submitInput(text)
   }
 
-  async function handleCreateFile(name: string) {
+  async function handleCreateFile(name: string, folderId: number | null = null) {
     if (!activeClassId) return
-    const created = await createFile(activeClassId, name)
+    const created = await createFile(activeClassId, name, folderId)
     await mutate(filesKey)
     setActiveFileId(created.id)
     toast.success(`Created ${created.name}`)
+  }
+
+  async function handleCreateFolder(name: string) {
+    if (!activeClassId) return
+    const created = await createStudentFolder(activeClassId, name)
+    await mutate(filesKey)
+    toast.success(`Created folder ${created.name}`)
   }
 
   async function handleDeleteFile(fileId: number) {
     await deleteFile(fileId)
     await mutate(filesKey)
     toast.success("File deleted")
+  }
+
+  async function handleDeleteFolder(folderId: number) {
+    await deleteStudentFolder(folderId)
+    await mutate(filesKey)
+    toast.success("Folder deleted")
   }
 
   const activeClass = classes.find((c) => c.id === activeClassId) ?? null
@@ -197,38 +252,41 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
 
         <div className="flex items-center justify-between px-3 py-2">
           <Label className="text-xs uppercase tracking-wide text-muted-foreground">Files</Label>
-          <NewFileDialog onCreate={handleCreateFile} />
+          <div className="flex items-center gap-0.5">
+            <NewFolderDialog onCreate={handleCreateFolder} />
+            <NewFileDialog onCreate={(name) => handleCreateFile(name, null)} />
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">
-          {files === undefined ? (
+          {tree === undefined ? (
             <p className="px-2 text-sm text-muted-foreground">Loading...</p>
-          ) : files.length === 0 ? (
-            <p className="px-2 text-sm text-muted-foreground">No files yet. Create one to start.</p>
+          ) : !hasAnyFiles && tree.folders.length === 0 ? (
+            <p className="px-2 text-sm text-muted-foreground">
+              No files yet. Create a file or folder to start.
+            </p>
           ) : (
-            files.map((f) => (
-              <div
-                key={f.id}
-                className={cn(
-                  "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                  f.id === activeFileId ? "bg-muted font-medium" : "hover:bg-muted/60",
-                )}
-              >
-                <button
-                  onClick={() => setActiveFileId(f.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  <FileCode className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="truncate">{f.name}</span>
-                </button>
-                <button
-                  onClick={() => handleDeleteFile(f.id)}
-                  className="opacity-0 transition-opacity group-hover:opacity-100"
-                  aria-label={`Delete ${f.name}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                </button>
-              </div>
-            ))
+            <>
+              {tree.folders.map((folder) => (
+                <StudentFolderRow
+                  key={folder.id}
+                  folder={folder}
+                  activeFileId={activeFileId}
+                  onSelectFile={setActiveFileId}
+                  onDeleteFile={handleDeleteFile}
+                  onDeleteFolder={handleDeleteFolder}
+                  onCreateFile={(name) => handleCreateFile(name, folder.id)}
+                />
+              ))}
+              {tree.rootFiles.map((f) => (
+                <FileRow
+                  key={f.id}
+                  file={f}
+                  active={f.id === activeFileId}
+                  onSelect={() => setActiveFileId(f.id)}
+                  onDelete={() => handleDeleteFile(f.id)}
+                />
+              ))}
+            </>
           )}
         </div>
       </aside>
@@ -241,6 +299,11 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
               <>
                 <FileCode className="h-4 w-4 shrink-0 text-primary" />
                 <span className="truncate text-sm font-medium">{activeFile.name}</span>
+                {activeFile.status === "done" && (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-chart-3/15 px-2 py-0.5 text-xs font-semibold text-chart-3">
+                    <CheckCircle2 className="h-3 w-3" /> Marked done
+                  </span>
+                )}
                 <SaveIndicator state={saveState} />
               </>
             ) : (
@@ -307,7 +370,131 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
             )}
           </div>
         </div>
+
+        {/* Teacher feedback on the open file, updated in real time */}
+        {activeFile && (
+          <div className="h-56 shrink-0 border-t border-border bg-card">
+            <FileComments fileId={activeFile.id} canComment={false} />
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+function FileRow({
+  file,
+  active,
+  onSelect,
+  onDelete,
+  nested,
+}: {
+  file: FileItem
+  active: boolean
+  onSelect: () => void
+  onDelete: () => void
+  nested?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+        nested && "ml-4",
+        active ? "bg-muted font-medium" : "hover:bg-muted/60",
+      )}
+    >
+      <button
+        onClick={onSelect}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+      >
+        <FileCode className="h-4 w-4 shrink-0 text-primary" />
+        <span className="truncate">{file.name}</span>
+        {file.assignedByTeacher && (
+          <Send className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Assigned by teacher" />
+        )}
+        {file.status === "done" && (
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-chart-3" aria-label="Marked done" />
+        )}
+      </button>
+      <button
+        onClick={onDelete}
+        className="opacity-0 transition-opacity group-hover:opacity-100"
+        aria-label={`Delete ${file.name}`}
+      >
+        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+      </button>
+    </div>
+  )
+}
+
+function StudentFolderRow({
+  folder,
+  activeFileId,
+  onSelectFile,
+  onDeleteFile,
+  onDeleteFolder,
+  onCreateFile,
+}: {
+  folder: FolderItem
+  activeFileId: number | null
+  onSelectFile: (id: number) => void
+  onDeleteFile: (id: number) => void
+  onDeleteFolder: (id: number) => void
+  onCreateFile: (name: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(true)
+
+  return (
+    <div className="mb-0.5">
+      <div className="group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          {open ? (
+            <FolderOpen className="h-4 w-4 shrink-0 text-chart-2" />
+          ) : (
+            <Folder className="h-4 w-4 shrink-0 text-chart-2" />
+          )}
+          <span className="truncate font-medium">{folder.name}</span>
+          {folder.assignedByTeacher && (
+            <Send className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Shared by teacher" />
+          )}
+        </button>
+        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <NewFileDialog
+            onCreate={onCreateFile}
+            trigger={
+              <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="New file in folder">
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            }
+          />
+          <button onClick={() => onDeleteFolder(folder.id)} aria-label={`Delete folder ${folder.name}`}>
+            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          </button>
+        </div>
+      </div>
+      {open &&
+        (folder.files.length === 0 ? (
+          <p className="ml-8 px-2 py-1 text-xs text-muted-foreground">Empty folder</p>
+        ) : (
+          folder.files.map((f) => (
+            <FileRow
+              key={f.id}
+              file={f}
+              active={f.id === activeFileId}
+              onSelect={() => onSelectFile(f.id)}
+              onDelete={() => onDeleteFile(f.id)}
+              nested
+            />
+          ))
+        ))}
     </div>
   )
 }
@@ -328,7 +515,13 @@ function SaveIndicator({ state }: { state: "idle" | "saving" | "saved" }) {
   return null
 }
 
-function NewFileDialog({ onCreate }: { onCreate: (name: string) => Promise<void> }) {
+function NewFileDialog({
+  onCreate,
+  trigger,
+}: {
+  onCreate: (name: string) => Promise<void>
+  trigger?: React.ReactNode
+}) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
@@ -349,11 +542,15 @@ function NewFileDialog({ onCreate }: { onCreate: (name: string) => Promise<void>
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file" />}
-      >
-        <Plus className="h-4 w-4" />
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger render={trigger as React.ReactElement} />
+      ) : (
+        <DialogTrigger
+          render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file" />}
+        >
+          <Plus className="h-4 w-4" />
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New Python file</DialogTitle>
@@ -376,6 +573,63 @@ function NewFileDialog({ onCreate }: { onCreate: (name: string) => Promise<void>
           <Button onClick={submit} disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create file
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function NewFolderDialog({ onCreate }: { onCreate: (name: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    if (!name.trim()) return
+    setBusy(true)
+    try {
+      await onCreate(name)
+      setName("")
+      setOpen(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create folder")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New folder" />}
+      >
+        <FolderPlus className="h-4 w-4" />
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New folder</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="foldername">Folder name</Label>
+          <Input
+            id="foldername"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Week 1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
+            }}
+            autoFocus
+          />
+          <p className="text-xs text-muted-foreground">
+            Organize your own work into folders.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button onClick={submit} disabled={busy}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create folder
           </Button>
         </DialogFooter>
       </DialogContent>

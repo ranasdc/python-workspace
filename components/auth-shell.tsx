@@ -1,17 +1,13 @@
 import type React from "react"
-import { Code2, Play, FolderTree, GraduationCap } from "lucide-react"
+import { Play, FolderTree, GraduationCap } from "lucide-react"
+import { Logo } from "@/components/logo"
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       {/* Brand / feature panel */}
       <div className="relative hidden flex-col justify-between bg-sidebar p-10 lg:flex">
-        <div className="flex items-center gap-2 text-sidebar-foreground">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Code2 className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-semibold">PyClass</span>
-        </div>
+        <Logo iconClassName="h-10 w-10" textClassName="text-xl" showTagline />
 
         <div className="max-w-sm">
           <h2 className="text-3xl font-semibold leading-tight text-balance text-sidebar-foreground">

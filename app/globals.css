@@ -210,3 +210,102 @@ textarea.pycharm-code::placeholder {
   color: #080808;
   background: transparent;
 }
+
+/* ------------------------------------------------------------------ */
+/* Hero "code transfer" animation keyframes                            */
+/* ------------------------------------------------------------------ */
+
+/* A scan bar sweeping down the teacher's review panel. */
+@keyframes pyide-scan {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(560%);
+    opacity: 0;
+  }
+}
+
+/* Flowing dashes along the connector between the two panels. */
+@keyframes pyide-dash {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+/* Blinking editor caret. */
+@keyframes pyide-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Approved badge pop-in. */
+@keyframes pyide-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Gentle floating bob for devices / floating pills. */
+@keyframes pyide-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Marker pen wiggle while the teacher grades. */
+@keyframes pyide-wiggle {
+  0%,
+  100% {
+    transform: rotate(-8deg) translateY(0);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-2px);
+  }
+}
+
+/* Soft pulsing ring for "live" indicators. */
+@keyframes pyide-ping-soft {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pyide-anim * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

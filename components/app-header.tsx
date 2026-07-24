@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
-import { Code2, LogOut } from "lucide-react"
+import { LogOut } from "lucide-react"
+import { LogoIcon, LogoWordmark } from "@/components/logo"
 
 export function AppHeader({
   name,
@@ -22,12 +23,10 @@ export function AppHeader({
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-6">
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Code2 className="h-4 w-4" />
-        </div>
+      <div className="flex items-center gap-2.5">
+        <LogoIcon className="h-9 w-9 shrink-0" />
         <div className="leading-tight">
-          <span className="block text-sm font-semibold">PyClass</span>
+          <LogoWordmark className="block text-sm" />
           <span className="block text-xs capitalize text-muted-foreground">{role} workspace</span>
         </div>
       </div>
