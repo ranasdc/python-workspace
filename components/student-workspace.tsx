@@ -28,6 +28,7 @@ import {
 } from "@/app/actions/files"
 import { joinClass } from "@/app/actions/classes"
 import { FileComments } from "@/components/file-comments"
+import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -266,10 +267,11 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
             </p>
           ) : (
             <>
-              {tree.folders.map((folder) => (
+              {tree.folders.map((folder, index) => (
                 <StudentFolderRow
                   key={folder.id}
                   folder={folder}
+                  folderIndex={index}
                   activeFileId={activeFileId}
                   onSelectFile={setActiveFileId}
                   onDeleteFile={handleDeleteFile}
@@ -429,6 +431,7 @@ function FileRow({
 
 function StudentFolderRow({
   folder,
+  folderIndex,
   activeFileId,
   onSelectFile,
   onDeleteFile,
@@ -436,6 +439,7 @@ function StudentFolderRow({
   onCreateFile,
 }: {
   folder: FolderItem
+  folderIndex: number
   activeFileId: number | null
   onSelectFile: (id: number) => void
   onDeleteFile: (id: number) => void
@@ -443,6 +447,7 @@ function StudentFolderRow({
   onCreateFile: (name: string) => Promise<void>
 }) {
   const [open, setOpen] = useState(true)
+  const { icon: folderIconColor } = getFolderColors(folderIndex)
 
   return (
     <div className="mb-0.5">
@@ -457,9 +462,9 @@ function StudentFolderRow({
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
           {open ? (
-            <FolderOpen className="h-4 w-4 shrink-0 text-chart-2" />
+            <FolderOpen className={cn("h-4 w-4 shrink-0", folderIconColor)} />
           ) : (
-            <Folder className="h-4 w-4 shrink-0 text-chart-2" />
+            <Folder className={cn("h-4 w-4 shrink-0", folderIconColor)} />
           )}
           <span className="truncate font-medium">{folder.name}</span>
           {folder.assignedByTeacher && (
