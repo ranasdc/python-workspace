@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useEffect, useMemo, useState } from "react"
-import { Check, FileCode2, Folder, User, Pencil, Save, Sparkles, X } from "lucide-react"
+import { Check, FileCode2, Folder, User, Pencil, Save, Sparkles, X, MessageSquare } from "lucide-react"
 
 /* ================================================================== *
  * Borderless, looping feature animations for the landing page.        *
@@ -153,6 +153,8 @@ const ERROR_LINE = 4
 function TeacherAnimation() {
   // marked = how many lines have been graded so far (0..len)
   const [marked, setMarked] = useState(0)
+  // commentIn = the teacher's correction note has slid into view
+  const [commentIn, setCommentIn] = useState(false)
   const total = TEACHER_CODE.length
   const done = marked >= total
 
@@ -161,8 +163,16 @@ function TeacherAnimation() {
       const id = setTimeout(() => setMarked((m) => m + 1), 620)
       return () => clearTimeout(id)
     }
-    const id = setTimeout(() => setMarked(0), 2400)
-    return () => clearTimeout(id)
+    // Grading finished: reveal the comment, hold, then loop.
+    const showId = setTimeout(() => setCommentIn(true), 450)
+    const resetId = setTimeout(() => {
+      setCommentIn(false)
+      setMarked(0)
+    }, 3800)
+    return () => {
+      clearTimeout(showId)
+      clearTimeout(resetId)
+    }
   }, [marked, done])
 
   // Pen sits on the line currently being graded.
@@ -182,14 +192,17 @@ function TeacherAnimation() {
             </span>
             Reviewing submission
           </span>
-          {done && (
-            <span
-              className="flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive"
-              style={{ animation: "pyide-pop 0.4s ease-out" }}
-            >
-              1 issue found
+
+          {/* Mark mode: AI (active) or Manual */}
+          <div className="flex items-center rounded-full bg-muted/60 p-0.5 text-[10px] font-semibold">
+            <span className="flex items-center gap-1 rounded-full bg-chart-2 px-2 py-0.5 text-primary-foreground shadow-sm">
+              <Sparkles className="h-2.5 w-2.5" />
+              AI
             </span>
-          )}
+            <span className="flex items-center gap-1 px-2 py-0.5 text-muted-foreground">
+              Manual
+            </span>
+          </div>
         </div>
 
         <div className="relative">
@@ -263,6 +276,37 @@ function TeacherAnimation() {
                 </div>
               )
             })}
+          </div>
+        </div>
+
+        {/* Teacher's correction comment — reserves space so the layout
+            doesn't jump as it fades in/out each loop. */}
+        <div className="mt-4 min-h-[3.75rem]">
+          <div
+            className="flex items-start gap-2 transition-all duration-500 ease-out"
+            style={{
+              opacity: commentIn ? 1 : 0,
+              transform: commentIn ? "translateY(0)" : "translateY(8px)",
+            }}
+          >
+            {/* teacher avatar */}
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-chart-2 text-[10px] font-bold text-primary-foreground">
+              MR
+            </span>
+            <div className="rounded-xl rounded-tl-sm bg-chart-2/10 px-3 py-2">
+              <div className="mb-0.5 flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-foreground/90">Ms. Rivera</span>
+                <MessageSquare className="h-2.5 w-2.5 text-chart-2" />
+                <span className="text-[9px] font-medium text-muted-foreground">on line 5</span>
+              </div>
+              <p className="text-[11px] leading-snug text-foreground/75">
+                Typo here —{" "}
+                <code className="rounded bg-destructive/15 px-1 font-mono text-destructive">siez</code>{" "}
+                should be{" "}
+                <code className="rounded bg-chart-3/15 px-1 font-mono text-chart-3">size</code>. Fix
+                the name and re-run.
+              </p>
+            </div>
           </div>
         </div>
       </div>
