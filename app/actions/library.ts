@@ -147,13 +147,15 @@ async function resolveRecipients(teacherId: string, classId: number, studentId: 
 }
 
 // Copy a set of library files to each recipient. If a recipient already has a
-// file with the same name in that class, we skip it so their work is never
-// overwritten.
+// file with the same name in the same location (folder or root), we skip it so
+// their work is never overwritten. `folderIdFor` maps a studentId to the folder
+// the files should land in (null = class root).
 async function copyFilesToStudents(
   fileIds: number[],
   teacherId: string,
   classId: number,
   recipientIds: string[],
+  folderIdFor?: (studentId: string) => number | null,
 ) {
   if (fileIds.length === 0 || recipientIds.length === 0) return 0
 
@@ -164,25 +166,32 @@ async function copyFilesToStudents(
   if (sourceFiles.length === 0) return 0
 
   const existing = await db
-    .select({ studentId: codeFiles.studentId, name: codeFiles.name })
+    .select({
+      studentId: codeFiles.studentId,
+      name: codeFiles.name,
+      folderId: codeFiles.folderId,
+    })
     .from(codeFiles)
     .where(eq(codeFiles.classId, classId))
-  const taken = new Set(existing.map((e) => `${e.studentId}::${e.name}`))
+  const taken = new Set(existing.map((e) => `${e.studentId}::${e.folderId ?? "root"}::${e.name}`))
 
   const rows: {
     classId: number
     studentId: string
+    folderId: number | null
     name: string
     content: string
     assignedByTeacher: boolean
   }[] = []
 
   for (const student of recipientIds) {
+    const folderId = folderIdFor ? folderIdFor(student) : null
     for (const file of sourceFiles) {
-      if (taken.has(`${student}::${file.name}`)) continue
+      if (taken.has(`${student}::${folderId ?? "root"}::${file.name}`)) continue
       rows.push({
         classId,
         studentId: student,
+        folderId,
         name: file.name,
         content: file.content,
         assignedByTeacher: true,
@@ -215,6 +224,13 @@ export async function distributeFolder(
 ) {
   const teacher = await requireTeacher()
 
+  // Confirm the folder belongs to this teacher and grab its name.
+  const [folder] = await db
+    .select()
+    .from(libraryFolders)
+    .where(and(eq(libraryFolders.id, folderId), eq(libraryFolders.teacherId, teacher.id)))
+  if (!folder) throw new Error("Folder not found")
+
   const files = await db
     .select({ id: libraryFiles.id })
     .from(libraryFiles)
@@ -222,13 +238,44 @@ export async function distributeFolder(
   if (files.length === 0) throw new Error("This folder has no files to distribute")
 
   const recipients = await resolveRecipients(teacher.id, classId, studentId)
+
+  // Recreate the folder itself for each recipient so the whole folder is
+  // shared — reusing an existing teacher-assigned folder of the same name to
+  // avoid duplicates on repeat distributions.
+  const existingFolders = await db
+    .select()
+    .from(studentFolders)
+    .where(and(eq(studentFolders.classId, classId), eq(studentFolders.name, folder.name)))
+
+  const folderByStudent = new Map<string, number>()
+  for (const ef of existingFolders) {
+    if (ef.assignedByTeacher) folderByStudent.set(ef.studentId, ef.id)
+  }
+
+  const toCreate = recipients.filter((s) => !folderByStudent.has(s))
+  if (toCreate.length > 0) {
+    const created = await db
+      .insert(studentFolders)
+      .values(
+        toCreate.map((s) => ({
+          classId,
+          studentId: s,
+          name: folder.name,
+          assignedByTeacher: true,
+        })),
+      )
+      .returning()
+    for (const c of created) folderByStudent.set(c.studentId, c.id)
+  }
+
   const count = await copyFilesToStudents(
     files.map((f) => f.id),
     teacher.id,
     classId,
     recipients,
+    (student) => folderByStudent.get(student) ?? null,
   )
   revalidatePath("/teacher")
   revalidatePath("/student")
-  return { delivered: count, recipients: recipients.length }
+  return { delivered: count, recipients: recipients.length, folder: folder.name }
 }

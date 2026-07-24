@@ -39,6 +39,7 @@ import {
   Library,
   CheckCircle2,
   Circle,
+  Folder,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -54,16 +55,26 @@ type TreeFile = {
   id: number
   name: string
   content: string
+  folderId: number | null
   status: string
   markedAt: Date | null
   assignedByTeacher: boolean
   updatedAt: Date
 }
 
+type TreeFolder = {
+  id: number
+  name: string
+  assignedByTeacher: boolean
+  files: TreeFile[]
+}
+
 type TreeStudent = {
   id: string
   name: string
   email: string
+  folders: TreeFolder[]
+  rootFiles: TreeFile[]
   files: TreeFile[]
 }
 
@@ -411,26 +422,105 @@ function StudentNode({
           {student.files.length === 0 ? (
             <li className="px-2 py-1 text-xs text-muted-foreground">No files yet</li>
           ) : (
-            student.files.map((f) => (
-              <li key={f.id}>
-                <button
-                  onClick={() => onSelectFile(f)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
-                    selectedFileId === f.id ? "bg-muted font-medium" : "hover:bg-muted/60",
-                  )}
-                >
-                  <FileCode className="h-3.5 w-3.5 shrink-0 text-primary" />
-                  <span className="truncate">{f.name}</span>
-                  {f.status === "done" && (
-                    <CheckCircle2 className="ml-auto h-3.5 w-3.5 shrink-0 text-chart-3" />
-                  )}
-                </button>
-              </li>
-            ))
+            <>
+              {student.folders.map((folder) => (
+                <TreeFolderRow
+                  key={folder.id}
+                  folder={folder}
+                  selectedFileId={selectedFileId}
+                  onSelectFile={onSelectFile}
+                />
+              ))}
+              {student.rootFiles.map((f) => (
+                <TreeFileRow
+                  key={f.id}
+                  file={f}
+                  selected={selectedFileId === f.id}
+                  onSelect={() => onSelectFile(f)}
+                />
+              ))}
+            </>
           )}
         </ul>
       )}
+    </li>
+  )
+}
+
+function TreeFileRow({
+  file,
+  selected,
+  onSelect,
+  nested,
+}: {
+  file: TreeFile
+  selected: boolean
+  onSelect: () => void
+  nested?: boolean
+}) {
+  return (
+    <li>
+      <button
+        onClick={onSelect}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+          nested && "pl-6",
+          selected ? "bg-muted font-medium" : "hover:bg-muted/60",
+        )}
+      >
+        <FileCode className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <span className="truncate">{file.name}</span>
+        {file.status === "done" && (
+          <CheckCircle2 className="ml-auto h-3.5 w-3.5 shrink-0 text-chart-3" />
+        )}
+      </button>
+    </li>
+  )
+}
+
+function TreeFolderRow({
+  folder,
+  selectedFileId,
+  onSelectFile,
+}: {
+  folder: TreeFolder
+  selectedFileId: number | null
+  onSelectFile: (f: TreeFile) => void
+}) {
+  const [open, setOpen] = useState(true)
+  return (
+    <li>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+      >
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <Folder className="h-3.5 w-3.5 shrink-0 text-chart-2" />
+        <span className="truncate font-medium">{folder.name}</span>
+        <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
+          {folder.files.length}
+        </Badge>
+      </button>
+      {open &&
+        (folder.files.length === 0 ? (
+          <p className="pl-8 text-xs text-muted-foreground">Empty</p>
+        ) : (
+          <ul>
+            {folder.files.map((f) => (
+              <TreeFileRow
+                key={f.id}
+                file={f}
+                selected={selectedFileId === f.id}
+                onSelect={() => onSelectFile(f)}
+                nested
+              />
+            ))}
+          </ul>
+        ))}
     </li>
   )
 }
