@@ -8,7 +8,7 @@ const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 export const metadata: Metadata = {
-  title: 'My Code Pad — Python IDE for Classrooms',
+  title: 'mycodepad — Python IDE for Classrooms',
   description:
     'A collaborative Python IDE where students write and run code in the browser and teachers review submissions in an organized class workspace.',
   generator: 'v0.app',

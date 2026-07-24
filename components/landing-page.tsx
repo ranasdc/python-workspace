@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { CodeTransferAnimation } from "@/components/code-transfer-animation"
 import { FeatureAnimation } from "@/components/feature-animations"
 import {
-  Code2,
   Play,
   FolderTree,
   GraduationCap,
@@ -18,6 +17,7 @@ import {
   Users,
   CheckCircle2,
 } from "lucide-react"
+import { Logo, LogoWordmark } from "@/components/logo"
 
 /* ------------------------------------------------------------------ */
 /* Scroll-reveal wrapper: fades + slides children in when they enter   */
@@ -140,11 +140,8 @@ export function LandingPage() {
             : "border-b border-transparent bg-transparent"
         }`}
       >
-        <Link href="#top" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Code2 className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-semibold">My Code Pad</span>
+        <Link href="#top">
+          <Logo iconClassName="h-9 w-9" textClassName="text-lg" />
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
           {sections.map((s) => (
@@ -299,7 +296,7 @@ export function LandingPage() {
       </section>
 
       <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
-        My Code Pad — Python IDE for classrooms.
+        <LogoWordmark className="text-sm" /> — Python IDE for classrooms.
       </footer>
     </main>
   )

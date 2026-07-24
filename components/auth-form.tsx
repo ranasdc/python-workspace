@@ -9,7 +9,8 @@ import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GraduationCap, BookOpen, Code2, Loader2 } from "lucide-react"
+import { GraduationCap, BookOpen, Loader2 } from "lucide-react"
+import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
 type Mode = "sign-in" | "sign-up"
@@ -54,11 +55,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
   return (
     <div className="w-full max-w-md">
       <div className="mb-8 flex flex-col items-center text-center">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Code2 className="h-6 w-6" />
-        </div>
+        <LogoIcon className="mb-4 h-14 w-14" />
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
-          {mode === "sign-up" ? "Create your My Code Pad account" : "Welcome back to My Code Pad"}
+          {mode === "sign-up" ? (
+            <>
+              Create your <LogoWordmark className="text-2xl" /> account
+            </>
+          ) : (
+            <>
+              Welcome back to <LogoWordmark className="text-2xl" />
+            </>
+          )}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground text-pretty">
           {mode === "sign-up"
