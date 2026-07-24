@@ -22,6 +22,7 @@ import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import { getClassTree, setFileStatus } from "@/app/actions/files"
 import { FileComments } from "@/components/file-comments"
 import { TeacherLibrary } from "@/components/teacher-library"
+import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -423,10 +424,11 @@ function StudentNode({
             <li className="px-2 py-1 text-xs text-muted-foreground">No files yet</li>
           ) : (
             <>
-              {student.folders.map((folder) => (
+              {student.folders.map((folder, index) => (
                 <TreeFolderRow
                   key={folder.id}
                   folder={folder}
+                  folderIndex={index}
                   selectedFileId={selectedFileId}
                   onSelectFile={onSelectFile}
                 />
@@ -480,14 +482,17 @@ function TreeFileRow({
 
 function TreeFolderRow({
   folder,
+  folderIndex,
   selectedFileId,
   onSelectFile,
 }: {
   folder: TreeFolder
+  folderIndex: number
   selectedFileId: number | null
   onSelectFile: (f: TreeFile) => void
 }) {
   const [open, setOpen] = useState(true)
+  const { icon: folderIconColor } = getFolderColors(folderIndex)
   return (
     <li>
       <button
@@ -499,7 +504,7 @@ function TreeFolderRow({
         ) : (
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
-        <Folder className="h-3.5 w-3.5 shrink-0 text-chart-2" />
+        <Folder className={cn("h-3.5 w-3.5 shrink-0", folderIconColor)} />
         <span className="truncate font-medium">{folder.name}</span>
         <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
           {folder.files.length}

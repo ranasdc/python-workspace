@@ -141,7 +141,7 @@ export function LandingPage() {
         }`}
       >
         <Link href="#top">
-          <Logo iconClassName="h-9 w-9" textClassName="text-lg" />
+          <Logo iconClassName="h-9 w-9" textClassName="text-lg" showTagline />
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
           {sections.map((s) => (
