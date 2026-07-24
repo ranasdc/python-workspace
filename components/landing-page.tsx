@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { CodeTransferAnimation } from "@/components/code-transfer-animation"
 import {
   Code2,
   Play,
@@ -203,20 +204,9 @@ export function LandingPage() {
           </div>
         </Reveal>
 
-        {/* Hero preview image with hover tilt */}
+        {/* Hero: live "student → teacher" code transfer animation */}
         <Reveal delay={320} className="mt-16 w-full">
-          <div className="group relative mx-auto w-full max-w-4xl [perspective:1200px]">
-            <div className="overflow-hidden rounded-2xl border border-white/20 bg-card/40 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl transition-transform duration-500 ease-out will-change-transform group-hover:[transform:rotateX(4deg)_scale(1.01)]">
-              <Image
-                src="/images/hero-ide.png"
-                alt="Preview of the PyClass Python editor and console"
-                width={1280}
-                height={800}
-                priority
-                className="h-full w-full object-cover"
-              />
-            </div>
-          </div>
+          <CodeTransferAnimation />
         </Reveal>
 
         {/* Stats band */}
