@@ -66,84 +66,68 @@ function StudentAnimation() {
     }
   }, [lineIndex, charCount])
 
+  const rowH = 1.6 // rem — matches the teacher animation
+
   return (
     <div className="pyide-anim group relative mx-auto w-full max-w-md [perspective:1200px]">
       <Glow className="from-primary/40" />
 
-      {/* Laptop lid / screen */}
-      <div className="relative rounded-2xl bg-[oklch(0.16_0.02_260)] p-2 shadow-2xl transition-transform duration-500 ease-out will-change-transform group-hover:[transform:rotateX(6deg)_scale(1.02)]">
-        {/* camera dot */}
-        <div className="mx-auto mb-1 h-1 w-1 rounded-full bg-white/25" />
-
-        <div className="overflow-hidden rounded-xl bg-[oklch(0.13_0.02_260)]">
-          {/* window title bar */}
-          <div className="flex items-center justify-between bg-white/[0.04] px-3 py-2">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-destructive/70" />
-              <span className="h-2 w-2 rounded-full bg-chart-4/70" />
-              <span className="h-2 w-2 rounded-full bg-chart-3/70" />
-            </div>
-            <span className="font-mono text-[10px] text-white/40">main.py</span>
-            {/* autosave indicator */}
-            <span
-              className={`flex items-center gap-1 text-[10px] transition-colors ${
-                saved ? "text-chart-3" : "text-primary"
-              }`}
-            >
-              {saved ? <Check className="h-3 w-3" /> : <Save className="h-3 w-3 animate-pulse" />}
-              {saved ? "Saved" : "Saving"}
+      {/* code sheet — floats directly on the section (no card, no dark screen) */}
+      <div className="relative px-1 transition-transform duration-500 ease-out will-change-transform group-hover:[transform:rotateX(6deg)_scale(1.01)]">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-primary">
+              <Pencil className="h-3 w-3" />
             </span>
-          </div>
-
-          {/* editor body */}
-          <div className="min-h-[8.5rem] px-3 py-3">
-            <div className="flex flex-col gap-1">
-              {STUDENT_CODE.map((line, i) => {
-                const done = i < lineIndex
-                const isActive = i === lineIndex
-                const plain = plainOf(line)
-                return (
-                  <div key={i} className="flex h-5 items-center gap-3">
-                    <span className="w-3 select-none text-right font-mono text-[10px] text-white/25">
-                      {i + 1}
-                    </span>
-                    <code className="whitespace-pre font-mono text-[11px] leading-none sm:text-xs">
-                      {done ? (
-                        line.map((tok, j) => (
-                          <span key={j} className={tok.c ? TOKEN_CLASS[tok.c] : "text-white/80"}>
-                            {tok.t}
-                          </span>
-                        ))
-                      ) : isActive ? (
-                        <>
-                          <span className="text-white/80">{plain.slice(0, charCount)}</span>
-                          <span
-                            className="ml-px inline-block h-3.5 w-[2px] -translate-y-[1px] bg-primary align-middle"
-                            style={{ animation: "pyide-caret 1s steps(1) infinite" }}
-                          />
-                        </>
-                      ) : null}
-                    </code>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+            Writing code
+          </span>
+          {/* autosave status pill, styled like the teacher badges */}
+          <span
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+              saved ? "bg-chart-3/15 text-chart-3" : "bg-primary/15 text-primary"
+            }`}
+          >
+            {saved ? <Check className="h-3 w-3" /> : <Save className="h-3 w-3 animate-pulse" />}
+            {saved ? "Saved" : "Saving"}
+          </span>
         </div>
-      </div>
 
-      {/* Laptop base / hinge */}
-      <div className="relative mx-auto mt-1 h-3">
-        <div
-          className="absolute left-1/2 top-0 h-3 w-[112%] -translate-x-1/2 rounded-b-xl rounded-t-sm bg-gradient-to-b from-white/15 to-white/5"
-          style={{ clipPath: "polygon(2% 0, 98% 0, 100% 100%, 0 100%)" }}
-        />
-        <div className="absolute left-1/2 top-0 h-1 w-16 -translate-x-1/2 rounded-b-md bg-white/10" />
+        <div className="flex flex-col">
+          {STUDENT_CODE.map((line, i) => {
+            const done = i < lineIndex
+            const isActive = i === lineIndex
+            const plain = plainOf(line)
+            return (
+              <div key={i} className="flex items-center gap-3 pl-5" style={{ height: `${rowH}rem` }}>
+                <span className="w-3 select-none text-right font-mono text-[10px] text-muted-foreground/50">
+                  {i + 1}
+                </span>
+                <code className="whitespace-pre font-mono text-[11px] leading-none sm:text-xs">
+                  {done ? (
+                    line.map((tok, j) => (
+                      <span key={j} className={tok.c ? TOKEN_CLASS[tok.c] : "text-foreground/80"}>
+                        {tok.t}
+                      </span>
+                    ))
+                  ) : isActive ? (
+                    <>
+                      <span className="text-foreground/80">{plain.slice(0, charCount)}</span>
+                      <span
+                        className="ml-px inline-block h-3.5 w-[2px] -translate-y-[1px] bg-primary align-middle"
+                        style={{ animation: "pyide-caret 1s steps(1) infinite" }}
+                      />
+                    </>
+                  ) : null}
+                </code>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* floating "keystroke" spark */}
       <div
-        className="absolute -right-1 top-8 flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-[10px] font-semibold text-primary-foreground shadow-lg"
+        className="absolute -left-2 top-10 flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-[10px] font-semibold text-primary-foreground shadow-lg"
         style={{ animation: "pyide-float 3s ease-in-out infinite" }}
       >
         <Sparkles className="h-3 w-3" />
