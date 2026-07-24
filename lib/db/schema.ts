@@ -83,10 +83,23 @@ export const enrollments = pgTable(
   }),
 )
 
+// Folders that organize a student's files within a class. A folder can be
+// created by the student or delivered by a teacher (assignedByTeacher).
+export const studentFolders = pgTable("student_folder", {
+  id: serial("id").primaryKey(),
+  classId: integer("classId").notNull(),
+  studentId: text("studentId").notNull(),
+  name: text("name").notNull(),
+  assignedByTeacher: boolean("assignedByTeacher").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 export const codeFiles = pgTable("code_file", {
   id: serial("id").primaryKey(),
   classId: integer("classId").notNull(),
   studentId: text("studentId").notNull(),
+  // Null = file lives at the class root (outside any folder).
+  folderId: integer("folderId"),
   name: text("name").notNull(),
   content: text("content").notNull().default(""),
   // Teacher marking: "unmarked" | "done"

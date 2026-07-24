@@ -7,6 +7,7 @@ import {
   enrollments,
   libraryFiles,
   libraryFolders,
+  studentFolders,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { and, asc, eq, inArray } from "drizzle-orm"

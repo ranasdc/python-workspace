@@ -1,9 +1,16 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { classes, codeFiles, enrollments, fileComments, user } from "@/lib/db/schema"
+import {
+  classes,
+  codeFiles,
+  enrollments,
+  fileComments,
+  studentFolders,
+  user,
+} from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 const STARTER = `# Welcome to your Python file!
@@ -20,31 +27,92 @@ async function assertEnrolled(studentId: string, classId: number) {
   if (!row) throw new Error("You are not enrolled in this class")
 }
 
-// ---------- Student: manage own files ----------
+// ---------- Student: manage own files & folders ----------
 export async function getStudentFiles(classId: number) {
   const student = await requireUser()
   await assertEnrolled(student.id, classId)
-  return db
-    .select()
-    .from(codeFiles)
-    .where(and(eq(codeFiles.classId, classId), eq(codeFiles.studentId, student.id)))
-    .orderBy(asc(codeFiles.name))
+
+  const [folders, files] = await Promise.all([
+    db
+      .select()
+      .from(studentFolders)
+      .where(and(eq(studentFolders.classId, classId), eq(studentFolders.studentId, student.id)))
+      .orderBy(asc(studentFolders.name)),
+    db
+      .select()
+      .from(codeFiles)
+      .where(and(eq(codeFiles.classId, classId), eq(codeFiles.studentId, student.id)))
+      .orderBy(asc(codeFiles.name)),
+  ])
+
+  return {
+    folders: folders.map((folder) => ({
+      ...folder,
+      files: files.filter((f) => f.folderId === folder.id),
+    })),
+    // Files not inside any folder live at the class root.
+    rootFiles: files.filter((f) => f.folderId === null),
+  }
 }
 
-export async function createFile(classId: number, name: string) {
+export async function createFile(classId: number, name: string, folderId: number | null = null) {
   const student = await requireUser()
   await assertEnrolled(student.id, classId)
 
   const clean = name.trim().endsWith(".py") ? name.trim() : `${name.trim()}.py`
   if (!clean || clean === ".py") throw new Error("Enter a file name")
 
+  // Make sure a provided folder belongs to this student in this class.
+  if (folderId !== null) {
+    const [folder] = await db
+      .select()
+      .from(studentFolders)
+      .where(
+        and(
+          eq(studentFolders.id, folderId),
+          eq(studentFolders.studentId, student.id),
+          eq(studentFolders.classId, classId),
+        ),
+      )
+    if (!folder) throw new Error("Folder not found")
+  }
+
   const [created] = await db
     .insert(codeFiles)
-    .values({ classId, studentId: student.id, name: clean, content: STARTER })
+    .values({ classId, studentId: student.id, folderId, name: clean, content: STARTER })
     .returning()
 
   revalidatePath("/student")
   return created
+}
+
+export async function createStudentFolder(classId: number, name: string) {
+  const student = await requireUser()
+  await assertEnrolled(student.id, classId)
+
+  const clean = name.trim()
+  if (!clean) throw new Error("Enter a folder name")
+
+  const [created] = await db
+    .insert(studentFolders)
+    .values({ classId, studentId: student.id, name: clean })
+    .returning()
+
+  revalidatePath("/student")
+  return created
+}
+
+// Delete a folder and every file inside it (scoped to this student).
+export async function deleteStudentFolder(folderId: number) {
+  const student = await requireUser()
+  await db
+    .delete(codeFiles)
+    .where(and(eq(codeFiles.folderId, folderId), eq(codeFiles.studentId, student.id)))
+  await db
+    .delete(studentFolders)
+    .where(and(eq(studentFolders.id, folderId), eq(studentFolders.studentId, student.id)))
+  revalidatePath("/student")
+  return { ok: true }
 }
 
 export async function saveFile(fileId: number, content: string) {
@@ -104,13 +172,31 @@ export async function getClassTree(classId: number) {
         .orderBy(desc(codeFiles.updatedAt))
     : []
 
+  const folders = studentIds.length
+    ? await db
+        .select()
+        .from(studentFolders)
+        .where(eq(studentFolders.classId, classId))
+        .orderBy(asc(studentFolders.name))
+    : []
+
   return {
     class: cls,
     students: students
-      .map((s) => ({
-        ...s,
-        files: files.filter((f) => f.studentId === s.id),
-      }))
+      .map((s) => {
+        const studentFiles = files.filter((f) => f.studentId === s.id)
+        return {
+          ...s,
+          folders: folders
+            .filter((folder) => folder.studentId === s.id)
+            .map((folder) => ({
+              ...folder,
+              files: studentFiles.filter((f) => f.folderId === folder.id),
+            })),
+          rootFiles: studentFiles.filter((f) => f.folderId === null),
+          files: studentFiles,
+        }
+      })
       .sort((a, b) => a.name.localeCompare(b.name)),
   }
 }
