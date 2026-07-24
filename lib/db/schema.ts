@@ -89,6 +89,40 @@ export const codeFiles = pgTable("code_file", {
   studentId: text("studentId").notNull(),
   name: text("name").notNull(),
   content: text("content").notNull().default(""),
+  // Teacher marking: "unmarked" | "done"
+  status: text("status").notNull().default("unmarked"),
+  markedAt: timestamp("markedAt"),
+  // True when a teacher distributed this file to the student.
+  assignedByTeacher: boolean("assignedByTeacher").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Teacher comments left on a specific student file.
+export const fileComments = pgTable("file_comment", {
+  id: serial("id").primaryKey(),
+  fileId: integer("fileId").notNull(),
+  teacherId: text("teacherId").notNull(),
+  teacherName: text("teacherName").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// A teacher's private library of reusable folders...
+export const libraryFolders = pgTable("library_folder", {
+  id: serial("id").primaryKey(),
+  teacherId: text("teacherId").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// ...and the files inside them (folderId null = library root).
+export const libraryFiles = pgTable("library_file", {
+  id: serial("id").primaryKey(),
+  teacherId: text("teacherId").notNull(),
+  folderId: integer("folderId"),
+  name: text("name").notNull(),
+  content: text("content").notNull().default(""),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })

@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { classes, codeFiles, enrollments, user } from "@/lib/db/schema"
+import { classes, codeFiles, enrollments, fileComments, user } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -113,4 +113,87 @@ export async function getClassTree(classId: number) {
       }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   }
+}
+
+// ---------- Comments & marking ----------
+
+// Load a file and verify the teacher owns the class it belongs to.
+async function requireTeacherForFile(teacherId: string, fileId: number) {
+  const [file] = await db.select().from(codeFiles).where(eq(codeFiles.id, fileId))
+  if (!file) throw new Error("File not found")
+  const [cls] = await db
+    .select()
+    .from(classes)
+    .where(and(eq(classes.id, file.classId), eq(classes.teacherId, teacherId)))
+  if (!cls) throw new Error("Unauthorized")
+  return file
+}
+
+// Comments are visible to the teacher who owns the class and to the student
+// who owns the file. Ordered oldest → newest so the thread reads naturally.
+export async function getFileComments(fileId: number) {
+  const me = await requireUser()
+
+  const [file] = await db.select().from(codeFiles).where(eq(codeFiles.id, fileId))
+  if (!file) throw new Error("File not found")
+
+  if (file.studentId !== me.id) {
+    // Not the owning student — must be the class teacher.
+    const [cls] = await db
+      .select()
+      .from(classes)
+      .where(and(eq(classes.id, file.classId), eq(classes.teacherId, me.id)))
+    if (!cls) throw new Error("Unauthorized")
+  }
+
+  return db
+    .select()
+    .from(fileComments)
+    .where(eq(fileComments.fileId, fileId))
+    .orderBy(asc(fileComments.createdAt))
+}
+
+export async function addComment(fileId: number, body: string) {
+  const teacher = await requireUser()
+  if (teacher.role !== "teacher") throw new Error("Only teachers can comment")
+  await requireTeacherForFile(teacher.id, fileId)
+
+  const clean = body.trim()
+  if (!clean) throw new Error("Comment cannot be empty")
+
+  const [created] = await db
+    .insert(fileComments)
+    .values({ fileId, teacherId: teacher.id, teacherName: teacher.name, body: clean })
+    .returning()
+
+  revalidatePath("/student")
+  revalidatePath("/teacher")
+  return created
+}
+
+export async function deleteComment(commentId: number) {
+  const teacher = await requireUser()
+  if (teacher.role !== "teacher") throw new Error("Unauthorized")
+  await db
+    .delete(fileComments)
+    .where(and(eq(fileComments.id, commentId), eq(fileComments.teacherId, teacher.id)))
+  revalidatePath("/student")
+  revalidatePath("/teacher")
+  return { ok: true }
+}
+
+// Toggle a file between "done" and "unmarked".
+export async function setFileStatus(fileId: number, status: "done" | "unmarked") {
+  const teacher = await requireUser()
+  if (teacher.role !== "teacher") throw new Error("Only teachers can mark work")
+  await requireTeacherForFile(teacher.id, fileId)
+
+  await db
+    .update(codeFiles)
+    .set({ status, markedAt: status === "done" ? new Date() : null })
+    .where(eq(codeFiles.id, fileId))
+
+  revalidatePath("/student")
+  revalidatePath("/teacher")
+  return { ok: true }
 }

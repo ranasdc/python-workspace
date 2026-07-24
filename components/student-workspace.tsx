@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { getStudentFiles, createFile, saveFile, deleteFile } from "@/app/actions/files"
 import { joinClass } from "@/app/actions/classes"
+import { FileComments } from "@/components/file-comments"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -31,6 +32,8 @@ import {
   Check,
   Users,
   FolderPlus,
+  CheckCircle2,
+  Send,
 } from "lucide-react"
 
 type ClassItem = {
@@ -47,6 +50,9 @@ type FileItem = {
   studentId: string
   name: string
   content: string
+  status: string
+  markedAt: Date | null
+  assignedByTeacher: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -66,7 +72,9 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
 
   const filesKey = activeClassId ? ["files", activeClassId] : null
   const { data: files } = useSWR<FileItem[]>(filesKey, () => getStudentFiles(activeClassId!), {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true,
+    // Poll so teacher-distributed files and marking updates show up live.
+    refreshInterval: 6000,
   })
 
   const activeFile = files?.find((f) => f.id === activeFileId) ?? null
@@ -219,6 +227,12 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
                 >
                   <FileCode className="h-4 w-4 shrink-0 text-primary" />
                   <span className="truncate">{f.name}</span>
+                  {f.assignedByTeacher && (
+                    <Send className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Assigned by teacher" />
+                  )}
+                  {f.status === "done" && (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-chart-3" aria-label="Marked done" />
+                  )}
                 </button>
                 <button
                   onClick={() => handleDeleteFile(f.id)}
@@ -241,6 +255,11 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
               <>
                 <FileCode className="h-4 w-4 shrink-0 text-primary" />
                 <span className="truncate text-sm font-medium">{activeFile.name}</span>
+                {activeFile.status === "done" && (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-chart-3/15 px-2 py-0.5 text-xs font-semibold text-chart-3">
+                    <CheckCircle2 className="h-3 w-3" /> Marked done
+                  </span>
+                )}
                 <SaveIndicator state={saveState} />
               </>
             ) : (
@@ -307,6 +326,13 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
             )}
           </div>
         </div>
+
+        {/* Teacher feedback on the open file, updated in real time */}
+        {activeFile && (
+          <div className="h-56 shrink-0 border-t border-border bg-card">
+            <FileComments fileId={activeFile.id} canComment={false} />
+          </div>
+        )}
       </div>
     </div>
   )

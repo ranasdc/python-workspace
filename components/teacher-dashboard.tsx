@@ -19,7 +19,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { createClass, getTeacherClasses } from "@/app/actions/classes"
-import { getClassTree } from "@/app/actions/files"
+import { getClassTree, setFileStatus } from "@/app/actions/files"
+import { FileComments } from "@/components/file-comments"
+import { TeacherLibrary } from "@/components/teacher-library"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -34,6 +36,9 @@ import {
   BookOpen,
   Check,
   Play,
+  Library,
+  CheckCircle2,
+  Circle,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -49,6 +54,9 @@ type TreeFile = {
   id: number
   name: string
   content: string
+  status: string
+  markedAt: Date | null
+  assignedByTeacher: boolean
   updatedAt: Date
 }
 
@@ -71,6 +79,7 @@ export function TeacherDashboard({
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
   )
+  const [view, setView] = useState<"classes" | "library">("classes")
 
   // Load the Python runtime once for the whole dashboard so switching between
   // student files doesn't re-download Pyodide each time.
@@ -83,6 +92,28 @@ export function TeacherDashboard({
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Classes list */}
       <aside className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-64 lg:border-b-0 lg:border-r">
+        {/* Classes / Library switcher */}
+        <div className="flex gap-1 border-b border-border p-2">
+          <button
+            onClick={() => setView("classes")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+              view === "classes" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <BookOpen className="h-4 w-4" /> Classes
+          </button>
+          <button
+            onClick={() => setView("library")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+              view === "library" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <Library className="h-4 w-4" /> Library
+          </button>
+        </div>
+
         <div className="flex items-center justify-between px-3 py-3">
           <Label className="text-xs uppercase tracking-wide text-muted-foreground">
             Your classes
@@ -91,6 +122,7 @@ export function TeacherDashboard({
             onCreated={async (id) => {
               await mutate("teacher-classes")
               setActiveClassId(id)
+              setView("classes")
             }}
           />
         </div>
@@ -101,10 +133,13 @@ export function TeacherDashboard({
             list.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setActiveClassId(c.id)}
+                onClick={() => {
+                  setActiveClassId(c.id)
+                  setView("classes")
+                }}
                 className={cn(
                   "mb-1 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors",
-                  c.id === activeClassId ? "bg-primary/10" : "hover:bg-muted",
+                  c.id === activeClassId && view === "classes" ? "bg-primary/10" : "hover:bg-muted",
                 )}
               >
                 <span
@@ -125,15 +160,21 @@ export function TeacherDashboard({
         </div>
       </aside>
 
-      {/* Class detail */}
-      <div className="min-h-0 flex-1 overflow-auto">
-        {activeClass ? (
-          <ClassDetail key={activeClass.id} cls={activeClass} pyodide={pyodide} />
+      {/* Main area: class detail or the teacher's library */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {view === "library" ? (
+          <TeacherLibrary classes={list} />
+        ) : activeClass ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <ClassDetail key={activeClass.id} cls={activeClass} pyodide={pyodide} />
+          </div>
         ) : (
-          <EmptyTeacherState onCreated={async (id) => {
-            await mutate("teacher-classes")
-            setActiveClassId(id)
-          }} />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <EmptyTeacherState onCreated={async (id) => {
+              await mutate("teacher-classes")
+              setActiveClassId(id)
+            }} />
+          </div>
         )}
       </div>
     </div>
@@ -148,12 +189,24 @@ function ClassDetail({
   pyodide: ReturnType<typeof usePyodide>
 }) {
   const { data } = useSWR(["class-tree", cls.id], () => getClassTree(cls.id), {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true,
+    // Poll so students' newly saved work appears without a manual refresh.
+    refreshInterval: 6000,
   })
   const [selected, setSelected] = useState<{ student: TreeStudent; file: TreeFile } | null>(null)
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  const [marking, setMarking] = useState(false)
 
   const { status, loadError, awaitingInput, interactive, run, submitInput } = pyodide
+
+  // Always read the freshest copy of the selected file from the polled tree so
+  // status changes and edits stay in sync.
+  const currentFile =
+    selected && data
+      ? data.students
+          .find((s) => s.id === selected.student.id)
+          ?.files.find((f) => f.id === selected.file.id) ?? selected.file
+      : selected?.file ?? null
 
   // Clear the previous output whenever the teacher opens a different file.
   useEffect(() => {
@@ -161,11 +214,26 @@ function ClassDetail({
   }, [selected?.file.id])
 
   async function handleRun() {
-    if (!selected) return
+    if (!currentFile) return
     setConsoleLines([])
-    await run(selected.file.content, (text, kind) => {
+    await run(currentFile.content, (text, kind) => {
       setConsoleLines((prev) => [...prev, { text, kind }])
     })
+  }
+
+  async function toggleMark() {
+    if (!currentFile) return
+    const next = currentFile.status === "done" ? "unmarked" : "done"
+    setMarking(true)
+    try {
+      await setFileStatus(currentFile.id, next)
+      await mutate(["class-tree", cls.id])
+      toast.success(next === "done" ? "Marked as done" : "Marked as unmarked")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update status")
+    } finally {
+      setMarking(false)
+    }
   }
 
   function handleSubmitInput(text: string) {
@@ -217,20 +285,42 @@ function ClassDetail({
 
         {/* Viewer */}
         <div className="flex min-h-[300px] flex-col lg:min-h-0">
-          {selected ? (
+          {selected && currentFile ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5">
                 <div className="flex items-center gap-2 text-sm">
                   <FileCode className="h-4 w-4 text-primary" />
-                  <span className="font-medium">{selected.file.name}</span>
+                  <span className="font-medium">{currentFile.name}</span>
                   <span className="text-muted-foreground">— {selected.student.name}</span>
+                  {currentFile.status === "done" ? (
+                    <Badge className="gap-1 bg-chart-3/15 text-chart-3 hover:bg-chart-3/15">
+                      <CheckCircle2 className="h-3 w-3" /> Done
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="gap-1">
+                      <Circle className="h-3 w-3" /> Unmarked
+                    </Badge>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="hidden text-xs text-muted-foreground sm:inline">
-                    Updated {new Date(selected.file.updatedAt).toLocaleString()}
-                  </span>
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
+                    variant={currentFile.status === "done" ? "outline" : "default"}
+                    onClick={toggleMark}
+                    disabled={marking}
+                  >
+                    {marking ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : currentFile.status === "done" ? (
+                      <Circle className="mr-1.5 h-4 w-4" />
+                    ) : (
+                      <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                    )}
+                    {currentFile.status === "done" ? "Mark unmarked" : "Mark as done"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     onClick={handleRun}
                     disabled={status === "loading" || status === "running"}
                   >
@@ -250,22 +340,28 @@ function ClassDetail({
                   </Button>
                 </div>
               </div>
-              <div className="grid min-h-0 flex-1 grid-rows-2">
-                <div className="min-h-0 border-b border-border">
-                  <CodeEditor value={selected.file.content} readOnly />
+              <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
+                <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
+                  <div className="min-h-0 border-b border-border">
+                    <CodeEditor value={currentFile.content} readOnly />
+                  </div>
+                  <div className="min-h-0">
+                    <PythonConsole
+                      lines={
+                        loadError
+                          ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
+                          : consoleLines
+                      }
+                      running={status === "running"}
+                      awaitingInput={awaitingInput}
+                      interactive={interactive}
+                      onSubmitInput={handleSubmitInput}
+                    />
+                  </div>
                 </div>
-                <div className="min-h-0">
-                  <PythonConsole
-                    lines={
-                      loadError
-                        ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                        : consoleLines
-                    }
-                    running={status === "running"}
-                    awaitingInput={awaitingInput}
-                    interactive={interactive}
-                    onSubmitInput={handleSubmitInput}
-                  />
+                {/* Feedback thread for this student's file */}
+                <div className="min-h-[240px] lg:min-h-0">
+                  <FileComments fileId={currentFile.id} canComment />
                 </div>
               </div>
             </>
@@ -326,6 +422,9 @@ function StudentNode({
                 >
                   <FileCode className="h-3.5 w-3.5 shrink-0 text-primary" />
                   <span className="truncate">{f.name}</span>
+                  {f.status === "done" && (
+                    <CheckCircle2 className="ml-auto h-3.5 w-3.5 shrink-0 text-chart-3" />
+                  )}
                 </button>
               </li>
             ))
