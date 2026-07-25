@@ -306,20 +306,39 @@ textarea.pycharm-code::placeholder {
 /* Glowing border cycling through blue, green, yellow. */
 @keyframes border-glow {
   0% {
-    border-color: rgb(59, 130, 246 / 0.6);
-    box-shadow: 0 0 20px rgb(59, 130, 246 / 0.4), inset 0 0 20px rgb(59, 130, 246 / 0.1);
+    border-color: rgb(59, 130, 246);
+    box-shadow: 0 0 30px rgb(59, 130, 246 / 0.8), 0 0 60px rgb(59, 130, 246 / 0.4), inset 0 0 30px rgb(59, 130, 246 / 0.2);
   }
   33% {
-    border-color: rgb(34, 197, 94 / 0.6);
-    box-shadow: 0 0 20px rgb(34, 197, 94 / 0.4), inset 0 0 20px rgb(34, 197, 94 / 0.1);
+    border-color: rgb(34, 197, 94);
+    box-shadow: 0 0 30px rgb(34, 197, 94 / 0.8), 0 0 60px rgb(34, 197, 94 / 0.4), inset 0 0 30px rgb(34, 197, 94 / 0.2);
   }
   66% {
-    border-color: rgb(234, 179, 8 / 0.6);
-    box-shadow: 0 0 20px rgb(234, 179, 8 / 0.4), inset 0 0 20px rgb(234, 179, 8 / 0.1);
+    border-color: rgb(234, 179, 8);
+    box-shadow: 0 0 30px rgb(234, 179, 8 / 0.8), 0 0 60px rgb(234, 179, 8 / 0.4), inset 0 0 30px rgb(234, 179, 8 / 0.2);
   }
   100% {
-    border-color: rgb(59, 130, 246 / 0.6);
-    box-shadow: 0 0 20px rgb(59, 130, 246 / 0.4), inset 0 0 20px rgb(59, 130, 246 / 0.1);
+    border-color: rgb(59, 130, 246);
+    box-shadow: 0 0 30px rgb(59, 130, 246 / 0.8), 0 0 60px rgb(59, 130, 246 / 0.4), inset 0 0 30px rgb(59, 130, 246 / 0.2);
+  }
+}
+
+/* Water waves splashing effect. */
+@keyframes water-waves {
+  0% {
+    transform: translateY(0) scaleY(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-15px) scaleY(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+    opacity: 0;
   }
 }
 

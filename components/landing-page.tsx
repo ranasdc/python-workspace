@@ -174,15 +174,32 @@ export function LandingPage() {
 
         <Reveal>
           <div 
-            className="mb-6 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
+            className="mb-6 relative inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm overflow-hidden"
             style={{
               animation: 'border-glow 4s ease-in-out infinite'
             }}
           >
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
+            {/* Water waves background */}
+            <div className="absolute inset-0 flex items-end justify-center pointer-events-none">
+              <svg className="absolute bottom-0 w-full h-16 opacity-30" viewBox="0 0 200 100" preserveAspectRatio="none">
+                <defs>
+                  <style>{`
+                    .wave-1 { animation: water-waves 2s ease-in-out infinite; }
+                    .wave-2 { animation: water-waves 2.5s ease-in-out infinite 0.3s; }
+                    .wave-3 { animation: water-waves 2.2s ease-in-out infinite 0.6s; }
+                  `}</style>
+                </defs>
+                <path className="wave-1" d="M0,50 Q50,30 100,50 T200,50 L200,100 L0,100 Z" fill="rgb(59, 130, 246)" />
+                <path className="wave-2" d="M0,55 Q50,35 100,55 T200,55 L200,100 L0,100 Z" fill="rgb(34, 197, 94)" />
+                <path className="wave-3" d="M0,60 Q50,40 100,60 T200,60 L200,100 L0,100 Z" fill="rgb(234, 179, 8)" />
+              </svg>
+            </div>
+            
+            {/* Content */}
+            <div className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
               <Play className="h-2.5 w-2.5 text-primary" />
             </div>
-            <span>Run your code right in the browser</span>
+            <span className="relative z-10">Run your code right in the browser</span>
           </div>
         </Reveal>
       <Reveal delay={80}>
