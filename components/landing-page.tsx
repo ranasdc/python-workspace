@@ -178,11 +178,11 @@ export function LandingPage() {
             Runs Python right in the browser
           </span>
         </Reveal>
-        <Reveal delay={80}>
-          <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-            A Python IDE built for teachers and students
-          </h1>
-        </Reveal>
+      <Reveal delay={80}>
+        <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
+          A more than Python IDE built for teachers and students
+        </h1>
+      </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
             Students write and run Python in a clean editor. Their code flows straight to the
