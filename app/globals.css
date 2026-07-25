@@ -303,6 +303,37 @@ textarea.pycharm-code::placeholder {
   }
 }
 
+/* Rainbow shimmer moving through text. */
+@keyframes rainbow-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.rainbow-text {
+  background: linear-gradient(
+    90deg,
+    #ff0080,
+    #ff4500,
+    #ffaa00,
+    #aaff00,
+    #00ffaa,
+    #00aaff,
+    #aa00ff,
+    #ff0080,
+    #ff4500,
+    #ffaa00
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbow-shimmer 4s linear infinite;
+}
+
 /* Glowing border cycling through blue, green, yellow. */
 @keyframes border-glow {
   0% {

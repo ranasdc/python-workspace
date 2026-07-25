@@ -187,7 +187,7 @@ export function LandingPage() {
         </Reveal>
       <Reveal delay={80}>
         <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          A more than Python IDE built for teachers and students
+          A <span className="rainbow-text">more than</span> Python IDE built for teachers and students
         </h1>
       </Reveal>
         <Reveal delay={160}>
