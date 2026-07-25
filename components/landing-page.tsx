@@ -218,6 +218,31 @@ export function LandingPage() {
           </div>
         </Reveal>
 
+        {/* Scroll indicator */}
+        <div className="mt-12 flex flex-col items-center gap-2">
+          <p className="text-xs text-muted-foreground">Scroll to explore</p>
+          <div
+            className="flex flex-col items-center gap-1"
+            style={{
+              animation: 'bounce-down 2s ease-in-out infinite'
+            }}
+          >
+            <svg
+              className="h-6 w-4 text-primary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 14l-7 7m0 0l-7-7m7 7V3"
+              />
+            </svg>
+          </div>
+        </div>
+
         {/* Hero: live "student → teacher" code transfer animation */}
         <Reveal delay={320} className="mt-16 w-full">
           <CodeTransferAnimation />
