@@ -173,10 +173,12 @@ export function LandingPage() {
         </div>
 
         <Reveal>
-          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Play className="h-3 w-3 text-primary" />
-            Runs Python right in the browser
-          </span>
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border-2 border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm shadow-lg shadow-primary/10">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
+              <Play className="h-2.5 w-2.5 text-primary" />
+            </div>
+            <span>Run your code right in the browser</span>
+          </div>
         </Reveal>
       <Reveal delay={80}>
         <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
