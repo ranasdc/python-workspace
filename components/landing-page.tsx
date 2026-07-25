@@ -20,6 +20,52 @@ import {
 import { Logo, LogoWordmark } from "@/components/logo"
 
 /* ------------------------------------------------------------------ */
+/* Fixed scroll indicator — visible on load, fades out 2s after scroll */
+/* ------------------------------------------------------------------ */
+function ScrollIndicator() {
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    const onScroll = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => setVisible(false), 2000)
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      clearTimeout(timer)
+    }
+  }, [])
+
+  return (
+    <div
+      className="pointer-events-none fixed bottom-8 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-1.5 transition-opacity duration-700"
+      style={{ opacity: visible ? 1 : 0 }}
+    >
+      <span className="text-xs font-medium tracking-widest text-muted-foreground uppercase">
+        Scroll to explore
+      </span>
+      <div style={{ animation: "bounce-down 2s ease-in-out infinite" }}>
+        <svg
+          className="h-5 w-5 text-primary"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Scroll-reveal wrapper: fades + slides children in when they enter   */
 /* the viewport, using IntersectionObserver (no data fetching).        */
 /* ------------------------------------------------------------------ */
@@ -223,30 +269,7 @@ export function LandingPage() {
           <CodeTransferAnimation />
         </Reveal>
 
-        {/* Scroll indicator */}
-        <div className="mt-12 flex flex-col items-center gap-2">
-          <p className="text-xs text-muted-foreground">Scroll to explore</p>
-          <div
-            className="flex flex-col items-center gap-1"
-            style={{
-              animation: 'bounce-down 2s ease-in-out infinite'
-            }}
-          >
-            <svg
-              className="h-6 w-4 text-primary"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 14l-7 7m0 0l-7-7m7 7V3"
-              />
-            </svg>
-          </div>
-        </div>
+        <ScrollIndicator />
 
         {/* Stats band */}
         <Reveal delay={120} className="mt-16 w-full">
