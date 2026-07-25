@@ -303,6 +303,39 @@ textarea.pycharm-code::placeholder {
   }
 }
 
+/* Red LED dot orbiting around badge border. */
+@keyframes led-orbit {
+  0% {
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  25% {
+    top: 50%;
+    right: -6px;
+    left: auto;
+    transform: translateY(-50%);
+  }
+  50% {
+    bottom: -6px;
+    top: auto;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  75% {
+    top: 50%;
+    left: -6px;
+    right: auto;
+    transform: translateY(-50%);
+  }
+  100% {
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pyide-anim * {
     animation: none !important;
