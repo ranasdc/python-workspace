@@ -364,16 +364,6 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Rotating conic glow right to left (counter-clockwise). */
-@keyframes border-spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(-360deg);
-  }
-}
-
 /* Blue glowing border with fade in/out effect. */
 @keyframes border-glow {
   0% {
