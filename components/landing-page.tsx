@@ -190,6 +190,11 @@ export function LandingPage() {
           A <span className="rainbow-text">more than</span> Python IDE built for teachers and students
         </h1>
       </Reveal>
+      <Reveal delay={120}>
+        <div className="mt-4 inline-block rounded-full border-2 border-amber-500/50 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent px-4 py-2 text-sm font-semibold text-amber-400 shadow-lg shadow-amber-500/20">
+          ✨ More programming languages coming soon!
+        </div>
+      </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
             Students write and run code in a clean editor. Their code flows straight to the
