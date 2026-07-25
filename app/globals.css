@@ -303,6 +303,83 @@ textarea.pycharm-code::placeholder {
   }
 }
 
+/* Rainbow shimmer moving through text. */
+@keyframes rainbow-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.rainbow-text {
+  background: linear-gradient(
+    90deg,
+    #ff0080,
+    #ff4500,
+    #ffaa00,
+    #aaff00,
+    #00ffaa,
+    #00aaff,
+    #aa00ff,
+    #ff0080,
+    #ff4500,
+    #ffaa00
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbow-shimmer 4s linear infinite;
+}
+
+/* Emerald shimmer moving right to left. */
+@keyframes emerald-text-shimmer {
+  0% {
+    text-shadow: -100px 0 30px rgba(16, 185, 129, 0);
+  }
+  50% {
+    text-shadow: 0 0 30px rgba(16, 185, 129, 0.8), 0 0 50px rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    text-shadow: 100px 0 30px rgba(16, 185, 129, 0);
+  }
+}
+
+.emerald-shimmer {
+  animation: emerald-text-shimmer 4s ease-in-out infinite;
+}
+
+/* Slow moving green halo effect. */
+@keyframes halo-pulse {
+  0% {
+    box-shadow: 0 0 20px rgb(16, 185, 129 / 0.3), inset 0 0 20px rgb(16, 185, 129 / 0.1);
+  }
+  50% {
+    box-shadow: 0 0 40px rgb(16, 185, 129 / 0.5), inset 0 0 30px rgb(16, 185, 129 / 0.2);
+  }
+  100% {
+    box-shadow: 0 0 20px rgb(16, 185, 129 / 0.3), inset 0 0 20px rgb(16, 185, 129 / 0.1);
+  }
+}
+
+/* Blue glowing border with fade in/out effect. */
+@keyframes border-glow {
+  0% {
+    border-color: rgb(59, 130, 246 / 0.2);
+    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05), inset 0 0 10px rgb(59, 130, 246 / 0.03);
+  }
+  50% {
+    border-color: rgb(59, 130, 246 / 0.8);
+    box-shadow: 0 0 40px rgb(59, 130, 246 / 0.6), 0 0 80px rgb(59, 130, 246 / 0.3), inset 0 0 30px rgb(59, 130, 246 / 0.15);
+  }
+  100% {
+    border-color: rgb(59, 130, 246 / 0.2);
+    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05), inset 0 0 10px rgb(59, 130, 246 / 0.03);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pyide-anim * {
     animation: none !important;

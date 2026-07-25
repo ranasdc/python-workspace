@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
@@ -23,13 +24,13 @@ export function AppHeader({
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-6">
-      <div className="flex items-center gap-2.5">
+      <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
         <LogoIcon className="h-9 w-9 shrink-0" />
         <div className="leading-tight">
           <LogoWordmark className="block text-sm" />
           <span className="block text-xs capitalize text-muted-foreground">{role} workspace</span>
         </div>
-      </div>
+      </Link>
       <div className="flex items-center gap-3">
         <div className="hidden text-right sm:block">
           <span className="block text-sm font-medium">{name}</span>
