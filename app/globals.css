@@ -380,14 +380,15 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Scroll indicator bounce animation. */
+/* Scroll indicator bounce animation - moves up and down. */
 @keyframes bounce-down {
   0%, 100% {
-    transform: translateY(0);
+    transform: translateY(-8px);
     opacity: 1;
   }
   50% {
-    transform: translateY(10px);
+    transform: translateY(8px);
+    opacity: 1;
   }
 }
 
