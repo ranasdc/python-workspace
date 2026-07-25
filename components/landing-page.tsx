@@ -26,15 +26,12 @@ function ScrollIndicator() {
   const [visible, setVisible] = useState(true)
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>
     const onScroll = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => setVisible(false), 2000)
+      setVisible(false)
     }
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => {
       window.removeEventListener("scroll", onScroll)
-      clearTimeout(timer)
     }
   }, [])
 
