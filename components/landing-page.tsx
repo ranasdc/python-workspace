@@ -173,28 +173,16 @@ export function LandingPage() {
         </div>
 
         <Reveal>
-          <div className="mb-6 relative inline-flex">
-            {/* Aurora blur background effect */}
-            <div 
-              className="absolute -inset-8 rounded-full blur-3xl opacity-60 -z-10"
-              style={{
-                animation: 'border-glow 4s ease-in-out infinite',
-                background: 'radial-gradient(circle, currentColor 0%, transparent 70%)'
-              }}
-            />
-            
-            {/* Main badge */}
-            <div 
-              className="inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
-              style={{
-                animation: 'border-glow 4s ease-in-out infinite'
-              }}
-            >
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
-                <Play className="h-2.5 w-2.5 text-primary" />
-              </div>
-              <span>Run your code right in the browser</span>
+          <div 
+            className="mb-6 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
+            style={{
+              animation: 'border-glow 6s ease-in-out infinite'
+            }}
+          >
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
+              <Play className="h-2.5 w-2.5 text-primary" />
             </div>
+            <span>Run your code right in the browser</span>
           </div>
         </Reveal>
       <Reveal delay={80}>
