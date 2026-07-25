@@ -323,22 +323,13 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Water waves splashing effect. */
-@keyframes water-waves {
+/* Ocean wave surface motion. */
+@keyframes wave-motion {
   0% {
-    transform: translateY(0) scaleY(1);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  50% {
-    transform: translateY(-15px) scaleY(0.8);
-    opacity: 1;
+    transform: translateX(0);
   }
   100% {
-    transform: translateY(0) scaleY(1);
-    opacity: 0;
+    transform: translateX(300px);
   }
 }
 
