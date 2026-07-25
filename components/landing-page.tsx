@@ -173,14 +173,12 @@ export function LandingPage() {
         </div>
 
         <Reveal>
-          <div className="mb-6 relative inline-flex items-center gap-2 rounded-full border-2 border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm shadow-lg shadow-primary/10">
-            {/* Animated red LED dot */}
-            <div 
-              className="absolute h-3 w-3 rounded-full bg-red-500 shadow-lg shadow-red-500/50"
-              style={{
-                animation: 'led-orbit 4s linear infinite'
-              }}
-            />
+          <div 
+            className="mb-6 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
+            style={{
+              animation: 'border-glow 4s ease-in-out infinite'
+            }}
+          >
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
               <Play className="h-2.5 w-2.5 text-primary" />
             </div>
