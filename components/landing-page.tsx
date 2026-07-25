@@ -176,7 +176,7 @@ export function LandingPage() {
           <div 
             className="mb-6 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
             style={{
-              animation: 'border-glow 6s ease-in-out infinite'
+              animation: 'border-glow 10s ease-in-out infinite'
             }}
           >
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
