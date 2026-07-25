@@ -197,7 +197,7 @@ export function LandingPage() {
             animation: 'halo-pulse 4s ease-in-out infinite'
           }}
         >
-          ✨ More programming languages coming soon!
+          ✨ <span className="emerald-shimmer">More programming languages coming soon!</span>
         </div>
       </Reveal>
         <Reveal delay={160}>
