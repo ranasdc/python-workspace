@@ -334,21 +334,21 @@ textarea.pycharm-code::placeholder {
   animation: rainbow-shimmer 4s linear infinite;
 }
 
-/* Emerald shimmer text effect. */
+/* Emerald shimmer moving right to left. */
 @keyframes emerald-text-shimmer {
   0% {
-    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    text-shadow: -100px 0 30px rgba(16, 185, 129, 0);
   }
   50% {
-    text-shadow: 0 0 12px rgba(16, 185, 129, 0.6), 0 0 24px rgba(16, 185, 129, 0.3);
+    text-shadow: 0 0 30px rgba(16, 185, 129, 0.8), 0 0 50px rgba(16, 185, 129, 0.4);
   }
   100% {
-    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    text-shadow: 100px 0 30px rgba(16, 185, 129, 0);
   }
 }
 
 .emerald-shimmer {
-  animation: emerald-text-shimmer 5s ease-in-out infinite;
+  animation: emerald-text-shimmer 4s ease-in-out infinite;
 }
 
 /* Slow moving green halo effect. */
