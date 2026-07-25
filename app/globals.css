@@ -303,21 +303,17 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Text shimmer effect with moving light - preserves readability. */
+/* Text shimmer effect. */
 @keyframes text-shimmer {
   0% {
-    text-shadow: 0 0 5px rgba(59, 130, 246, 0), 0 0 10px rgba(59, 130, 246, 0);
+    text-shadow: 0 0 0 rgba(255, 255, 255, 0);
   }
   50% {
-    text-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.6), 0 0 20px rgba(59, 130, 246, 0.3);
   }
   100% {
-    text-shadow: 0 0 5px rgba(59, 130, 246, 0), 0 0 10px rgba(59, 130, 246, 0);
+    text-shadow: 0 0 0 rgba(255, 255, 255, 0);
   }
-}
-
-.shimmer-text {
-  animation: text-shimmer 6s ease-in-out infinite;
 }
 
 /* Rainbow shimmer moving through text. */
@@ -362,25 +358,6 @@ textarea.pycharm-code::placeholder {
   100% {
     box-shadow: 0 0 20px rgb(16, 185, 129 / 0.3), inset 0 0 20px rgb(16, 185, 129 / 0.1);
   }
-}
-
-/* Emerald shimmer text effect. */
-@keyframes emerald-shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
-.emerald-shimmer-text {
-  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.4), rgba(16, 185, 129, 0.8), rgba(16, 185, 129, 0.4), transparent);
-  background-size: 1000px 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: emerald-shimmer 3s ease-in-out infinite;
 }
 
 /* Blue glowing border with fade in/out effect. */
