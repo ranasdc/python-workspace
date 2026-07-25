@@ -347,22 +347,19 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Blue glowing border with fade in/out and blur effect. */
+/* Blue glowing border with fade in/out effect. */
 @keyframes border-glow {
   0% {
     border-color: rgb(59, 130, 246 / 0.2);
-    box-shadow: 0 0 15px rgb(59, 130, 246 / 0.1), 0 0 30px rgb(59, 130, 246 / 0.05), inset 0 0 15px rgb(59, 130, 246 / 0.05);
-    filter: blur(0.5px);
+    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05), inset 0 0 10px rgb(59, 130, 246 / 0.03);
   }
   50% {
     border-color: rgb(59, 130, 246 / 0.8);
-    box-shadow: 0 0 40px rgb(59, 130, 246 / 0.6), 0 0 80px rgb(59, 130, 246 / 0.3), inset 0 0 30px rgb(59, 130, 246 / 0.2);
-    filter: blur(0px);
+    box-shadow: 0 0 40px rgb(59, 130, 246 / 0.6), 0 0 80px rgb(59, 130, 246 / 0.3), inset 0 0 30px rgb(59, 130, 246 / 0.15);
   }
   100% {
     border-color: rgb(59, 130, 246 / 0.2);
-    box-shadow: 0 0 15px rgb(59, 130, 246 / 0.1), 0 0 30px rgb(59, 130, 246 / 0.05), inset 0 0 15px rgb(59, 130, 246 / 0.05);
-    filter: blur(0.5px);
+    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05), inset 0 0 10px rgb(59, 130, 246 / 0.03);
   }
 }
 
