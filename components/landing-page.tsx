@@ -218,6 +218,11 @@ export function LandingPage() {
           </div>
         </Reveal>
 
+        {/* Hero: live "student → teacher" code transfer animation */}
+        <Reveal delay={320} className="mt-16 w-full">
+          <CodeTransferAnimation />
+        </Reveal>
+
         {/* Scroll indicator */}
         <div className="mt-12 flex flex-col items-center gap-2">
           <p className="text-xs text-muted-foreground">Scroll to explore</p>
@@ -242,11 +247,6 @@ export function LandingPage() {
             </svg>
           </div>
         </div>
-
-        {/* Hero: live "student → teacher" code transfer animation */}
-        <Reveal delay={320} className="mt-16 w-full">
-          <CodeTransferAnimation />
-        </Reveal>
 
         {/* Stats band */}
         <Reveal delay={120} className="mt-16 w-full">
