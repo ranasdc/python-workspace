@@ -364,23 +364,19 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Rotating blue halo effect from right to left. */
+/* Blue glowing border with fade in/out effect. */
 @keyframes border-glow {
   0% {
-    border-image-source: conic-gradient(from 0deg, rgb(59, 130, 246 / 0.2), rgb(59, 130, 246 / 0.2));
-    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05);
-  }
-  25% {
-    box-shadow: -40px 0 40px rgb(59, 130, 246 / 0.5), 0 0 20px rgb(59, 130, 246 / 0.3);
+    border-color: rgb(59, 130, 246 / 0.2);
+    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05), inset 0 0 10px rgb(59, 130, 246 / 0.03);
   }
   50% {
-    box-shadow: 0 -40px 40px rgb(59, 130, 246 / 0.5), 0 0 20px rgb(59, 130, 246 / 0.3);
-  }
-  75% {
-    box-shadow: 40px 0 40px rgb(59, 130, 246 / 0.5), 0 0 20px rgb(59, 130, 246 / 0.3);
+    border-color: rgb(59, 130, 246 / 0.8);
+    box-shadow: 0 0 40px rgb(59, 130, 246 / 0.6), 0 0 80px rgb(59, 130, 246 / 0.3), inset 0 0 30px rgb(59, 130, 246 / 0.15);
   }
   100% {
-    box-shadow: 0 40px 40px rgb(59, 130, 246 / 0.5), 0 0 20px rgb(59, 130, 246 / 0.3);
+    border-color: rgb(59, 130, 246 / 0.2);
+    box-shadow: 0 0 10px rgb(59, 130, 246 / 0.1), 0 0 20px rgb(59, 130, 246 / 0.05), inset 0 0 10px rgb(59, 130, 246 / 0.03);
   }
 }
 
