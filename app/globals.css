@@ -334,6 +334,19 @@ textarea.pycharm-code::placeholder {
   animation: rainbow-shimmer 4s linear infinite;
 }
 
+/* Slow moving green halo effect. */
+@keyframes halo-pulse {
+  0% {
+    box-shadow: 0 0 20px rgb(16, 185, 129 / 0.3), inset 0 0 20px rgb(16, 185, 129 / 0.1);
+  }
+  50% {
+    box-shadow: 0 0 40px rgb(16, 185, 129 / 0.5), inset 0 0 30px rgb(16, 185, 129 / 0.2);
+  }
+  100% {
+    box-shadow: 0 0 20px rgb(16, 185, 129 / 0.3), inset 0 0 20px rgb(16, 185, 129 / 0.1);
+  }
+}
+
 /* Glowing border cycling through blue, green, yellow. */
 @keyframes border-glow {
   0% {
