@@ -173,16 +173,22 @@ export function LandingPage() {
         </div>
 
         <Reveal>
-          <div 
-            className="mb-6 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
-            style={{
-              animation: 'border-glow 10s ease-in-out infinite'
-            }}
-          >
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
-              <Play className="h-2.5 w-2.5 text-primary" />
+          <div className="mb-6 relative inline-flex">
+            {/* Spinning conic glow layer — right to left */}
+            <div
+              className="absolute -inset-[2px] rounded-full blur-sm"
+              style={{
+                background: 'conic-gradient(from 0deg, transparent 60%, rgba(59,130,246,0.9) 80%, rgba(59,130,246,0.3) 90%, transparent 100%)',
+                animation: 'border-spin 6s linear infinite',
+              }}
+            />
+            {/* Badge */}
+            <div className="relative inline-flex items-center gap-2 rounded-full border border-primary/20 bg-background/80 px-4 py-2 text-xs font-semibold text-primary">
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
+                <Play className="h-2.5 w-2.5 text-primary" />
+              </div>
+              <span>Run your code right in the browser</span>
             </div>
-            <span>Run your code right in the browser</span>
           </div>
         </Reveal>
       <Reveal delay={80}>
