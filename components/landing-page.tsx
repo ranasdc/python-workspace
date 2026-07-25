@@ -194,12 +194,12 @@ export function LandingPage() {
       </Reveal>
       <Reveal delay={120}>
         <div 
-          className="mt-4 inline-block rounded-full bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-transparent px-4 py-2 text-sm font-semibold text-emerald-400"
+          className="mt-4 inline-block rounded-full bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-transparent px-4 py-2 text-sm font-semibold"
           style={{
             animation: 'halo-pulse 4s ease-in-out infinite'
           }}
         >
-          ✨ More programming languages coming soon!
+          ✨ <span className="emerald-shimmer-text">More programming languages coming soon!</span>
         </div>
       </Reveal>
         <Reveal delay={160}>
