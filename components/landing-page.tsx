@@ -185,7 +185,7 @@ export function LandingPage() {
       </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
-            Students write and run Python in a clean editor. Their code flows straight to the
+            Students write and run code in a clean editor. Their code flows straight to the
             teacher&apos;s dashboard, neatly organized by class, student, and file.
           </p>
         </Reveal>
