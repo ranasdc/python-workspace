@@ -173,47 +173,28 @@ export function LandingPage() {
         </div>
 
         <Reveal>
-          <div 
-            className="mb-6 relative inline-flex flex-col items-center justify-center gap-1 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-3 text-xs font-semibold text-primary backdrop-blur-sm overflow-hidden"
-            style={{
-              animation: 'border-glow 4s ease-in-out infinite'
-            }}
-          >
-            {/* Content - Icon and Text */}
-            <div className="relative z-10 flex items-center gap-2">
+          <div className="mb-6 relative inline-flex">
+            {/* Aurora blur background effect */}
+            <div 
+              className="absolute -inset-8 rounded-full blur-3xl opacity-60 -z-10"
+              style={{
+                animation: 'border-glow 4s ease-in-out infinite',
+                background: 'radial-gradient(circle, currentColor 0%, transparent 70%)'
+              }}
+            />
+            
+            {/* Main badge */}
+            <div 
+              className="inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary backdrop-blur-sm"
+              style={{
+                animation: 'border-glow 4s ease-in-out infinite'
+              }}
+            >
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
                 <Play className="h-2.5 w-2.5 text-primary" />
               </div>
               <span>Run your code right in the browser</span>
             </div>
-            
-            {/* Ocean waves underneath */}
-            <svg className="relative z-0 w-full h-8 -mb-1" viewBox="0 0 300 60" preserveAspectRatio="none">
-              <defs>
-                <style>{`
-                  .wave-surface { animation: wave-motion 3s ease-in-out infinite; }
-                  .wave-accent { animation: wave-motion 2.5s ease-in-out infinite 0.2s; }
-                  .wave-deep { animation: wave-motion 2.8s ease-in-out infinite 0.4s; }
-                `}</style>
-              </defs>
-              <path className="wave-surface" d="M0,30 Q75,15 150,30 T300,30 L300,60 L0,60 Z" fill="url(#waveGradient1)" opacity="0.6" />
-              <path className="wave-accent" d="M0,35 Q75,20 150,35 T300,35 L300,60 L0,60 Z" fill="url(#waveGradient2)" opacity="0.4" />
-              <path className="wave-deep" d="M0,40 Q75,25 150,40 T300,40 L300,60 L0,60 Z" fill="url(#waveGradient3)" opacity="0.3" />
-              <defs>
-                <linearGradient id="waveGradient1" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.2" />
-                </linearGradient>
-                <linearGradient id="waveGradient2" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgb(34, 197, 94)" stopOpacity="0.7" />
-                  <stop offset="100%" stopColor="rgb(34, 197, 94)" stopOpacity="0.1" />
-                </linearGradient>
-                <linearGradient id="waveGradient3" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgb(234, 179, 8)" stopOpacity="0.6" />
-                  <stop offset="100%" stopColor="rgb(234, 179, 8)" stopOpacity="0.05" />
-                </linearGradient>
-              </defs>
-            </svg>
           </div>
         </Reveal>
       <Reveal delay={80}>

@@ -323,16 +323,6 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Ocean wave surface motion. */
-@keyframes wave-motion {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(300px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .pyide-anim * {
     animation: none !important;
