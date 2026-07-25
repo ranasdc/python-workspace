@@ -182,11 +182,7 @@ export function LandingPage() {
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
               <Play className="h-2.5 w-2.5 text-primary" />
             </div>
-            <span 
-              style={{
-                animation: 'text-shimmer 4s ease-in-out infinite'
-              }}
-            >
+            <span className="shimmer-text">
               Run your code right in the browser
             </span>
           </div>
