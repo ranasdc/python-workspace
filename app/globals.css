@@ -303,29 +303,21 @@ textarea.pycharm-code::placeholder {
   }
 }
 
-/* Text shimmer effect with moving light. */
+/* Text shimmer effect with moving light - preserves readability. */
 @keyframes text-shimmer {
   0% {
-    background: linear-gradient(90deg, transparent, transparent, rgba(59, 130, 246, 0), transparent, transparent);
-    background-position: -1000px 0;
+    text-shadow: 0 0 5px rgba(59, 130, 246, 0), 0 0 10px rgba(59, 130, 246, 0);
   }
   50% {
-    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), rgba(59, 130, 246, 0.8), rgba(59, 130, 246, 0.4), transparent);
-    background-position: 1000px 0;
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
   }
   100% {
-    background: linear-gradient(90deg, transparent, transparent, rgba(59, 130, 246, 0), transparent, transparent);
-    background-position: -1000px 0;
+    text-shadow: 0 0 5px rgba(59, 130, 246, 0), 0 0 10px rgba(59, 130, 246, 0);
   }
 }
 
 .shimmer-text {
-  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), rgba(59, 130, 246, 0.8), rgba(59, 130, 246, 0.4), transparent);
-  background-size: 1000px 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: text-shimmer 3s ease-in-out infinite;
+  animation: text-shimmer 6s ease-in-out infinite;
 }
 
 /* Rainbow shimmer moving through text. */
