@@ -192,7 +192,7 @@ export function LandingPage() {
       </Reveal>
       <Reveal delay={120}>
         <div 
-          className="mt-4 inline-block text-sm font-semibold text-emerald-400"
+          className="mt-4 inline-block text-base font-semibold text-emerald-400 px-2 py-1"
           style={{
             animation: 'halo-pulse 4s ease-in-out infinite'
           }}
