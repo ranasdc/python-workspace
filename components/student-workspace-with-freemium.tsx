@@ -51,9 +51,13 @@ export function StudentWorkspaceWithFreemium({ initialClasses }: { initialClasse
     return <div className="flex flex-1 items-center justify-center">Loading...</div>
   }
 
+  // Check if user is on free tier (individual account without subscription)
   const isFreeUser =
     subscriptionInfo?.accountType === "individual" &&
     subscriptionInfo?.subscriptionStatus === "free"
+
+  // For individual users with no classes, treat as free tier
+  const shouldShowFreeTier = isFreeUser || (initialClasses.length === 0 && subscriptionInfo?.accountType === "individual")
 
   const handleUpgradeClick = () => {
     setShowUpgradeModal(true)
@@ -62,10 +66,10 @@ export function StudentWorkspaceWithFreemium({ initialClasses }: { initialClasse
   return (
     <>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {isFreeUser && (
+        {shouldShowFreeTier && (
           <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              Free tier: {subscriptionInfo.createdFoldersCount}/1 folders, {subscriptionInfo.createdFilesCount}/2 files
+              Free tier: {subscriptionInfo?.createdFoldersCount || 0}/1 folders, {subscriptionInfo?.createdFilesCount || 0}/2 files
             </span>
             <UpgradeButton onClick={handleUpgradeClick} compact={true} />
           </div>
@@ -76,9 +80,9 @@ export function StudentWorkspaceWithFreemium({ initialClasses }: { initialClasse
             setLimitType(type)
             setShowUpgradeModal(true)
           }}
-          isFreeUser={isFreeUser}
-          canCreateFile={isFreeUser ? subscriptionInfo.createdFilesCount < 2 : true}
-          canCreateFolder={isFreeUser ? subscriptionInfo.createdFoldersCount < 1 : true}
+          isFreeUser={shouldShowFreeTier}
+          canCreateFile={shouldShowFreeTier ? (subscriptionInfo?.createdFilesCount || 0) < 2 : true}
+          canCreateFolder={shouldShowFreeTier ? (subscriptionInfo?.createdFoldersCount || 0) < 1 : true}
         />
       </div>
 

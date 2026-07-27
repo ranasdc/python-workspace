@@ -15,7 +15,7 @@ export default async function StudentPage() {
   return (
     <div className="flex h-svh flex-col">
       <AppHeader name={sessionUser.name} role="student" />
-      <StudentOnboarding />
+      {classes.length === 0 && <StudentOnboarding />}
       <StudentWorkspaceWithFreemium initialClasses={classes} />
     </div>
   )
