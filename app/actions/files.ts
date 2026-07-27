@@ -82,6 +82,26 @@ export async function createFile(classId: number, name: string, folderId: number
     .values({ classId, studentId: student.id, folderId, name: clean, content: STARTER })
     .returning()
 
+  // Track file creation for free tier users
+  try {
+    const [userRecord] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, student.id))
+      .limit(1)
+    
+    if (userRecord?.accountType === "individual" && userRecord?.subscriptionStatus === "free") {
+      await db
+        .update(user)
+        .set({
+          createdFilesCount: (userRecord.createdFilesCount || 0) + 1,
+        })
+        .where(eq(user.id, student.id))
+    }
+  } catch (error) {
+    console.error("[v0] Failed to track file creation:", error)
+  }
+
   revalidatePath("/student")
   return created
 }
@@ -97,6 +117,26 @@ export async function createStudentFolder(classId: number, name: string) {
     .insert(studentFolders)
     .values({ classId, studentId: student.id, name: clean })
     .returning()
+
+  // Track folder creation for free tier users
+  try {
+    const [userRecord] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, student.id))
+      .limit(1)
+    
+    if (userRecord?.accountType === "individual" && userRecord?.subscriptionStatus === "free") {
+      await db
+        .update(user)
+        .set({
+          createdFoldersCount: (userRecord.createdFoldersCount || 0) + 1,
+        })
+        .where(eq(user.id, student.id))
+    }
+  } catch (error) {
+    console.error("[v0] Failed to track folder creation:", error)
+  }
 
   revalidatePath("/student")
   return created
