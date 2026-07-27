@@ -1,20 +1,32 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { setAccountType } from "@/app/actions/onboarding"
 
+const ONBOARDING_DISMISSED_KEY = "student_onboarding_dismissed"
+
 export function StudentOnboarding() {
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<"choice" | "join-class">("choice")
   const [classCode, setClassCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
+  useEffect(() => {
+    // Check if onboarding was already dismissed in this session
+    const isDismissed = sessionStorage.getItem(ONBOARDING_DISMISSED_KEY)
+    if (!isDismissed) {
+      setIsOpen(true)
+    }
+  }, [])
+
   const handleIndividualUser = async () => {
     setIsLoading(true)
     try {
+      // Mark onboarding as dismissed before closing
+      sessionStorage.setItem(ONBOARDING_DISMISSED_KEY, "true")
       await setAccountType("individual")
       setIsOpen(false)
       // Refresh page to reload with new account type
@@ -22,6 +34,7 @@ export function StudentOnboarding() {
     } catch (error) {
       console.error("Failed to set account type:", error)
       // Still close the modal and proceed even if DB update fails
+      sessionStorage.setItem(ONBOARDING_DISMISSED_KEY, "true")
       setIsOpen(false)
       window.location.reload()
     } finally {
@@ -35,6 +48,8 @@ export function StudentOnboarding() {
 
     setIsLoading(true)
     try {
+      // Mark onboarding as dismissed before closing
+      sessionStorage.setItem(ONBOARDING_DISMISSED_KEY, "true")
       // Call join class action (to be created in next step)
       // For now, we'll just set account type to "class"
       await setAccountType("class")
@@ -43,6 +58,7 @@ export function StudentOnboarding() {
     } catch (error) {
       console.error("Failed to join class:", error)
       // Still close the modal and proceed even if DB update fails
+      sessionStorage.setItem(ONBOARDING_DISMISSED_KEY, "true")
       setIsOpen(false)
       window.location.reload()
     } finally {
