@@ -1,5 +1,8 @@
 import { getSessionUser } from "@/lib/session"
 import { redirect } from "next/navigation"
+import { db } from "@/lib/db"
+import { user as userTable } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { getStudentClasses } from "@/app/actions/classes"
 import { AppHeader } from "@/components/app-header"
 import { StudentWorkspaceWithFreemium } from "@/components/student-workspace-with-freemium"
@@ -12,10 +15,22 @@ export default async function StudentPage() {
 
   const classes = await getStudentClasses()
 
-  // Show onboarding only if user has no classes
-  // Individual users will have no classes initially, then get the onboarding
-  // Once they choose, we show the workspace
-  const showOnboarding = classes.length === 0
+  // Determine if the user has already chosen an account type.
+  let accountType: string | null = null
+  try {
+    const [record] = await db
+      .select({ accountType: userTable.accountType })
+      .from(userTable)
+      .where(eq(userTable.id, sessionUser.id))
+      .limit(1)
+    accountType = record?.accountType ?? null
+  } catch (error) {
+    console.error("[v0] Failed to read accountType:", error)
+  }
+
+  // Show onboarding only if the user hasn't chosen an account type
+  // and hasn't joined any class yet.
+  const showOnboarding = !accountType && classes.length === 0
 
   return (
     <div className="flex h-svh flex-col">
