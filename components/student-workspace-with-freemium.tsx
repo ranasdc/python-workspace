@@ -32,6 +32,13 @@ export function StudentWorkspaceWithFreemium({ initialClasses }: { initialClasse
         setSubscriptionInfo(info)
       } catch (error) {
         console.error("Failed to load subscription info:", error)
+        // Fallback for when database schema isn't migrated yet
+        setSubscriptionInfo({
+          accountType: null,
+          subscriptionStatus: null,
+          createdFilesCount: 0,
+          createdFoldersCount: 0,
+        })
       } finally {
         setIsLoading(false)
       }

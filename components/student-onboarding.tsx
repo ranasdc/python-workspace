@@ -21,6 +21,9 @@ export function StudentOnboarding() {
       window.location.reload()
     } catch (error) {
       console.error("Failed to set account type:", error)
+      // Still close the modal and proceed even if DB update fails
+      setIsOpen(false)
+      window.location.reload()
     } finally {
       setIsLoading(false)
     }
@@ -39,6 +42,9 @@ export function StudentOnboarding() {
       window.location.reload()
     } catch (error) {
       console.error("Failed to join class:", error)
+      // Still close the modal and proceed even if DB update fails
+      setIsOpen(false)
+      window.location.reload()
     } finally {
       setIsLoading(false)
     }
