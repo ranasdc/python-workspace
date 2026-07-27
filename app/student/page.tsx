@@ -12,10 +12,15 @@ export default async function StudentPage() {
 
   const classes = await getStudentClasses()
 
+  // Show onboarding only if user has no classes
+  // Individual users will have no classes initially, then get the onboarding
+  // Once they choose, we show the workspace
+  const showOnboarding = classes.length === 0
+
   return (
     <div className="flex h-svh flex-col">
       <AppHeader name={sessionUser.name} role="student" />
-      {classes.length === 0 && <StudentOnboarding />}
+      {showOnboarding && <StudentOnboarding />}
       <StudentWorkspaceWithFreemium initialClasses={classes} />
     </div>
   )
