@@ -16,6 +16,12 @@ export const user = pgTable("user", {
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),
   role: text("role").notNull().default("student"),
+  // Freemium model for individual students
+  accountType: text("accountType"), // "class" | "individual"
+  isFirstLogin: boolean("isFirstLogin").notNull().default(true),
+  subscriptionStatus: text("subscriptionStatus").default("free"), // "free" | "monthly" | "yearly"
+  createdFilesCount: integer("createdFilesCount").notNull().default(0),
+  createdFoldersCount: integer("createdFoldersCount").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
