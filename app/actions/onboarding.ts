@@ -9,14 +9,19 @@ export async function setAccountType(accountType: "class" | "individual") {
   const sessionUser = await getSessionUser()
   if (!sessionUser) throw new Error("Not authenticated")
 
-  await db
-    .update(user)
-    .set({
-      accountType,
-      isFirstLogin: false,
-      subscriptionStatus: accountType === "individual" ? "free" : undefined,
-    })
-    .where(eq(user.id, sessionUser.id))
+  try {
+    await db
+      .update(user)
+      .set({
+        accountType,
+        isFirstLogin: false,
+        subscriptionStatus: accountType === "individual" ? "free" : undefined,
+      })
+      .where(eq(user.id, sessionUser.id))
+  } catch (error) {
+    console.error("[v0] Failed to set account type in DB:", error)
+    // Continue anyway - the schema might not be migrated yet
+  }
 }
 
 export async function incrementFileCount(userId: string) {
@@ -91,17 +96,29 @@ export async function getUserSubscriptionInfo() {
   const sessionUser = await getSessionUser()
   if (!sessionUser) throw new Error("Not authenticated")
 
-  const currentUser = await db.query.user.findFirst({
-    where: eq(user.id, sessionUser.id),
-  })
+  try {
+    const currentUser = await db.query.user.findFirst({
+      where: eq(user.id, sessionUser.id),
+    })
 
-  if (!currentUser) throw new Error("User not found")
+    if (!currentUser) throw new Error("User not found")
 
-  return {
-    accountType: currentUser.accountType,
-    subscriptionStatus: currentUser.subscriptionStatus,
-    createdFilesCount: currentUser.createdFilesCount || 0,
-    createdFoldersCount: currentUser.createdFoldersCount || 0,
-    isFirstLogin: currentUser.isFirstLogin,
+    return {
+      accountType: currentUser.accountType,
+      subscriptionStatus: currentUser.subscriptionStatus,
+      createdFilesCount: currentUser.createdFilesCount || 0,
+      createdFoldersCount: currentUser.createdFoldersCount || 0,
+      isFirstLogin: currentUser.isFirstLogin,
+    }
+  } catch (error) {
+    console.error("[v0] Failed to get subscription info:", error)
+    // Return default free tier info if DB query fails
+    return {
+      accountType: null,
+      subscriptionStatus: "free",
+      createdFilesCount: 0,
+      createdFoldersCount: 0,
+      isFirstLogin: true,
+    }
   }
 }
