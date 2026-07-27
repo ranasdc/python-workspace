@@ -85,7 +85,19 @@ type FileTree = {
   rootFiles: FileItem[]
 }
 
-export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem[] }) {
+export function StudentWorkspace({ 
+  initialClasses,
+  onLimitReached,
+  isFreeUser,
+  canCreateFile,
+  canCreateFolder,
+}: { 
+  initialClasses: ClassItem[]
+  onLimitReached?: (type: "file" | "folder") => void
+  isFreeUser?: boolean
+  canCreateFile?: boolean
+  canCreateFolder?: boolean
+}) {
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
@@ -171,6 +183,13 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
 
   async function handleCreateFile(name: string, folderId: number | null = null) {
     if (!activeClassId) return
+    
+    // Check free tier limit
+    if (isFreeUser && !canCreateFile) {
+      onLimitReached?.("file")
+      return
+    }
+    
     const created = await createFile(activeClassId, name, folderId)
     await mutate(filesKey)
     setActiveFileId(created.id)
@@ -179,6 +198,13 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
 
   async function handleCreateFolder(name: string) {
     if (!activeClassId) return
+    
+    // Check free tier limit
+    if (isFreeUser && !canCreateFolder) {
+      onLimitReached?.("folder")
+      return
+    }
+    
     const created = await createStudentFolder(activeClassId, name)
     await mutate(filesKey)
     toast.success(`Created folder ${created.name}`)
@@ -206,7 +232,7 @@ export function StudentWorkspace({ initialClasses }: { initialClasses: ClassItem
     .trim()
   const showErrorHelper = Boolean(errorText) && status !== "running" && !!activeFileId
 
-  if (classes.length === 0) {
+  if (classes.length === 0 && !isFreeUser) {
     return <EmptyState onJoined={(c) => {
       setClasses([c])
       setActiveClassId(c.id)

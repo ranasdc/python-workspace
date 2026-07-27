@@ -51,8 +51,8 @@ export function StudentOnboarding() {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-md">
+    <Dialog open={isOpen} onOpenChange={() => {}}>
+      <DialogContent className="max-w-md" showCloseButton={false}>
         {step === "choice" ? (
           <>
             <DialogHeader>
