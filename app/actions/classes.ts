@@ -101,6 +101,45 @@ export async function joinClass(formData: FormData) {
   return target
 }
 
+// Ensure an individual (class-less) student has a personal workspace so the
+// class-keyed file system works. Idempotent: returns early if already enrolled.
+export async function ensurePersonalWorkspace() {
+  const student = await requireUser()
+
+  const existing = await db
+    .select({ classId: enrollments.classId })
+    .from(enrollments)
+    .where(eq(enrollments.studentId, student.id))
+    .limit(1)
+  if (existing.length > 0) return
+
+  // Unique join code for the personal class (owned by the student themselves).
+  let joinCode = makeJoinCode()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const dup = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.joinCode, joinCode))
+    if (dup.length === 0) break
+    joinCode = makeJoinCode()
+  }
+
+  const [created] = await db
+    .insert(classes)
+    .values({
+      name: "My Workspace",
+      description: "Your personal Python workspace",
+      joinCode,
+      teacherId: student.id,
+    })
+    .returning()
+
+  await db
+    .insert(enrollments)
+    .values({ classId: created.id, studentId: student.id })
+    .onConflictDoNothing()
+}
+
 export async function getStudentClasses() {
   const student = await requireUser()
 
