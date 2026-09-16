@@ -22,7 +22,7 @@ const RELEVANT = new Set([
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET
   if (!secret) {
-    console.log("[v0] STRIPE_WEBHOOK_SECRET is not set; rejecting webhook")
+    console.error("[stripe-webhook] STRIPE_WEBHOOK_SECRET is not set; rejecting webhook")
     return new Response("Webhook not configured", { status: 500 })
   }
 
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     event = stripe.webhooks.constructEvent(payload, signature, secret)
   } catch (error) {
     console.log(
-      "[v0] stripe signature verification failed:",
+      "[stripe-webhook] signature verification failed:",
       error instanceof Error ? error.message : error,
     )
     return new Response("Invalid signature", { status: 400 })
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     // Roll the marker back so Stripe's retry can have another go.
     await db.delete(stripeEvents).where(eq(stripeEvents.id, event.id))
     console.log(
-      "[v0] stripe webhook handler failed:",
+      "[stripe-webhook] handler failed:",
       error instanceof Error ? error.message : error,
     )
     return new Response("Handler error", { status: 500 })

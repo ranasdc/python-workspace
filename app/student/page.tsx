@@ -25,7 +25,10 @@ export default async function StudentPage() {
       .limit(1)
     accountType = record?.accountType ?? null
   } catch (error) {
-    console.error("[v0] Failed to read accountType:", error)
+    // Safe to swallow: accountType only decides whether to show onboarding.
+    // It grants nothing, so a read failure degrades to "show onboarding"
+    // rather than failing the whole workspace.
+    console.error("[student] failed to read accountType:", error)
   }
 
   // Individual users have no teacher-led class, but the file system is keyed on

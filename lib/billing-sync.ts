@@ -33,7 +33,7 @@ export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
   const schoolIdRaw = sub.metadata?.schoolId
 
   if (!planId || !PLANS[planId]) {
-    console.log("[v0] stripe sync skipped: unknown planId", sub.id, planId)
+    console.warn("[billing] stripe sync skipped: unknown planId", sub.id, planId)
     return
   }
 
@@ -45,7 +45,7 @@ export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
   if (isSchoolPlan(planId)) {
     const schoolId = schoolIdRaw ? Number(schoolIdRaw) : Number.NaN
     if (!Number.isFinite(schoolId)) {
-      console.log("[v0] stripe sync skipped: school plan without schoolId", sub.id)
+      console.warn("[billing] stripe sync skipped: school plan without schoolId", sub.id)
       return
     }
 
@@ -83,7 +83,7 @@ export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
   }
 
   if (!userId) {
-    console.log("[v0] stripe sync skipped: individual plan without userId", sub.id)
+    console.warn("[billing] stripe sync skipped: individual plan without userId", sub.id)
     return
   }
 

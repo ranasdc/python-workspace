@@ -68,7 +68,7 @@ export async function POST(req: Request) {
 
     return Response.json({ help: text })
   } catch (e) {
-    console.log("[v0] error-help generation failed:", e instanceof Error ? e.message : e)
+    console.error("[error-help] generation failed:", e instanceof Error ? e.message : e)
     return Response.json(
       { error: "Could not generate a hint right now. Please try again." },
       { status: 500 },
