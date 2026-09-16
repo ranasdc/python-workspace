@@ -4,7 +4,9 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
 import { setAccountType } from "@/app/actions/onboarding"
+import { joinClass } from "@/app/actions/classes"
 
 export function StudentOnboarding() {
   // The server only renders this component when onboarding should be shown
@@ -22,10 +24,7 @@ export function StudentOnboarding() {
       // Refresh page to reload with new account type
       window.location.reload()
     } catch (error) {
-      console.error("Failed to set account type:", error)
-      // Still close the modal and proceed even if DB update fails
-      setIsOpen(false)
-      window.location.reload()
+      toast.error(error instanceof Error ? error.message : "Something went wrong")
     } finally {
       setIsLoading(false)
     }
@@ -37,15 +36,19 @@ export function StudentOnboarding() {
 
     setIsLoading(true)
     try {
-      // For now, we'll just set account type to "class"
+      // This step used to throw the code away and only flip the account type,
+      // so students were never actually enrolled. Enrol first; only record the
+      // preference once the join really succeeded.
+      const formData = new FormData()
+      formData.set("joinCode", classCode.trim())
+      await joinClass(formData)
       await setAccountType("class")
       setIsOpen(false)
       window.location.reload()
     } catch (error) {
-      console.error("Failed to join class:", error)
-      // Still close the modal and proceed even if DB update fails
-      setIsOpen(false)
-      window.location.reload()
+      toast.error(
+        error instanceof Error ? error.message : "Could not join that class",
+      )
     } finally {
       setIsLoading(false)
     }
@@ -70,7 +73,7 @@ export function StudentOnboarding() {
               >
                 <span className="text-base font-semibold">Join a Class</span>
                 <span className="text-xs text-muted-foreground">
-                  Learn with your teacher and classmates (all features included)
+                  Learn with your teacher and classmates using a class code
                 </span>
               </Button>
               <Button

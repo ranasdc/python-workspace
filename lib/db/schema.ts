@@ -73,6 +73,13 @@ export const classes = pgTable("class", {
   description: text("description"),
   joinCode: text("joinCode").notNull().unique(),
   teacherId: text("teacherId").notNull(),
+  // Set when the class belongs to a school; null for standalone teachers.
+  schoolId: integer("schoolId"),
+  // Personal workspaces are auto-created for individual students. They must
+  // never be joinable by anyone else even though they carry a join code.
+  isPersonal: boolean("isPersonal").notNull().default(false),
+  // Lets a teacher disable or rotate a code without deleting the class.
+  joinCodeActive: boolean("joinCodeActive").notNull().default(true),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -144,4 +151,103 @@ export const libraryFiles = pgTable("library_file", {
   content: text("content").notNull().default(""),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// ---------- Schools, membership & entitlements ----------
+
+export const schools = pgTable("school", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  createdBy: text("createdBy")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Membership is the ONLY way a user is attached to a school. Roles here are
+// independent of user.role so a school can promote an admin without granting
+// global privileges. "school_admin" is never self-registerable.
+export const schoolMembers = pgTable(
+  "school_member",
+  {
+    id: serial("id").primaryKey(),
+    schoolId: integer("schoolId")
+      .notNull()
+      .references(() => schools.id, { onDelete: "cascade" }),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("student"), // student | teacher | school_admin
+    status: text("status").notNull().default("active"), // active | removed
+    joinedAt: timestamp("joinedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqMember: unique().on(t.schoolId, t.userId),
+  }),
+)
+
+export const inviteCodes = pgTable("invite_code", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("schoolId")
+    .notNull()
+    .references(() => schools.id, { onDelete: "cascade" }),
+  code: text("code").notNull().unique(),
+  // Role granted when this code is redeemed.
+  role: text("role").notNull().default("student"), // student | teacher
+  maxUses: integer("maxUses"), // null = unlimited
+  usedCount: integer("usedCount").notNull().default(0),
+  expiresAt: timestamp("expiresAt"),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("createdBy")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Individual paid plans (Student Pro / Teacher Pro). One row per user.
+export const subscriptions = pgTable("subscription", {
+  id: serial("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  plan: text("plan").notNull(), // student_pro | teacher_pro
+  status: text("status").notNull().default("inactive"),
+  interval: text("interval"), // month | year
+  stripeCustomerId: text("stripeCustomerId"),
+  stripeSubscriptionId: text("stripeSubscriptionId").unique(),
+  stripePriceId: text("stripePriceId"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// School-wide plans. Seat limits are stored per school so they stay
+// configurable independently of the tier defaults.
+export const schoolSubscriptions = pgTable("school_subscription", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("schoolId")
+    .notNull()
+    .unique()
+    .references(() => schools.id, { onDelete: "cascade" }),
+  tier: text("tier").notNull(), // school_small | school_medium | school_large
+  status: text("status").notNull().default("inactive"),
+  teacherSeatLimit: integer("teacherSeatLimit"),
+  studentSeatLimit: integer("studentSeatLimit"),
+  stripeCustomerId: text("stripeCustomerId"),
+  stripeSubscriptionId: text("stripeSubscriptionId").unique(),
+  stripePriceId: text("stripePriceId"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Processed Stripe events, so webhook retries can never double-apply.
+export const stripeEvents = pgTable("stripe_event", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  processedAt: timestamp("processedAt").notNull().defaultNow(),
 })

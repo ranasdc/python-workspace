@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { classes, enrollments, user } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
+import { getEntitlement } from "@/lib/entitlements"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
@@ -35,9 +36,18 @@ export async function createClass(formData: FormData) {
     joinCode = makeJoinCode()
   }
 
+  // Classes created by a school teacher belong to that school.
+  const entitlement = await getEntitlement(teacher.id)
+
   const [created] = await db
     .insert(classes)
-    .values({ name, description: description || null, joinCode, teacherId: teacher.id })
+    .values({
+      name,
+      description: description || null,
+      joinCode,
+      teacherId: teacher.id,
+      schoolId: entitlement.schoolId,
+    })
     .returning()
 
   revalidatePath("/teacher")
@@ -89,6 +99,11 @@ export async function joinClass(formData: FormData) {
   const [target] = await db.select().from(classes).where(eq(classes.joinCode, rawCode))
   if (!target) throw new Error("No class found with that code")
 
+  // Personal workspaces are auto-created with a join code purely because the
+  // file system is keyed on a class. They are private: nobody may join one.
+  if (target.isPersonal) throw new Error("No class found with that code")
+  if (!target.joinCodeActive) throw new Error("That join code is no longer active")
+
   const existing = await db
     .select()
     .from(enrollments)
@@ -131,6 +146,8 @@ export async function ensurePersonalWorkspace() {
       description: "Your personal Python workspace",
       joinCode,
       teacherId: student.id,
+      isPersonal: true,
+      joinCodeActive: false,
     })
     .returning()
 
