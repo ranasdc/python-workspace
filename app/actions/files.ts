@@ -10,7 +10,11 @@ import {
   user,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
-import { assertCanCreateFile, assertCanCreateFolder } from "@/lib/entitlements"
+import {
+  assertCanCreateFile,
+  assertCanCreateFolder,
+  requireTeacherCapability,
+} from "@/lib/entitlements"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
@@ -150,7 +154,7 @@ export async function deleteFile(fileId: number) {
 // ---------- Teacher: read student files in a class ----------
 export async function getClassTree(classId: number) {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Unauthorized")
+  await requireTeacherCapability(teacher.id)
 
   const [cls] = await db
     .select()
@@ -248,7 +252,7 @@ export async function getFileComments(fileId: number) {
 
 export async function addComment(fileId: number, body: string) {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Only teachers can comment")
+  await requireTeacherCapability(teacher.id)
   await requireTeacherForFile(teacher.id, fileId)
 
   const clean = body.trim()
@@ -266,7 +270,7 @@ export async function addComment(fileId: number, body: string) {
 
 export async function deleteComment(commentId: number) {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Unauthorized")
+  await requireTeacherCapability(teacher.id)
   await db
     .delete(fileComments)
     .where(and(eq(fileComments.id, commentId), eq(fileComments.teacherId, teacher.id)))
@@ -278,7 +282,7 @@ export async function deleteComment(commentId: number) {
 // Toggle a file between "done" and "unmarked".
 export async function setFileStatus(fileId: number, status: "done" | "unmarked") {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Only teachers can mark work")
+  await requireTeacherCapability(teacher.id)
   await requireTeacherForFile(teacher.id, fileId)
 
   await db

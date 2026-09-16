@@ -10,12 +10,20 @@ import {
   studentFolders,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
+import {
+  assertCanCreateLibraryFile,
+  assertCanCreateLibraryFolder,
+  requireTeacherCapability,
+} from "@/lib/entitlements"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
+// Capability comes from the entitlement engine, not from the session's `role`
+// field: a school teacher who signed up as a student must still be able to
+// teach, and the session value reflects only a self-declared sign-up choice.
 async function requireTeacher() {
   const me = await requireUser()
-  if (me.role !== "teacher") throw new Error("Only teachers can use the library")
+  await requireTeacherCapability(me.id)
   return me
 }
 
@@ -49,6 +57,8 @@ export async function getLibrary() {
 // ---------- Folders ----------
 export async function createLibraryFolder(name: string) {
   const teacher = await requireTeacher()
+  await assertCanCreateLibraryFolder(teacher.id)
+
   const clean = name.trim()
   if (!clean) throw new Error("Folder name is required")
 
@@ -83,6 +93,8 @@ print("Let's get started!")
 
 export async function createLibraryFile(name: string, folderId: number | null) {
   const teacher = await requireTeacher()
+  await assertCanCreateLibraryFile(teacher.id)
+
   const clean = name.trim().endsWith(".py") ? name.trim() : `${name.trim()}.py`
   if (!clean || clean === ".py") throw new Error("Enter a file name")
 
@@ -133,11 +145,17 @@ async function resolveRecipients(teacherId: string, classId: number, studentId: 
     .where(and(eq(classes.id, classId), eq(classes.teacherId, teacherId)))
   if (!cls) throw new Error("Class not found")
 
+  // Distributed files are flagged assignedByTeacher and are deliberately exempt
+  // from the recipient's free-tier quota. Without these two guards a
+  // teacher-role account could distribute into its own personal workspace, or
+  // to itself, and mint unlimited files the quota never counts.
+  if (cls.isPersonal) throw new Error("Cannot distribute into a personal workspace")
+
   const enrolled = await db
     .select()
     .from(enrollments)
     .where(eq(enrollments.classId, classId))
-  const enrolledIds = enrolled.map((e) => e.studentId)
+  const enrolledIds = enrolled.map((e) => e.studentId).filter((id) => id !== teacherId)
 
   if (studentId) {
     if (!enrolledIds.includes(studentId)) throw new Error("Student is not in this class")

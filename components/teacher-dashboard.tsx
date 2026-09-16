@@ -79,10 +79,25 @@ type TreeStudent = {
   files: TreeFile[]
 }
 
+type TeacherPlanStatus = {
+  isTeacher: true
+  hasTeacherPro: boolean
+  limits: {
+    maxClasses: number | null
+    maxStudentsPerClass: number | null
+    maxLibraryFiles: number | null
+    maxLibraryFolders: number | null
+  }
+  usage: { classes: number; libraryFiles: number; libraryFolders: number }
+  schoolUnpaid: boolean
+}
+
 export function TeacherDashboard({
   initialClasses,
+  planStatus,
 }: {
   initialClasses: ClassWithStudents[]
+  planStatus: TeacherPlanStatus | null
 }) {
   const { data: classes } = useSWR<ClassWithStudents[]>("teacher-classes", getTeacherClasses, {
     fallbackData: initialClasses,
@@ -170,6 +185,10 @@ export function TeacherDashboard({
             ))
           )}
         </div>
+
+        {planStatus && !planStatus.hasTeacherPro && (
+          <TeacherPlanNotice planStatus={planStatus} />
+        )}
       </aside>
 
       {/* Main area: class detail or the teacher's library */}
@@ -188,6 +207,36 @@ export function TeacherDashboard({
             }} />
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Shows the free teacher tier's remaining headroom. The server is what actually
+ * enforces these numbers; this only explains them before a teacher hits a wall.
+ */
+function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
+  const { limits, usage, schoolUnpaid } = planStatus
+  const classesLeft =
+    limits.maxClasses === null ? null : Math.max(0, limits.maxClasses - usage.classes)
+
+  return (
+    <div className="border-t border-border p-3">
+      <div className="rounded-lg border border-border bg-muted/40 p-3">
+        <p className="text-xs font-medium">
+          {schoolUnpaid ? "Your school has no active plan" : "Free teacher plan"}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {classesLeft === 0
+            ? "You've used your free class."
+            : `${classesLeft} free ${classesLeft === 1 ? "class" : "classes"} remaining.`}{" "}
+          {limits.maxStudentsPerClass !== null &&
+            `Up to ${limits.maxStudentsPerClass} students each.`}
+        </p>
+        <Button size="sm" className="mt-2.5 w-full" render={<a href="/pricing" />}>
+          Upgrade to Teacher Pro
+        </Button>
       </div>
     </div>
   )

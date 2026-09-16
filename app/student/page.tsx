@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { user as userTable } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getStudentClasses, ensurePersonalWorkspace } from "@/app/actions/classes"
+import { getEntitlement } from "@/lib/entitlements"
 import { AppHeader } from "@/components/app-header"
 import { StudentWorkspaceWithFreemium } from "@/components/student-workspace-with-freemium"
 import { StudentOnboarding } from "@/components/student-onboarding"
@@ -11,7 +12,9 @@ import { StudentOnboarding } from "@/components/student-onboarding"
 export default async function StudentPage() {
   const sessionUser = await getSessionUser()
   if (!sessionUser) redirect("/sign-in")
-  if (sessionUser.role === "teacher") redirect("/teacher")
+
+  const entitlement = await getEntitlement(sessionUser.id)
+  if (entitlement.isTeacher) redirect("/teacher")
 
   let classes = await getStudentClasses()
 
