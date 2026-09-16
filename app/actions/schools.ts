@@ -13,7 +13,7 @@ import {
   user,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
-import { ACTIVE_STATUSES, getEntitlement, requireSchoolAdmin } from "@/lib/entitlements"
+import { getEntitlement, isSubscriptionLive, requireSchoolAdmin } from "@/lib/entitlements"
 
 // Unambiguous alphabet: no O/0, I/1.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -162,7 +162,9 @@ export async function joinSchoolWithCode(formData: FormData) {
       [invite.schoolId],
     )
     const plan = planRows[0]
-    if (!plan || !ACTIVE_STATUSES.includes(plan.status)) {
+    // Status alone can be stale, so the billing period is checked too —
+    // otherwise students keep joining a school whose plan has lapsed.
+    if (!plan || !isSubscriptionLive(plan.status, plan.currentPeriodEnd)) {
       throw new Error("This school does not have an active plan")
     }
 

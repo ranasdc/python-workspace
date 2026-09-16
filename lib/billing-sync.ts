@@ -27,6 +27,35 @@ function readInterval(sub: Stripe.Subscription): string | null {
   return sub.items?.data?.[0]?.price?.recurring?.interval ?? null
 }
 
+/**
+ * Current Stripe API versions express "cancel when the term is up" by setting
+ * `cancel_at` (plus `canceled_at`) and leaving `cancel_at_period_end` false —
+ * that is exactly what the billing portal's Cancel button produces. Reading the
+ * boolean alone therefore misses every scheduled cancellation, so treat a
+ * `cancel_at` timestamp as authoritative too.
+ */
+function readCancellation(sub: Stripe.Subscription) {
+  const raw = sub.cancel_at
+  const cancelAt = typeof raw === "number" ? new Date(raw * 1000) : null
+  return {
+    cancelAt,
+    scheduledToCancel: Boolean(sub.cancel_at_period_end) || cancelAt !== null,
+  }
+}
+
+/**
+ * The date access actually runs out: normally the next renewal, but the
+ * cancellation date when one is scheduled sooner. Entitlement checks re-read
+ * Stripe once this passes, so taking the earlier value only ever schedules an
+ * earlier re-check — never a later one.
+ */
+function readAccessEnd(sub: Stripe.Subscription): Date | null {
+  const periodEnd = readPeriodEnd(sub)
+  const { cancelAt } = readCancellation(sub)
+  if (cancelAt && (!periodEnd || cancelAt.getTime() < periodEnd.getTime())) return cancelAt
+  return periodEnd
+}
+
 export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
   const planId = sub.metadata?.planId as PlanId | undefined
   const userId = sub.metadata?.userId
@@ -39,8 +68,8 @@ export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
 
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id
   const priceId = sub.items?.data?.[0]?.price?.id ?? null
-  const currentPeriodEnd = readPeriodEnd(sub)
-  const cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end)
+  const currentPeriodEnd = readAccessEnd(sub)
+  const cancelAtPeriodEnd = readCancellation(sub).scheduledToCancel
 
   if (isSchoolPlan(planId)) {
     const schoolId = schoolIdRaw ? Number(schoolIdRaw) : Number.NaN

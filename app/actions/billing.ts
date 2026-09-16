@@ -8,6 +8,7 @@ import { schoolSubscriptions, subscriptions } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { stripe } from "@/lib/stripe"
 import { syncSubscriptionFromStripe } from "@/lib/billing-sync"
+import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
 import { getEntitlement, requireSchoolAdmin } from "@/lib/entitlements"
 import { CURRENCY, PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
 
@@ -147,6 +148,21 @@ export async function openBillingPortal(schoolId?: number) {
 /** Entitlement + usage for the billing screen. */
 export async function getBillingOverview() {
   const me = await requireUser()
+
+  const [existing] = await db
+    .select()
+    .from(subscriptions)
+    .where(and(eq(subscriptions.userId, me.id)))
+    .limit(1)
+
+  // Anything the user just did in the Stripe portal — cancelling, resuming,
+  // changing card — should be visible the moment they land back here, rather
+  // than whenever a webhook happens to arrive. This runs before the
+  // entitlement is resolved so the page reflects the refreshed row.
+  if (existing?.stripeSubscriptionId) {
+    await refreshSubscriptionFromStripe(existing.stripeSubscriptionId)
+  }
+
   const entitlement = await getEntitlement(me.id)
 
   const [individual] = await db

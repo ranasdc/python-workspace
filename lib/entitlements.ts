@@ -1,7 +1,7 @@
 import "server-only"
 
 import { cache } from "react"
-import { and, count, eq, inArray, ne } from "drizzle-orm"
+import { and, count, eq, ne } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
@@ -17,6 +17,7 @@ import {
   user,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
+import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
 
 // This module is the ONLY place allowed to decide what a user may do.
 // Nothing reads user.accountType or user.subscriptionStatus to make a decision
@@ -64,6 +65,68 @@ export const TEACHER_UNLIMITED: TeacherLimits = {
 
 /** Stripe statuses that still grant access. */
 export const ACTIVE_STATUSES = ["active", "trialing"] as const
+
+/**
+ * Only applied when Stripe itself could not be reached. A renewal webhook can
+ * be missed, so a briefly stale period must not lock out someone who is really
+ * paying — but the window is short enough that a genuinely cancelled plan
+ * cannot coast on it.
+ */
+export const RENEWAL_GRACE_MS = 3 * 24 * 60 * 60 * 1000
+
+type BillingRow = {
+  status: string
+  currentPeriodEnd: Date | null
+  stripeSubscriptionId: string | null
+}
+
+/**
+ * Decides whether a stored billing row still grants access.
+ *
+ * `status` alone is not enough: it only changes when a webhook arrives, so a
+ * lapsed or cancelled plan can sit in the database marked "active" forever. If
+ * the stored period has passed we re-read the subscription from Stripe and
+ * judge the refreshed row instead.
+ */
+async function resolveLiveRow<T extends BillingRow>(
+  row: T | undefined,
+  reload: () => Promise<T | undefined>,
+): Promise<T | null> {
+  if (!row) return null
+  if (!(ACTIVE_STATUSES as readonly string[]).includes(row.status)) return null
+
+  const periodEnd = row.currentPeriodEnd
+  if (!periodEnd) return row
+  if (periodEnd.getTime() > Date.now()) return row
+
+  // The period has lapsed, so this row is no longer evidence of anything.
+  if (!row.stripeSubscriptionId) return null
+
+  const refreshed = await refreshSubscriptionFromStripe(row.stripeSubscriptionId)
+  if (!refreshed) {
+    return periodEnd.getTime() + RENEWAL_GRACE_MS > Date.now() ? row : null
+  }
+
+  const fresh = await reload()
+  if (!fresh) return null
+  if (!(ACTIVE_STATUSES as readonly string[]).includes(fresh.status)) return null
+
+  const freshEnd = fresh.currentPeriodEnd
+  if (freshEnd && freshEnd.getTime() <= Date.now()) return null
+  return fresh
+}
+
+/** Same judgement for callers holding a row they fetched themselves. */
+export function isSubscriptionLive(
+  status: string,
+  currentPeriodEnd: Date | string | null,
+): boolean {
+  if (!(ACTIVE_STATUSES as readonly string[]).includes(status)) return false
+  if (!currentPeriodEnd) return true
+  const end =
+    currentPeriodEnd instanceof Date ? currentPeriodEnd : new Date(currentPeriodEnd)
+  return end.getTime() > Date.now()
+}
 
 export type Entitlement = {
   userId: string
@@ -156,16 +219,16 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
     base.schoolId = membership.schoolId
     base.schoolRole = schoolRole
 
-    const [schoolPlan] = await db
-      .select()
-      .from(schoolSubscriptions)
-      .where(
-        and(
-          eq(schoolSubscriptions.schoolId, membership.schoolId),
-          inArray(schoolSubscriptions.status, [...ACTIVE_STATUSES]),
-        ),
-      )
-      .limit(1)
+    const readSchoolPlan = async () =>
+      (
+        await db
+          .select()
+          .from(schoolSubscriptions)
+          .where(eq(schoolSubscriptions.schoolId, membership.schoolId))
+          .limit(1)
+      )[0]
+
+    const schoolPlan = await resolveLiveRow(await readSchoolPlan(), readSchoolPlan)
 
     if (schoolPlan) {
       return finalise({
@@ -181,16 +244,16 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
     base.schoolUnpaid = true
   }
 
-  const [individual] = await db
-    .select()
-    .from(subscriptions)
-    .where(
-      and(
-        eq(subscriptions.userId, userId),
-        inArray(subscriptions.status, [...ACTIVE_STATUSES]),
-      ),
-    )
-    .limit(1)
+  const readIndividual = async () =>
+    (
+      await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .limit(1)
+    )[0]
+
+  const individual = await resolveLiveRow(await readIndividual(), readIndividual)
 
   if (individual) {
     return finalise({
