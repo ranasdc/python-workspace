@@ -1,124 +1,83 @@
 "use server"
 
-import { db } from "@/lib/db"
-import { user } from "@/lib/db/schema"
-import { getSessionUser } from "@/lib/session"
 import { eq } from "drizzle-orm"
 
+import { db } from "@/lib/db"
+import { user } from "@/lib/db/schema"
+import { getSessionUser, requireUser } from "@/lib/session"
+import { getEntitlement, getUsage } from "@/lib/entitlements"
+
+/**
+ * Records the student's onboarding choice.
+ *
+ * This used to be an authorization decision: passing "class" made
+ * `canCreateFile` return true unconditionally, so any student could unlock the
+ * paid tier with a single action call. `accountType` is now nothing more than a
+ * UI preference — entitlements come from `lib/entitlements.ts` alone.
+ */
 export async function setAccountType(accountType: "class" | "individual") {
-  const sessionUser = await getSessionUser()
-  if (!sessionUser) throw new Error("Not authenticated")
-
-  try {
-    await db
-      .update(user)
-      .set({
-        accountType,
-        isFirstLogin: false,
-        subscriptionStatus: accountType === "individual" ? "free" : undefined,
-      })
-      .where(eq(user.id, sessionUser.id))
-  } catch (error) {
-    console.error("[v0] Failed to set account type in DB:", error)
-    // Continue anyway - the schema might not be migrated yet
+  const sessionUser = await requireUser()
+  if (accountType !== "class" && accountType !== "individual") {
+    throw new Error("Invalid account type")
   }
-}
-
-export async function incrementFileCount(userId: string) {
-  const currentUser = await db.query.user.findFirst({
-    where: eq(user.id, userId),
-  })
-
-  if (!currentUser) throw new Error("User not found")
 
   await db
     .update(user)
-    .set({
-      createdFilesCount: (currentUser.createdFilesCount || 0) + 1,
-    })
-    .where(eq(user.id, userId))
+    .set({ accountType, isFirstLogin: false })
+    .where(eq(user.id, sessionUser.id))
 }
 
-export async function incrementFolderCount(userId: string) {
-  const currentUser = await db.query.user.findFirst({
-    where: eq(user.id, userId),
-  })
+export async function canCreateFile(userId?: string): Promise<boolean> {
+  const me = await requireUser()
+  // Callers may only ask about themselves.
+  if (userId && userId !== me.id) throw new Error("Unauthorized")
 
-  if (!currentUser) throw new Error("User not found")
-
-  await db
-    .update(user)
-    .set({
-      createdFoldersCount: (currentUser.createdFoldersCount || 0) + 1,
-    })
-    .where(eq(user.id, userId))
+  const [entitlement, usage] = await Promise.all([getEntitlement(me.id), getUsage(me.id)])
+  const max = entitlement.limits.maxFiles
+  return max === null || usage.files < max
 }
 
-export async function canCreateFile(userId: string): Promise<boolean> {
-  const currentUser = await db.query.user.findFirst({
-    where: eq(user.id, userId),
-  })
+export async function canCreateFolder(userId?: string): Promise<boolean> {
+  const me = await requireUser()
+  if (userId && userId !== me.id) throw new Error("Unauthorized")
 
-  if (!currentUser) throw new Error("User not found")
-
-  // If user is on class account or paid subscription, no limit
-  if (
-    currentUser.accountType === "class" ||
-    currentUser.subscriptionStatus !== "free"
-  ) {
-    return true
-  }
-
-  // Free tier: max 2 Python files
-  return (currentUser.createdFilesCount || 0) < 2
-}
-
-export async function canCreateFolder(userId: string): Promise<boolean> {
-  const currentUser = await db.query.user.findFirst({
-    where: eq(user.id, userId),
-  })
-
-  if (!currentUser) throw new Error("User not found")
-
-  // If user is on class account or paid subscription, no limit
-  if (
-    currentUser.accountType === "class" ||
-    currentUser.subscriptionStatus !== "free"
-  ) {
-    return true
-  }
-
-  // Free tier: max 1 folder
-  return (currentUser.createdFoldersCount || 0) < 1
+  const [entitlement, usage] = await Promise.all([getEntitlement(me.id), getUsage(me.id)])
+  const max = entitlement.limits.maxFolders
+  return max === null || usage.folders < max
 }
 
 export async function getUserSubscriptionInfo() {
   const sessionUser = await getSessionUser()
   if (!sessionUser) throw new Error("Not authenticated")
 
-  try {
-    const currentUser = await db.query.user.findFirst({
-      where: eq(user.id, sessionUser.id),
-    })
+  const [entitlement, usage, [record]] = await Promise.all([
+    getEntitlement(sessionUser.id),
+    getUsage(sessionUser.id),
+    db
+      .select({ accountType: user.accountType, isFirstLogin: user.isFirstLogin })
+      .from(user)
+      .where(eq(user.id, sessionUser.id))
+      .limit(1),
+  ])
 
-    if (!currentUser) throw new Error("User not found")
+  return {
+    // Cosmetic fields, kept so existing UI keeps working.
+    accountType: record?.accountType ?? null,
+    isFirstLogin: record?.isFirstLogin ?? true,
+    subscriptionStatus: entitlement.isPro ? "active" : "free",
 
-    return {
-      accountType: currentUser.accountType,
-      subscriptionStatus: currentUser.subscriptionStatus,
-      createdFilesCount: currentUser.createdFilesCount || 0,
-      createdFoldersCount: currentUser.createdFoldersCount || 0,
-      isFirstLogin: currentUser.isFirstLogin,
-    }
-  } catch (error) {
-    console.error("[v0] Failed to get subscription info:", error)
-    // Return default free tier info if DB query fails
-    return {
-      accountType: null,
-      subscriptionStatus: "free",
-      createdFilesCount: 0,
-      createdFoldersCount: 0,
-      isFirstLogin: true,
-    }
+    // Live counts, not drifting counters.
+    createdFilesCount: usage.files,
+    createdFoldersCount: usage.folders,
+
+    // The authoritative view.
+    plan: entitlement.plan,
+    source: entitlement.source,
+    isPro: entitlement.isPro,
+    maxFiles: entitlement.limits.maxFiles,
+    maxFolders: entitlement.limits.maxFolders,
+    schoolId: entitlement.schoolId,
+    schoolRole: entitlement.schoolRole,
+    schoolUnpaid: entitlement.schoolUnpaid,
   }
 }

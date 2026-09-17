@@ -1,9 +1,26 @@
 import { generateText } from "ai"
 
+import { getSessionUser } from "@/lib/session"
+import { rateLimit } from "@/lib/rate-limit"
+
 // Allow the model a little room to respond.
 export const maxDuration = 30
 
 export async function POST(req: Request) {
+  // This route bills real tokens. It was previously open to the internet.
+  const sessionUser = await getSessionUser()
+  if (!sessionUser) {
+    return Response.json({ error: "Sign in to get help with errors" }, { status: 401 })
+  }
+
+  const limit = rateLimit(`error-help:${sessionUser.id}`, 20, 60 * 60 * 1000)
+  if (!limit.ok) {
+    return Response.json(
+      { error: "You've asked for a lot of hints. Try again a bit later." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    )
+  }
+
   let body: { code?: string; error?: string }
   try {
     body = await req.json()
@@ -51,7 +68,7 @@ export async function POST(req: Request) {
 
     return Response.json({ help: text })
   } catch (e) {
-    console.log("[v0] error-help generation failed:", e instanceof Error ? e.message : e)
+    console.error("[error-help] generation failed:", e instanceof Error ? e.message : e)
     return Response.json(
       { error: "Could not generate a hint right now. Please try again." },
       { status: 500 },

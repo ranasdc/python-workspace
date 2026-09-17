@@ -10,7 +10,12 @@ import {
   user,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
+import {
+  assertCanCreateFile,
+  assertCanCreateFolder,
+  requireTeacherCapability,
+} from "@/lib/entitlements"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 const STARTER = `# Welcome to your Python file!
@@ -59,6 +64,10 @@ export async function createFile(classId: number, name: string, folderId: number
   const student = await requireUser()
   await assertEnrolled(student.id, classId)
 
+  // Enforced here, on the server, before anything is written. The UI hint is a
+  // convenience; this is the actual limit.
+  await assertCanCreateFile(student.id)
+
   const clean = name.trim().endsWith(".py") ? name.trim() : `${name.trim()}.py`
   if (!clean || clean === ".py") throw new Error("Enter a file name")
 
@@ -82,26 +91,6 @@ export async function createFile(classId: number, name: string, folderId: number
     .values({ classId, studentId: student.id, folderId, name: clean, content: STARTER })
     .returning()
 
-  // Track file creation for free tier users
-  try {
-    const [userRecord] = await db
-      .select()
-      .from(user)
-      .where(eq(user.id, student.id))
-      .limit(1)
-    
-    if (userRecord?.accountType === "individual" && userRecord?.subscriptionStatus === "free") {
-      await db
-        .update(user)
-        .set({
-          createdFilesCount: (userRecord.createdFilesCount || 0) + 1,
-        })
-        .where(eq(user.id, student.id))
-    }
-  } catch (error) {
-    console.error("[v0] Failed to track file creation:", error)
-  }
-
   revalidatePath("/student")
   return created
 }
@@ -110,6 +99,8 @@ export async function createStudentFolder(classId: number, name: string) {
   const student = await requireUser()
   await assertEnrolled(student.id, classId)
 
+  await assertCanCreateFolder(student.id)
+
   const clean = name.trim()
   if (!clean) throw new Error("Enter a folder name")
 
@@ -117,26 +108,6 @@ export async function createStudentFolder(classId: number, name: string) {
     .insert(studentFolders)
     .values({ classId, studentId: student.id, name: clean })
     .returning()
-
-  // Track folder creation for free tier users
-  try {
-    const [userRecord] = await db
-      .select()
-      .from(user)
-      .where(eq(user.id, student.id))
-      .limit(1)
-    
-    if (userRecord?.accountType === "individual" && userRecord?.subscriptionStatus === "free") {
-      await db
-        .update(user)
-        .set({
-          createdFoldersCount: (userRecord.createdFoldersCount || 0) + 1,
-        })
-        .where(eq(user.id, student.id))
-    }
-  } catch (error) {
-    console.error("[v0] Failed to track folder creation:", error)
-  }
 
   revalidatePath("/student")
   return created
@@ -183,7 +154,7 @@ export async function deleteFile(fileId: number) {
 // ---------- Teacher: read student files in a class ----------
 export async function getClassTree(classId: number) {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Unauthorized")
+  await requireTeacherCapability(teacher.id)
 
   const [cls] = await db
     .select()
@@ -281,7 +252,7 @@ export async function getFileComments(fileId: number) {
 
 export async function addComment(fileId: number, body: string) {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Only teachers can comment")
+  await requireTeacherCapability(teacher.id)
   await requireTeacherForFile(teacher.id, fileId)
 
   const clean = body.trim()
@@ -299,7 +270,7 @@ export async function addComment(fileId: number, body: string) {
 
 export async function deleteComment(commentId: number) {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Unauthorized")
+  await requireTeacherCapability(teacher.id)
   await db
     .delete(fileComments)
     .where(and(eq(fileComments.id, commentId), eq(fileComments.teacherId, teacher.id)))
@@ -311,7 +282,7 @@ export async function deleteComment(commentId: number) {
 // Toggle a file between "done" and "unmarked".
 export async function setFileStatus(fileId: number, status: "done" | "unmarked") {
   const teacher = await requireUser()
-  if (teacher.role !== "teacher") throw new Error("Only teachers can mark work")
+  await requireTeacherCapability(teacher.id)
   await requireTeacherForFile(teacher.id, fileId)
 
   await db

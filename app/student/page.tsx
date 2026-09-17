@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { user as userTable } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getStudentClasses, ensurePersonalWorkspace } from "@/app/actions/classes"
+import { getEntitlement } from "@/lib/entitlements"
 import { AppHeader } from "@/components/app-header"
 import { StudentWorkspaceWithFreemium } from "@/components/student-workspace-with-freemium"
 import { StudentOnboarding } from "@/components/student-onboarding"
@@ -11,7 +12,9 @@ import { StudentOnboarding } from "@/components/student-onboarding"
 export default async function StudentPage() {
   const sessionUser = await getSessionUser()
   if (!sessionUser) redirect("/sign-in")
-  if (sessionUser.role === "teacher") redirect("/teacher")
+
+  const entitlement = await getEntitlement(sessionUser.id)
+  if (entitlement.isTeacher) redirect("/teacher")
 
   let classes = await getStudentClasses()
 
@@ -25,7 +28,10 @@ export default async function StudentPage() {
       .limit(1)
     accountType = record?.accountType ?? null
   } catch (error) {
-    console.error("[v0] Failed to read accountType:", error)
+    // Safe to swallow: accountType only decides whether to show onboarding.
+    // It grants nothing, so a read failure degrades to "show onboarding"
+    // rather than failing the whole workspace.
+    console.error("[student] failed to read accountType:", error)
   }
 
   // Individual users have no teacher-led class, but the file system is keyed on

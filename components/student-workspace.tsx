@@ -27,6 +27,7 @@ import {
   deleteStudentFolder,
 } from "@/app/actions/files"
 import { joinClass } from "@/app/actions/classes"
+import { SUBSCRIPTION_INFO_KEY } from "@/lib/swr-keys"
 import { FileComments } from "@/components/file-comments"
 import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
@@ -190,10 +191,16 @@ export function StudentWorkspace({
       return
     }
     
-    const created = await createFile(activeClassId, name, folderId)
-    await mutate(filesKey)
-    setActiveFileId(created.id)
-    toast.success(`Created ${created.name}`)
+    try {
+      const created = await createFile(activeClassId, name, folderId)
+      await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
+      setActiveFileId(created.id)
+      toast.success(`Created ${created.name}`)
+    } catch {
+      // The server is the real gate; if it refuses, show the upgrade path.
+      await mutate(SUBSCRIPTION_INFO_KEY)
+      onLimitReached?.("file")
+    }
   }
 
   async function handleCreateFolder(name: string) {
@@ -205,20 +212,25 @@ export function StudentWorkspace({
       return
     }
     
-    const created = await createStudentFolder(activeClassId, name)
-    await mutate(filesKey)
-    toast.success(`Created folder ${created.name}`)
+    try {
+      const created = await createStudentFolder(activeClassId, name)
+      await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
+      toast.success(`Created folder ${created.name}`)
+    } catch {
+      await mutate(SUBSCRIPTION_INFO_KEY)
+      onLimitReached?.("folder")
+    }
   }
 
   async function handleDeleteFile(fileId: number) {
     await deleteFile(fileId)
-    await mutate(filesKey)
+    await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
     toast.success("File deleted")
   }
 
   async function handleDeleteFolder(folderId: number) {
     await deleteStudentFolder(folderId)
-    await mutate(filesKey)
+    await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
     toast.success("Folder deleted")
   }
 

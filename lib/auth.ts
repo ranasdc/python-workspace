@@ -49,6 +49,27 @@ export const auth = betterAuth({
       },
     },
   },
+  // `role` is client-supplied at sign-up, so it is clamped here. Only the two
+  // self-service roles are ever accepted; "school_admin" is granted server-side
+  // by creating or being promoted within a school, never by asking for it.
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (newUser) => {
+          const requested = (newUser as { role?: unknown }).role
+          const role = requested === "teacher" ? "teacher" : "student"
+          return { data: { ...newUser, role } }
+        },
+      },
+      update: {
+        before: async (updates) => {
+          // Nobody changes their own role through the account endpoints.
+          const { role: _ignored, ...rest } = updates as Record<string, unknown>
+          return { data: rest }
+        },
+      },
+    },
+  },
   ...(isDev
     ? {
         advanced: {
