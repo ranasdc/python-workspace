@@ -80,6 +80,16 @@ export const classes = pgTable("class", {
   isPersonal: boolean("isPersonal").notNull().default(false),
   // Lets a teacher disable or rotate a code without deleting the class.
   joinCodeActive: boolean("joinCodeActive").notNull().default(true),
+  // Null = the code never expires. Enforced on join when set.
+  joinCodeExpiresAt: timestamp("joinCodeExpiresAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Failed join-code attempts. Durable because the throttle guards a bearer
+// credential and must hold across serverless instances and cold starts.
+export const joinAttempts = pgTable("join_attempt", {
+  id: serial("id").primaryKey(),
+  bucket: text("bucket").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

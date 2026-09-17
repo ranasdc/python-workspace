@@ -2,23 +2,30 @@
 
 import { randomBytes } from "node:crypto"
 
-import { db } from "@/lib/db"
+import { headers } from "next/headers"
+
+import { db, pool } from "@/lib/db"
 import { classes, enrollments, user } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import {
   assertCanCreateClass,
-  assertClassHasSeat,
   getEntitlement,
   getTeacherUsage,
+  isSubscriptionLive,
   requireTeacherCapability,
   EntitlementError,
 } from "@/lib/entitlements"
-import { rateLimit } from "@/lib/rate-limit"
+import { clearFailures, countRecentFailures, recordFailures } from "@/lib/rate-limit"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
-// Unambiguous alphabet: no O/0, I/1, so codes can be read out in a classroom.
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+// Unambiguous alphabet: no O/0, I/1 or L, so a code can be read aloud across a
+// classroom without the pupils mishearing it.
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+// 31^8 ~= 8.5e11 codes. At the throttle enforced below, exhausting even a
+// millionth of that space would take centuries.
+const CODE_LENGTH = 8
 
 /**
  * Join codes are a bearer credential — holding one grants access to a class —
@@ -26,7 +33,7 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
  * observed values. rejectionThreshold discards the tail of the byte range that
  * would otherwise bias the result toward the first few letters.
  */
-function makeJoinCode(length = 6) {
+function makeJoinCode(length = CODE_LENGTH) {
   const rejectionThreshold = 256 - (256 % CODE_ALPHABET.length)
   let out = ""
   while (out.length < length) {
@@ -37,6 +44,15 @@ function makeJoinCode(length = 6) {
     }
   }
   return out
+}
+
+/**
+ * Codes are shown grouped ("K7XM-42QP") but stored unformatted, so the
+ * separator is cosmetic and typing it — or omitting it, or using spaces or
+ * lowercase — must all resolve to the same class.
+ */
+function normaliseJoinCode(input: string) {
+  return input.toUpperCase().replace(/[^A-Z0-9]/g, "")
 }
 
 async function allocateJoinCode() {
@@ -118,56 +134,200 @@ export async function getTeacherClasses() {
 }
 
 // ---------- Student ----------
+
+// Deliberately identical for "no such code", "disabled", "expired" and
+// "personal workspace". Distinguishing them would turn the join box into an
+// oracle that confirms which codes — and therefore which schools — exist.
+const INVALID_CODE = "That invite code is invalid or no longer active."
+const CROSS_SCHOOL = "You already belong to another school and cannot join this class."
+const THROTTLED = "Too many attempts. Please try again later."
+
+const FAILURE_WINDOW_SECONDS = 15 * 60
+const MAX_FAILURES_PER_USER = 10
+// Looser, because a whole school can share one NAT address; this exists to
+// blunt an attacker cycling through accounts, not to limit a classroom.
+const MAX_FAILURES_PER_IP = 50
+
+async function callerIp() {
+  const h = await headers()
+  const forwarded = h.get("x-forwarded-for")
+  if (forwarded) return forwarded.split(",")[0]!.trim()
+  return h.get("x-real-ip")?.trim() || null
+}
+
+/**
+ * Join a class by invite code.
+ *
+ * Everything that decides the outcome — the class, its owner, its school, that
+ * school's plan and seat count — is resolved on the server from the code alone.
+ * The only value read from the request is the code itself, so there is no
+ * class_id, school_id or teacher_id for a caller to forge.
+ *
+ * Seat limits are enforced inside a transaction that holds a row lock on the
+ * class (and on the school's plan when one applies), so two pupils claiming the
+ * last seat at the same instant cannot both succeed.
+ */
 export async function joinClass(formData: FormData) {
   const student = await requireUser()
 
-  // A 6-character code is only ~10^9 possibilities; without a throttle it is
-  // brute-forceable. Keyed per account so one attacker cannot spread attempts.
-  const limit = rateLimit(`join-class:${student.id}`, 10, 10 * 60 * 1000)
-  if (!limit.ok) {
-    throw new Error("Too many join attempts. Please wait a few minutes and try again.")
+  const ip = await callerIp()
+  const userBucket = `join-class:user:${student.id}`
+  const ipBucket = ip ? `join-class:ip:${ip}` : null
+
+  const [userFailures, ipFailures] = await Promise.all([
+    countRecentFailures(userBucket, FAILURE_WINDOW_SECONDS),
+    ipBucket ? countRecentFailures(ipBucket, FAILURE_WINDOW_SECONDS) : Promise.resolve(0),
+  ])
+  if (userFailures >= MAX_FAILURES_PER_USER || ipFailures >= MAX_FAILURES_PER_IP) {
+    throw new Error(THROTTLED)
   }
 
-  const rawCode = String(formData.get("joinCode") || "")
-    .trim()
-    .toUpperCase()
-  if (!rawCode) throw new Error("Enter a join code")
+  // Only code-guessing failures are recorded. A cross-school or full-class
+  // rejection means the code was real, so it is not brute-force evidence and
+  // must not throttle a pupil who was handed the wrong code in good faith.
+  const guessFailed = async () => {
+    await recordFailures([userBucket, ...(ipBucket ? [ipBucket] : [])])
+    return new Error(INVALID_CODE)
+  }
 
-  const [target] = await db.select().from(classes).where(eq(classes.joinCode, rawCode))
-  if (!target) throw new Error("No class found with that code")
+  const code = normaliseJoinCode(String(formData.get("joinCode") || ""))
+  if (!code) throw new Error("Enter a join code")
 
-  // Personal workspaces are auto-created with a join code purely because the
-  // file system is keyed on a class. They are private: nobody may join one.
-  if (target.isPersonal) throw new Error("No class found with that code")
-  if (!target.joinCodeActive) throw new Error("That join code is no longer active")
-  if (target.teacherId === student.id) throw new Error("You already own this class")
+  const [preview] = await db.select().from(classes).where(eq(classes.joinCode, code))
+  if (!preview) throw await guessFailed()
+  // Personal workspaces carry a code only because the file system is keyed on a
+  // class. They are private, and must look exactly like a bad code.
+  if (preview.isPersonal) throw await guessFailed()
+  if (!preview.joinCodeActive) throw await guessFailed()
+  if (preview.joinCodeExpiresAt && preview.joinCodeExpiresAt.getTime() <= Date.now()) {
+    throw await guessFailed()
+  }
+  if (preview.teacherId === student.id) throw new Error("You already own this class")
 
-  // Tenant isolation: a class that belongs to a school is only joinable by that
-  // school's members, otherwise a leaked code would expose a pupil's work to an
-  // unrelated school's staff. Independent teachers' classes stay open.
-  if (target.schoolId !== null) {
-    const entitlement = await getEntitlement(student.id)
-    if (entitlement.schoolId !== target.schoolId) {
-      throw new Error("That class belongs to another school")
+  // Teaching accounts do not enrol as pupils; a teacher who needs a class of
+  // their own creates one. Derived from entitlements, never from the session.
+  const mine = await getEntitlement(student.id)
+  if (mine.isTeacher) {
+    throw new Error("Only student accounts can join a class with an invite code.")
+  }
+
+  // Resolved before the transaction opens: this can call Stripe, and a network
+  // round trip must never happen while we are holding row locks.
+  const owner = await getEntitlement(preview.teacherId)
+  const maxPerClass = owner.teacherLimits.maxStudentsPerClass
+
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+
+    // Re-read under lock: everything checked above could have changed, and this
+    // serialises concurrent joins to the same class.
+    const { rows: classRows } = await client.query(
+      `SELECT * FROM "class" WHERE "joinCode" = $1 FOR UPDATE`,
+      [code],
+    )
+    const target = classRows[0]
+    if (
+      !target ||
+      target.isPersonal ||
+      !target.joinCodeActive ||
+      (target.joinCodeExpiresAt && new Date(target.joinCodeExpiresAt) <= new Date())
+    ) {
+      throw new Error(INVALID_CODE)
     }
+
+    const { rows: memberRows } = await client.query(
+      `SELECT * FROM "school_member" WHERE "userId" = $1 AND "status" = 'active'`,
+      [student.id],
+    )
+    const membership = memberRows[0] ?? null
+
+    if (target.schoolId !== null) {
+      // Belonging elsewhere is disqualifying regardless of how valid the code
+      // is: a School A pupil must never land in a School B class.
+      if (membership && membership.schoolId !== target.schoolId) {
+        throw new Error(CROSS_SCHOOL)
+      }
+
+      const { rows: planRows } = await client.query(
+        `SELECT * FROM "school_subscription" WHERE "schoolId" = $1 FOR UPDATE`,
+        [target.schoolId],
+      )
+      const plan = planRows[0]
+      // A valid code is not entitlement. The school itself must be paying, and
+      // status alone can be stale, so the period is checked too.
+      if (!plan || !isSubscriptionLive(plan.status, plan.currentPeriodEnd)) {
+        throw new Error("This school does not have an active plan.")
+      }
+
+      // An unattached pupil joining a school class becomes a member of that
+      // school — which means they take a seat, and the cap applies.
+      if (!membership) {
+        const limit = plan.studentSeatLimit
+        if (limit !== null && limit !== undefined) {
+          const { rows: usedRows } = await client.query(
+            `SELECT COUNT(*)::int AS used FROM "school_member"
+              WHERE "schoolId" = $1 AND "status" = 'active' AND "role" = 'student'`,
+            [target.schoolId],
+          )
+          if (usedRows[0].used >= limit) {
+            throw new Error("Your school has reached its student seat limit.")
+          }
+        }
+
+        // Re-activates a previously removed row rather than inserting a second
+        // one, so rejoining never duplicates the pupil's membership.
+        await client.query(
+          `INSERT INTO "school_member" ("schoolId", "userId", "role")
+           VALUES ($1, $2, 'student')
+           ON CONFLICT ("schoolId", "userId")
+           DO UPDATE SET "status" = 'active', "role" = 'student'`,
+          [target.schoolId, student.id],
+        )
+      }
+    }
+
+    const { rows: already } = await client.query(
+      `SELECT 1 FROM "enrollment" WHERE "classId" = $1 AND "studentId" = $2`,
+      [target.id, student.id],
+    )
+
+    if (already.length === 0) {
+      // Seat cap is charged against the class owner's plan, not the joiner's.
+      if (maxPerClass !== null) {
+        const { rows: seatRows } = await client.query(
+          `SELECT COUNT(*)::int AS used FROM "enrollment"
+            WHERE "classId" = $1 AND "studentId" <> $2`,
+          [target.id, target.teacherId],
+        )
+        if (seatRows[0].used >= maxPerClass) {
+          throw new EntitlementError(
+            "student_limit",
+            "This class is full. Ask your teacher to upgrade to Teacher Pro for unlimited students.",
+          )
+        }
+      }
+
+      await client.query(
+        `INSERT INTO "enrollment" ("classId", "studentId") VALUES ($1, $2)
+         ON CONFLICT ("classId", "studentId") DO NOTHING`,
+        [target.id, student.id],
+      )
+    }
+
+    await client.query("COMMIT")
+
+    await clearFailures(userBucket)
+
+    revalidatePath("/student")
+    revalidatePath("/school")
+    return target as typeof classes.$inferSelect
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
   }
-
-  const existing = await db
-    .select()
-    .from(enrollments)
-    .where(and(eq(enrollments.classId, target.id), eq(enrollments.studentId, student.id)))
-
-  if (existing.length === 0) {
-    // Seat cap is charged against the class owner's plan, not the joiner's.
-    await assertClassHasSeat(target.id, target.teacherId)
-    await db
-      .insert(enrollments)
-      .values({ classId: target.id, studentId: student.id })
-      .onConflictDoNothing()
-  }
-
-  revalidatePath("/student")
-  return target
 }
 
 // Ensure an individual (class-less) student has a personal workspace so the

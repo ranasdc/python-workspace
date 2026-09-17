@@ -590,7 +590,11 @@ function JoinCodeBadge({ code }: { code: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5">
       <span className="text-xs text-muted-foreground">Join code</span>
-      <code className="font-mono text-sm font-semibold tracking-widest">{code}</code>
+      <code className="font-mono text-sm font-semibold tracking-widest">
+        {/* Grouped so it can be read aloud accurately. The join form strips the
+            separator, so either form works when typed back in. */}
+        {code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code}
+      </code>
       <button onClick={copy} aria-label="Copy join code" className="text-muted-foreground hover:text-foreground">
         {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
       </button>
