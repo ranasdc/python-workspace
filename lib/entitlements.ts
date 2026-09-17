@@ -467,6 +467,17 @@ export async function requireSchoolAdmin(schoolId?: number) {
 }
 
 /** Prevents cross-tenant reads: both users must sit in the same school. */
+/**
+ * Same-school check, for features that are scoped to a school rather than to
+ * one owner — a school-admin report, for example.
+ *
+ * Deliberately NOT used by the teacher-facing reads in app/actions/files.ts.
+ * Those match on `class.teacherId = <caller>`, which already denies School B a
+ * School A class and additionally denies a colleague in the same school.
+ * Swapping that ownership check for this helper would widen access, not narrow
+ * it: every teacher in a school would gain access to every other teacher's
+ * classes. Add it alongside an ownership check, never in place of one.
+ */
 export async function assertSameSchool(userIdA: string, userIdB: string) {
   const [a, b] = await Promise.all([getEntitlement(userIdA), getEntitlement(userIdB)])
   if (!a.schoolId || a.schoolId !== b.schoolId) {
