@@ -1,7 +1,7 @@
 import "server-only"
 
 import { cache } from "react"
-import { and, count, eq, ne } from "drizzle-orm"
+import { and, count, eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
@@ -441,23 +441,11 @@ export async function assertCanCreateLibraryFolder(userId: string) {
  * Checked when a student joins, so the cap is enforced against the class
  * owner's plan rather than the joining student's.
  */
-export async function assertClassHasSeat(classId: number, teacherId: string) {
-  const entitlement = await getEntitlement(teacherId)
-  const max = entitlement.teacherLimits.maxStudentsPerClass
-  if (max === null) return
-
-  const [row] = await db
-    .select({ value: count() })
-    .from(enrollments)
-    .where(and(eq(enrollments.classId, classId), ne(enrollments.studentId, teacherId)))
-
-  if ((row?.value ?? 0) >= max) {
-    throw new EntitlementError(
-      "student_limit",
-      "This class is full. Ask your teacher to upgrade to Teacher Pro for unlimited students.",
-    )
-  }
-}
+// NOTE: the class seat check lives inside joinClass, not here. It has to run in
+// the same transaction as the enrolment insert and behind a row lock on the
+// class, otherwise two pupils claiming the last seat can both pass the check
+// before either writes. A standalone helper cannot offer that guarantee, so it
+// was removed rather than left available to call.
 
 export async function requireSchoolAdmin(schoolId?: number) {
   const me = await requireUser()
