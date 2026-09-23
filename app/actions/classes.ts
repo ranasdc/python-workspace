@@ -348,7 +348,7 @@ export async function ensurePersonalWorkspace() {
     .insert(classes)
     .values({
       name: "My Workspace",
-      description: "Your personal Python workspace",
+      description: "Your personal coding workspace",
       joinCode,
       teacherId: student.id,
       isPersonal: true,

@@ -725,8 +725,8 @@ function EmptyTeacherState({ onCreated }: { onCreated: (id: number) => Promise<v
         </div>
         <h2 className="text-lg font-semibold">Create your first class</h2>
         <p className="mt-2 text-sm text-muted-foreground text-pretty">
-          Set up a class and share the join code with your students. Their Python files will
-          appear here, organized by student.
+            Set up a class and share the join code with your students. Their files will
+            appear here, organized by student.
         </p>
         <div className="mt-5">
           <CreateClassDialog onCreated={onCreated} />

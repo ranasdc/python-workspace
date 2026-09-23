@@ -26,10 +26,11 @@ const plainOf = (line: Token[]) => line.map((t) => t.t).join("")
 /* 1. Student — typing Python into a laptop                            */
 /* ------------------------------------------------------------------ */
 
+// Tokens with no `c` render as plain code; only highlighted spans name a class.
 const STUDENT_CODE: Token[][] = [
-  [{ t: "name ", c: "" }, { t: "=", c: "kw" }, { t: " ", c: "" }, { t: '"Ada"', c: "str" }],
-  [{ t: "for", c: "kw" }, { t: " i ", c: "" }, { t: "in", c: "kw" }, { t: " range(", c: "" }, { t: "3", c: "num" }, { t: "):", c: "" }],
-  [{ t: "    print", c: "fn" }, { t: "(", c: "" }, { t: '"Hi"', c: "str" }, { t: ", name)", c: "" }],
+  [{ t: "name " }, { t: "=", c: "kw" }, { t: " " }, { t: '"Ada"', c: "str" }],
+  [{ t: "for", c: "kw" }, { t: " i " }, { t: "in", c: "kw" }, { t: " range(" }, { t: "3", c: "num" }, { t: "):" }],
+  [{ t: "    print", c: "fn" }, { t: "(" }, { t: '"Hi"', c: "str" }, { t: ", name)" }],
 ]
 
 function StudentAnimation() {
@@ -142,11 +143,11 @@ function StudentAnimation() {
 /* ------------------------------------------------------------------ */
 
 const TEACHER_CODE: (Token[] | null)[] = [
-  [{ t: "def", c: "kw" }, { t: " area", c: "fn" }, { t: "(w, h):", c: "" }],
-  [{ t: "    return", c: "kw" }, { t: " w ", c: "" }, { t: "*", c: "kw" }, { t: " h", c: "" }],
+  [{ t: "def", c: "kw" }, { t: " area", c: "fn" }, { t: "(w, h):" }],
+  [{ t: "    return", c: "kw" }, { t: " w " }, { t: "*", c: "kw" }, { t: " h" }],
   null, // blank line
-  [{ t: "size ", c: "" }, { t: "=", c: "kw" }, { t: " area(", c: "" }, { t: "5", c: "num" }, { t: ", ", c: "" }, { t: "4", c: "num" }, { t: ")", c: "" }],
-  [{ t: "print", c: "fn" }, { t: "(siez)", c: "" }], // typo -> error line
+  [{ t: "size " }, { t: "=", c: "kw" }, { t: " area(" }, { t: "5", c: "num" }, { t: ", " }, { t: "4", c: "num" }, { t: ")" }],
+  [{ t: "print", c: "fn" }, { t: "(siez)" }], // typo -> error line
 ]
 const ERROR_LINE = 4
 
@@ -320,11 +321,13 @@ function TeacherAnimation() {
 
 type TreeNode = { depth: 0 | 1 | 2; type: "class" | "student" | "file"; label: string }
 
+// Deliberately mixes .py and .html: the tree is the clearest place to show a
+// teacher that both IDEs land in the same organised place.
 const TREE: TreeNode[] = [
-  { depth: 0, type: "class", label: "Grade 10 · Python" },
+  { depth: 0, type: "class", label: "Grade 10 · Computing" },
   { depth: 1, type: "student", label: "Ada Chen" },
   { depth: 2, type: "file", label: "variables.py" },
-  { depth: 2, type: "file", label: "loops.py" },
+  { depth: 2, type: "file", label: "index.html" },
   { depth: 1, type: "student", label: "Sam Lee" },
   { depth: 2, type: "file", label: "functions.py" },
 ]
