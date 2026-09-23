@@ -230,7 +230,7 @@ export function LandingPage() {
         </Reveal>
       <Reveal delay={80}>
         <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          A <span className="rainbow-text">more than</span> Python IDE built for teachers and students
+          More than just an IDE built for teachers and students
         </h1>
       </Reveal>
       <Reveal delay={120}>
@@ -240,7 +240,7 @@ export function LandingPage() {
             animation: 'halo-pulse 4s ease-in-out infinite'
           }}
         >
-          ✨ <span className="emerald-shimmer">More programming languages coming soon!</span>
+          ✨ <span className="emerald-shimmer">Code in <span className="font-bold">Python & HTML</span> — with more programming languages coming soon !</span>
         </div>
       </Reveal>
         <Reveal delay={160}>
