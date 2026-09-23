@@ -25,6 +25,13 @@ export type LanguageDef = {
   /** Shown under the label in the IDE switcher. */
   blurb: string
   /**
+   * Theme token this IDE is coloured with, everywhere it appears: the active
+   * workspace tab, and the language cards on the marketing page. Defined once
+   * here so the colour a student learns on the landing page is the same one
+   * that tells them which IDE they are in.
+   */
+  accent: string
+  /**
    * Extensions this IDE accepts. The first is appended when a student types a
    * bare name, and the whole list is what keeps files out of the wrong tree.
    */
@@ -40,6 +47,8 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     id: "python",
     label: "Python",
     blurb: "Run code and see output",
+    // Indigo, the product's own primary hue.
+    accent: "var(--chart-1)",
     extensions: [".py"],
     freeLimits: { maxFiles: 2, maxFolders: 1 },
   },
@@ -47,6 +56,9 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     id: "html",
     label: "HTML",
     blurb: "Build pages with HTML, CSS & JS",
+    // Amber, near HTML5's brand orange and the furthest hue from Python's
+    // indigo, so the two IDEs are told apart at a glance rather than read.
+    accent: "var(--chart-4)",
     extensions: [".html", ".htm", ".css", ".js"],
     freeLimits: { maxFiles: 3, maxFolders: 1 },
   },

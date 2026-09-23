@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
@@ -243,7 +244,12 @@ function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
           {limits.maxStudentsPerClass !== null &&
             `Up to ${limits.maxStudentsPerClass} students each.`}
         </p>
-        <Button size="sm" className="mt-2.5 w-full" render={<a href="/pricing" />}>
+          <Button
+            size="sm"
+            className="mt-2.5 w-full"
+            render={<Link href="/pricing" />}
+            nativeButton={false}
+          >
           Upgrade to Teacher Pro
         </Button>
       </div>

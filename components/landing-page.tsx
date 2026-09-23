@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { Logo, LogoWordmark } from "@/components/logo"
+import { LANGUAGES } from "@/lib/ide/languages"
 
 /* ------------------------------------------------------------------ */
 /* Scroll indicator — sits in the hero flow so it can never cover the   */
@@ -164,14 +165,14 @@ const languages = [
     ext: ".py",
     blurb: "Run code, read output",
     icon: Terminal,
-    color: "var(--primary)",
+    color: LANGUAGES.python.accent,
   },
   {
     label: "HTML",
     ext: ".html · .css · .js",
     blurb: "Build and preview pages",
     icon: PanelsTopLeft,
-    color: "var(--chart-2)",
+    color: LANGUAGES.html.accent,
   },
 ] as const
 

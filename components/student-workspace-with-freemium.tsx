@@ -3,8 +3,10 @@
 import { useState } from "react"
 import useSWR from "swr"
 import { StudentWorkspace } from "@/components/student-workspace"
+import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { SubscriptionModal } from "@/components/subscription-modal"
 import { UpgradeButton } from "@/components/upgrade-button"
+import { cn } from "@/lib/utils"
 import { getUserSubscriptionInfo } from "@/app/actions/onboarding"
 import { setLastIde } from "@/app/actions/preferences"
 import { subscriptionInfoKey } from "@/lib/swr-keys"
@@ -59,24 +61,39 @@ export function StudentWorkspaceWithFreemium({
 
   const showFreeTierBar = !isPro && maxFiles !== null && maxFolders !== null
 
+  const atFolderLimit = maxFolders !== null && usedFolders >= maxFolders
+  const atFileLimit = maxFiles !== null && usedFiles >= maxFiles
+
   return (
     <>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {showFreeTierBar && (
-          <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              {/* Named explicitly: each IDE has its own allowance, so an
-                  unlabelled count would look like the number was wrong. */}
-              Free tier &middot; {getLanguage(language).label}: {usedFolders}/{maxFolders}{" "}
-              folders, {usedFiles}/{maxFiles} files
-            </span>
-            <UpgradeButton onClick={() => setShowUpgradeModal(true)} compact={true} />
-          </div>
-        )}
+        {/* The workspace's top-level navigation. The IDE tabs and the
+            allowance share one bar because the allowance is metered per IDE —
+            putting them side by side is what makes that obvious. */}
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-2 sm:px-4">
+          <IdeSwitcher variant="bar" value={language} onChange={handleLanguageChange} />
+          {showFreeTierBar && (
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <span className="hidden text-xs text-muted-foreground md:inline">
+                {/* Named explicitly: each IDE has its own allowance, so an
+                    unlabelled count would look like the number was wrong. */}
+                Free tier &middot; {getLanguage(language).label}:{" "}
+                <span className={cn(atFolderLimit && "font-semibold text-chart-4")}>
+                  {usedFolders}/{maxFolders}
+                </span>{" "}
+                folders,{" "}
+                <span className={cn(atFileLimit && "font-semibold text-chart-4")}>
+                  {usedFiles}/{maxFiles}
+                </span>{" "}
+                files
+              </span>
+              <UpgradeButton onClick={() => setShowUpgradeModal(true)} compact={true} />
+            </div>
+          )}
+        </div>
         <StudentWorkspace
           initialClasses={initialClasses}
           language={language}
-          onLanguageChange={handleLanguageChange}
           onLimitReached={(type) => {
             setLimitType(type)
             setShowUpgradeModal(true)
