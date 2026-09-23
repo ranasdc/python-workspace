@@ -69,8 +69,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
         </h1>
         <p className="mt-2 text-sm text-muted-foreground text-pretty">
           {mode === "sign-up"
-            ? "Set up your classroom or join one to start coding in Python."
-            : "Sign in to access your Python workspace."}
+            ? "Set up your classroom or join one to start coding."
+            : "Sign in to access your coding workspace."}
         </p>
       </div>
 

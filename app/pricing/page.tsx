@@ -11,7 +11,7 @@ import { LogoIcon, LogoWordmark } from "@/components/logo"
 export const metadata = {
   title: "Pricing",
   description:
-    "Student Pro, Teacher Pro and school plans for MyCodePad. School plans give every student and teacher Pro at no personal cost.",
+    "Student Pro, Teacher Pro and school plans for MyCodePad, the classroom workspace for Python and HTML. School plans give every student and teacher Pro at no personal cost.",
 }
 
 export default async function PricingPage() {
@@ -31,8 +31,11 @@ export default async function PricingPage() {
           Simple pricing for learners, teachers and schools
         </h1>
         <p className="mt-3 max-w-2xl text-pretty text-muted-foreground">
-          Start free with 2 files and 1 folder. Upgrade when you outgrow it — or get
-          everything through your school.
+          {/* Deliberately not a single number: the free allowance is metered per
+              IDE, so quoting "2 files" would be wrong the moment you open the
+              HTML IDE, which allows 3. */}
+          Start free with a small file allowance in each IDE. Upgrade when you outgrow it
+          — or get everything through your school.
         </p>
       </header>
 

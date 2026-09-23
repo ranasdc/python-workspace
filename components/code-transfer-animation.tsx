@@ -16,7 +16,7 @@ const CODE: Token[][] = [
   [{ t: "def", c: "kw" }, { t: " total", c: "fn" }, { t: "(scores):" }],
   [{ t: "    return", c: "kw" }, { t: " sum(scores) " }, { t: "/", c: "kw" }, { t: " len(scores)" }],
   [],
-  [{ t: "avg " }, { t: "=", c: "kw" }, { t: " total([", c: "" }, { t: "88", c: "num" }, { t: ", " }, { t: "92", c: "num" }, { t: ", " }, { t: "79", c: "num" }, { t: "])" }],
+  [{ t: "avg " }, { t: "=", c: "kw" }, { t: " total([" }, { t: "88", c: "num" }, { t: ", " }, { t: "92", c: "num" }, { t: ", " }, { t: "79", c: "num" }, { t: "])" }],
   [{ t: "print", c: "fn" }, { t: "(" }, { t: '"Average:"', c: "str" }, { t: ", avg)" }],
 ]
 

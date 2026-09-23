@@ -1,10 +1,18 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { AlertCircle, Monitor, Smartphone } from "lucide-react"
+import {
+  AlertCircle,
+  Maximize2,
+  Minimize2,
+  Monitor,
+  Smartphone,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { PreviewBuild } from "@/lib/ide/html-document"
+
+type Device = "desktop" | "mobile"
 
 /**
  * Renders the assembled student page.
@@ -25,8 +33,11 @@ export function HtmlPreview({
 }) {
   const srcDoc = build?.document ?? null
   const [errors, setErrors] = useState<string[]>([])
-  const [width, setWidth] = useState<"full" | "mobile">("full")
+  const [device, setDevice] = useState<Device>("desktop")
+  const [expanded, setExpanded] = useState(false)
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const expandRef = useRef<HTMLButtonElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   // Errors belong to a single run; a fresh run starts with a clean slate.
   useEffect(() => {
@@ -48,17 +59,42 @@ export function HtmlPreview({
     return () => window.removeEventListener("message", onMessage)
   }, [])
 
-  if (!srcDoc) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted/30 p-6 text-center">
-        <Monitor className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground text-pretty">
-          Create an <code className="font-mono text-xs">index.html</code> file to see your
-          page here.
-        </p>
-      </div>
-    )
-  }
+  // Losing the page while expanded would leave a full-screen panel with nothing
+  // in it, so drop back to the split view instead.
+  useEffect(() => {
+    if (!srcDoc) setExpanded(false)
+  }, [srcDoc])
+
+  useEffect(() => {
+    if (!expanded) return
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setExpanded(false)
+    }
+
+    // The panel covers the page, so the document behind it must not scroll
+    // underneath on trackpads and phones.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", onKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [expanded])
+
+  // Keyboard users land on the control that got them here, and are put back
+  // where they were when they leave.
+  useEffect(() => {
+    if (expanded) {
+      returnFocusRef.current = document.activeElement as HTMLElement | null
+      expandRef.current?.focus()
+    } else {
+      returnFocusRef.current?.focus?.()
+      returnFocusRef.current = null
+    }
+  }, [expanded])
 
   // A link to a file that does not exist is the most common reason a page
   // "does nothing", and it produces no runtime error to catch, so it is
@@ -71,57 +107,106 @@ export function HtmlPreview({
   ]
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-muted/30">
-      <div className="flex shrink-0 items-center justify-between border-b border-border bg-card px-3 py-1.5">
+    <div
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded || undefined}
+      aria-label={expanded ? "Page preview, full screen" : undefined}
+      className={cn(
+        "flex min-h-0 flex-col bg-muted/30",
+        expanded ? "fixed inset-0 z-50 bg-background" : "h-full",
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1.5">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Preview
         </span>
-        <div className="flex items-center gap-0.5" role="group" aria-label="Preview width">
+
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5" role="group" aria-label="Preview width">
+            <DeviceButton
+              icon={Monitor}
+              label="Desktop width preview"
+              active={device === "desktop"}
+              disabled={!srcDoc}
+              onClick={() => setDevice("desktop")}
+            />
+            <DeviceButton
+              icon={Smartphone}
+              label="Mobile width preview"
+              active={device === "mobile"}
+              disabled={!srcDoc}
+              onClick={() => setDevice("mobile")}
+            />
+          </div>
+
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+
+          {expanded && (
+            <kbd className="mr-1 hidden rounded border border-border px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted-foreground sm:inline-block">
+              Esc
+            </kbd>
+          )}
           <button
+            ref={expandRef}
             type="button"
-            onClick={() => setWidth("full")}
-            aria-pressed={width === "full"}
+            onClick={() => setExpanded((v) => !v)}
+            disabled={!srcDoc}
+            aria-pressed={expanded}
             className={cn(
-              "rounded p-1 transition-colors",
-              width === "full"
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+              "flex items-center gap-1.5 rounded px-1.5 py-1 text-xs font-medium transition-colors",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "disabled:pointer-events-none disabled:opacity-40",
             )}
           >
-            <Monitor className="h-3.5 w-3.5" />
-            <span className="sr-only">Full width preview</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setWidth("mobile")}
-            aria-pressed={width === "mobile"}
-            className={cn(
-              "rounded p-1 transition-colors",
-              width === "mobile"
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+            {expanded ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
             )}
-          >
-            <Smartphone className="h-3.5 w-3.5" />
-            <span className="sr-only">Mobile width preview</span>
+            <span className="hidden sm:inline">{expanded ? "Exit" : "Full screen"}</span>
+            <span className="sr-only sm:hidden">
+              {expanded ? "Exit full screen preview" : "Open preview full screen"}
+            </span>
           </button>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 justify-center overflow-auto p-2">
-        <iframe
-          // Remounting on every run guarantees a clean document rather than a
-          // frame still holding timers and listeners from the previous one.
-          key={runId}
-          ref={frameRef}
-          title="Page preview"
-          srcDoc={srcDoc}
-          sandbox="allow-scripts allow-modals allow-forms allow-popups"
-          className={cn(
-            "h-full rounded border border-border bg-white shadow-sm",
-            width === "mobile" ? "w-[380px] max-w-full" : "w-full",
-          )}
-        />
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 justify-center overflow-auto",
+          expanded ? "p-4 sm:p-6" : "p-2",
+          // Full screen gives the phone frame far more height than a phone has,
+          // so centre it and cap it rather than stretching it into a ribbon.
+          device === "mobile" && expanded && "items-center",
+        )}
+      >
+        {srcDoc ? (
+          <iframe
+            // Remounting on every run guarantees a clean document rather than a
+            // frame still holding timers and listeners from the previous one.
+            key={runId}
+            ref={frameRef}
+            title="Page preview"
+            srcDoc={srcDoc}
+            sandbox="allow-scripts allow-modals allow-forms allow-popups"
+            className={cn(
+              "h-full rounded border border-border bg-white shadow-sm",
+              device === "mobile"
+                ? "w-[390px] max-w-full"
+                : "w-full",
+              device === "mobile" && expanded && "max-h-[844px]",
+            )}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
+            <Monitor className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground text-pretty">
+              Create an <code className="font-mono text-xs">index.html</code> file to see
+              your page here.
+            </p>
+          </div>
+        )}
       </div>
 
       {notices.length > 0 && (
@@ -141,5 +226,39 @@ export function HtmlPreview({
         </div>
       )}
     </div>
+  )
+}
+
+function DeviceButton({
+  icon: Icon,
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  icon: typeof Monitor
+  label: string
+  active: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      className={cn(
+        "rounded p-1 transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "disabled:pointer-events-none disabled:opacity-40",
+        active
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span className="sr-only">{label}</span>
+    </button>
   )
 }

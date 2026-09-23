@@ -14,13 +14,13 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
         <div className="max-w-sm">
           <h2 className="text-3xl font-semibold leading-tight text-balance text-sidebar-foreground">
-            Teach and learn Python in one clean workspace.
+            Teach and learn to code in one clean workspace.
           </h2>
           <ul className="mt-8 flex flex-col gap-5">
             <Feature
               icon={<Play className="h-4 w-4" />}
-              title="Run Python in the browser"
-              desc="Students execute code instantly with no setup, powered by Pyodide."
+              title="Two IDEs, nothing to install"
+              desc="Students run Python or build pages with HTML, CSS and JavaScript, right in the browser."
             />
             <Feature
               icon={<FolderTree className="h-4 w-4" />}

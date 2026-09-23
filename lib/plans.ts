@@ -36,10 +36,10 @@ export const PLANS: Record<PlanId, Plan> = {
     interval: "month",
     blurb: "For individual learners who want the full workspace.",
     features: [
-      "Unlimited files and folders",
+      "Unlimited files and folders in every IDE",
       "AI assisted learning",
       "Everyday coding exercises",
-      "Roadmap to learn Python",
+      "Learning roadmaps for Python and HTML",
       "Priority support",
     ],
   },
@@ -98,7 +98,7 @@ export const PLANS: Record<PlanId, Plan> = {
     audience: "school",
     priceInPence: 250000,
     interval: "year",
-    blurb: "For multi-academy trusts running Python at scale.",
+    blurb: "For multi-academy trusts running computing at scale.",
     teacherSeatLimit: 100,
     studentSeatLimit: 2500,
     features: [

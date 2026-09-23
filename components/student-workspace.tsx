@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
-import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import {
@@ -104,7 +103,6 @@ export function StudentWorkspace({
   canCreateFile,
   canCreateFolder,
   language = DEFAULT_LANGUAGE,
-  onLanguageChange,
 }: { 
   initialClasses: ClassItem[]
   onLimitReached?: (type: "file" | "folder") => void
@@ -112,7 +110,6 @@ export function StudentWorkspace({
   canCreateFile?: boolean
   canCreateFolder?: boolean
   language?: LanguageId
-  onLanguageChange?: (next: LanguageId) => void
 }) {
   const languageDef = getLanguage(language)
   const isWeb = language === "html"
@@ -328,15 +325,6 @@ export function StudentWorkspace({
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Sidebar: classes + files */}
       <aside className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-72 lg:border-b-0 lg:border-r">
-        {onLanguageChange && (
-          <div className="border-b border-border p-3">
-            <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
-              IDE
-            </Label>
-            <IdeSwitcher value={language} onChange={onLanguageChange} />
-          </div>
-        )}
-
         <div className="border-b border-border p-3">
           <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
             Class

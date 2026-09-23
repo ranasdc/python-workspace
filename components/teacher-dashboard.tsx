@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
@@ -243,7 +244,12 @@ function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
           {limits.maxStudentsPerClass !== null &&
             `Up to ${limits.maxStudentsPerClass} students each.`}
         </p>
-        <Button size="sm" className="mt-2.5 w-full" render={<a href="/pricing" />}>
+          <Button
+            size="sm"
+            className="mt-2.5 w-full"
+            render={<Link href="/pricing" />}
+            nativeButton={false}
+          >
           Upgrade to Teacher Pro
         </Button>
       </div>
@@ -719,8 +725,8 @@ function EmptyTeacherState({ onCreated }: { onCreated: (id: number) => Promise<v
         </div>
         <h2 className="text-lg font-semibold">Create your first class</h2>
         <p className="mt-2 text-sm text-muted-foreground text-pretty">
-          Set up a class and share the join code with your students. Their Python files will
-          appear here, organized by student.
+            Set up a class and share the join code with your students. Their files will
+            appear here, organized by student.
         </p>
         <div className="mt-5">
           <CreateClassDialog onCreated={onCreated} />

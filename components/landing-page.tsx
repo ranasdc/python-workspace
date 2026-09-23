@@ -16,19 +16,25 @@ import {
   Zap,
   Users,
   CheckCircle2,
+  Code2,
+  PanelsTopLeft,
+  Sparkles,
 } from "lucide-react"
 import { Logo, LogoWordmark } from "@/components/logo"
+import { LANGUAGES } from "@/lib/ide/languages"
 
 /* ------------------------------------------------------------------ */
-/* Fixed scroll indicator — visible on load, fades out 2s after scroll */
+/* Scroll indicator — sits in the hero flow so it can never cover the   */
+/* call-to-action buttons, and fades out once the page is scrolled.     */
 /* ------------------------------------------------------------------ */
 function ScrollIndicator() {
   const [visible, setVisible] = useState(true)
 
   useEffect(() => {
     const onScroll = () => {
-      setVisible(false)
+      setVisible(window.scrollY < 24)
     }
+    onScroll()
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => {
       window.removeEventListener("scroll", onScroll)
@@ -37,7 +43,8 @@ function ScrollIndicator() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-8 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-1.5 transition-opacity duration-700"
+      aria-hidden
+      className="pointer-events-none mt-7 flex flex-col items-center gap-1.5 transition-opacity duration-500"
       style={{ opacity: visible ? 1 : 0 }}
     >
       <span className="text-xs font-medium tracking-widest text-muted-foreground uppercase">
@@ -112,11 +119,15 @@ const sections = [
     id: "students",
     eyebrow: "For students",
     icon: BookOpen,
-    title: "Write and run Python without leaving the browser",
-    desc: "Join a class with a single code, open a clean editor, and hit run. Output appears instantly in an interactive console you can type into — and every keystroke saves automatically.",
+    title: "Write and run real code without leaving the browser",
+    desc: "Join a class with a single code, pick an IDE, and hit run. Python prints straight to an interactive console you can type into, HTML renders in a live preview — and every keystroke saves automatically.",
     image: "/images/students.png",
-    imageAlt: "Illustration of a student writing Python code on a laptop",
-    points: ["Real Python via Pyodide", "Interactive input in the console", "Autosave on every change"],
+    imageAlt: "Illustration of a student writing code on a laptop",
+    points: [
+      "Python and HTML today, more languages on the way",
+      "Interactive console and live page preview",
+      "Autosave on every change",
+    ],
     accent: "primary",
   },
   {
@@ -143,9 +154,31 @@ const sections = [
   },
 ] as const
 
+/**
+ * The IDEs that ship today. Mirrors LANGUAGES in lib/ide/languages.ts — when a
+ * third IDE lands there, add it here so the hero stops promising and starts
+ * showing it.
+ */
+const languages = [
+  {
+    label: "Python",
+    ext: ".py",
+    blurb: "Run code, read output",
+    icon: Terminal,
+    color: LANGUAGES.python.accent,
+  },
+  {
+    label: "HTML",
+    ext: ".html · .css · .js",
+    blurb: "Build and preview pages",
+    icon: PanelsTopLeft,
+    color: LANGUAGES.html.accent,
+  },
+] as const
+
 const stats = [
   { icon: Zap, value: "0", label: "installs needed" },
-  { icon: Terminal, value: "100%", label: "browser-based" },
+  { icon: Code2, value: "2", label: "IDEs, one account" },
   { icon: Users, value: "1", label: "code to join a class" },
 ]
 
@@ -206,7 +239,7 @@ export function LandingPage() {
       {/* Hero */}
       <section
         id="top"
-        className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-6 pb-24 pt-16 text-center sm:pt-24"
+        className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-6 pb-24 pt-10 text-center sm:pt-16"
       >
         {/* Animated background glows */}
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -217,7 +250,7 @@ export function LandingPage() {
 
         <Reveal>
           <div 
-            className="mb-6 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary"
+            className="mb-5 inline-flex items-center gap-2 rounded-full border-2 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-2 text-xs font-semibold text-primary"
             style={{
               animation: 'border-glow 10s ease-in-out infinite'
             }}
@@ -228,29 +261,67 @@ export function LandingPage() {
             <span className="shimmer-text">Run your code right in the browser</span>
           </div>
         </Reveal>
-      <Reveal delay={80}>
-        <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          A <span className="rainbow-text">more than</span> Python IDE built for teachers and students
-        </h1>
-      </Reveal>
-      <Reveal delay={120}>
-        <div 
-          className="mt-4 inline-block text-base font-semibold text-emerald-400 px-2 py-1"
-          style={{
-            animation: 'halo-pulse 4s ease-in-out infinite'
-          }}
-        >
-          ✨ <span className="emerald-shimmer">More programming languages coming soon!</span>
-        </div>
-      </Reveal>
+        <Reveal delay={80}>
+          <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
+            <span className="rainbow-text">More than</span> just an IDE built for teachers and students
+          </h1>
+        </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
             Students write and run code in a clean editor. Their code flows straight to the
             teacher&apos;s dashboard, neatly organized by class, student, and file.
           </p>
         </Reveal>
+
+        {/* Languages: what ships today, and what is coming next */}
+        <Reveal delay={200} className="mt-7">
+          <p
+            id="languages-label"
+            className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground"
+          >
+            What your class can build today
+          </p>
+          <ul
+            aria-labelledby="languages-label"
+            className="mt-3 flex flex-wrap items-center justify-center gap-2"
+          >
+            {languages.map((lang) => (
+              <li
+                key={lang.label}
+                className="flex items-center gap-2.5 rounded-xl border border-border bg-card/60 py-2 pl-2.5 pr-4 text-left backdrop-blur transition-colors hover:border-primary/40"
+              >
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `color-mix(in oklch, ${lang.color} 18%, transparent)` }}
+                >
+                  <lang.icon className="h-4 w-4" style={{ color: lang.color }} />
+                </span>
+                <span className="flex flex-col leading-tight">
+                  <span className="text-sm font-medium">
+                    {lang.label}
+                    <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
+                      {lang.ext}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">{lang.blurb}</span>
+                </span>
+              </li>
+            ))}
+            <li
+              className="flex items-center gap-2 rounded-xl border border-dashed px-3.5 py-3 text-sm font-medium"
+              style={{
+                borderColor: "color-mix(in oklch, var(--chart-3) 50%, transparent)",
+                color: "var(--chart-3)",
+              }}
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              More languages coming soon
+            </li>
+          </ul>
+        </Reveal>
+
         <Reveal delay={240}>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button render={<Link href="/sign-up" />} nativeButton={false} size="lg" className="group">
               Start coding
               <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -261,12 +332,12 @@ export function LandingPage() {
           </div>
         </Reveal>
 
+        <ScrollIndicator />
+
         {/* Hero: live "student → teacher" code transfer animation */}
-        <Reveal delay={320} className="mt-16 w-full">
+        <Reveal delay={320} className="mt-12 w-full">
           <CodeTransferAnimation />
         </Reveal>
-
-        <ScrollIndicator />
 
         {/* Stats band */}
         <Reveal delay={120} className="mt-16 w-full">
@@ -358,7 +429,7 @@ export function LandingPage() {
       </section>
 
       <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
-        <LogoWordmark className="text-sm" /> — Python IDE for classrooms.
+        <LogoWordmark className="text-sm" /> — the classroom IDE for Python, HTML, and more.
       </footer>
     </main>
   )
