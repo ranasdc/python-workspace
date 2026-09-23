@@ -17,6 +17,12 @@ import {
 } from "@/lib/entitlements"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import {
+  normaliseFileName,
+  starterContentFor,
+  toLanguageId,
+  type LanguageId,
+} from "@/lib/ide/languages"
 
 // Capability comes from the entitlement engine, not from the session's `role`
 // field: a school teacher who signed up as a student must still be able to
@@ -28,19 +34,27 @@ async function requireTeacher() {
 }
 
 // ---------- Read ----------
-export async function getLibrary() {
+export async function getLibrary(languageInput: LanguageId = "python") {
   const teacher = await requireTeacher()
+  const language = toLanguageId(languageInput)
 
   const [folders, files] = await Promise.all([
     db
       .select()
       .from(libraryFolders)
-      .where(eq(libraryFolders.teacherId, teacher.id))
+      .where(
+        and(
+          eq(libraryFolders.teacherId, teacher.id),
+          eq(libraryFolders.language, language),
+        ),
+      )
       .orderBy(asc(libraryFolders.name)),
     db
       .select()
       .from(libraryFiles)
-      .where(eq(libraryFiles.teacherId, teacher.id))
+      .where(
+        and(eq(libraryFiles.teacherId, teacher.id), eq(libraryFiles.language, language)),
+      )
       .orderBy(asc(libraryFiles.name)),
   ])
 
@@ -55,8 +69,12 @@ export async function getLibrary() {
 }
 
 // ---------- Folders ----------
-export async function createLibraryFolder(name: string) {
+export async function createLibraryFolder(
+  name: string,
+  languageInput: LanguageId = "python",
+) {
   const teacher = await requireTeacher()
+  const language = toLanguageId(languageInput)
   await assertCanCreateLibraryFolder(teacher.id)
 
   const clean = name.trim()
@@ -64,7 +82,7 @@ export async function createLibraryFolder(name: string) {
 
   const [created] = await db
     .insert(libraryFolders)
-    .values({ teacherId: teacher.id, name: clean })
+    .values({ teacherId: teacher.id, name: clean, language })
     .returning()
 
   revalidatePath("/teacher")
@@ -85,31 +103,44 @@ export async function deleteLibraryFolder(folderId: number) {
 }
 
 // ---------- Files ----------
-const STARTER = `# New task
-# Describe the exercise here, then distribute it to your students.
 
-print("Let's get started!")
-`
-
-export async function createLibraryFile(name: string, folderId: number | null) {
+export async function createLibraryFile(
+  name: string,
+  folderId: number | null,
+  languageInput: LanguageId = "python",
+) {
   const teacher = await requireTeacher()
+  const language = toLanguageId(languageInput)
   await assertCanCreateLibraryFile(teacher.id)
 
-  const clean = name.trim().endsWith(".py") ? name.trim() : `${name.trim()}.py`
-  if (!clean || clean === ".py") throw new Error("Enter a file name")
+  const normalised = normaliseFileName(name, language)
+  if (!normalised.ok) throw new Error(normalised.error)
+  const clean = normalised.name
 
-  // Make sure a provided folder belongs to this teacher.
+  // The folder must belong to this teacher and sit in the same IDE.
   if (folderId !== null) {
     const [folder] = await db
       .select()
       .from(libraryFolders)
-      .where(and(eq(libraryFolders.id, folderId), eq(libraryFolders.teacherId, teacher.id)))
+      .where(
+        and(
+          eq(libraryFolders.id, folderId),
+          eq(libraryFolders.teacherId, teacher.id),
+          eq(libraryFolders.language, language),
+        ),
+      )
     if (!folder) throw new Error("Folder not found")
   }
 
   const [created] = await db
     .insert(libraryFiles)
-    .values({ teacherId: teacher.id, folderId, name: clean, content: STARTER })
+    .values({
+      teacherId: teacher.id,
+      folderId,
+      name: clean,
+      language,
+      content: starterContentFor(clean),
+    })
     .returning()
 
   revalidatePath("/teacher")
@@ -198,6 +229,7 @@ async function copyFilesToStudents(
     studentId: string
     folderId: number | null
     name: string
+    language: string
     content: string
     assignedByTeacher: boolean
   }[] = []
@@ -211,6 +243,9 @@ async function copyFilesToStudents(
         studentId: student,
         folderId,
         name: file.name,
+        // Carried from the source file, so a distributed page lands in the
+        // student's HTML IDE rather than appearing in their Python tree.
+        language: file.language,
         content: file.content,
         assignedByTeacher: true,
       })
@@ -263,7 +298,14 @@ export async function distributeFolder(
   const existingFolders = await db
     .select()
     .from(studentFolders)
-    .where(and(eq(studentFolders.classId, classId), eq(studentFolders.name, folder.name)))
+    .where(
+      and(
+        eq(studentFolders.classId, classId),
+        eq(studentFolders.name, folder.name),
+        // Same-named folders in different IDEs are different folders.
+        eq(studentFolders.language, folder.language),
+      ),
+    )
 
   const folderByStudent = new Map<string, number>()
   for (const ef of existingFolders) {
@@ -279,6 +321,7 @@ export async function distributeFolder(
           classId,
           studentId: s,
           name: folder.name,
+          language: folder.language,
           assignedByTeacher: true,
         })),
       )

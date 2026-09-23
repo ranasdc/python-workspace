@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import { CodeEditor } from "@/components/code-editor"
+import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import {
+  DEFAULT_LANGUAGE,
+  editorModeFor,
+  getLanguage,
+  type LanguageId,
+} from "@/lib/ide/languages"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -66,8 +73,13 @@ type ClassOption = {
 }
 
 export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
-  const { data } = useSWR<LibraryData>("teacher-library", getLibrary, {
+  // Library content is per IDE, matching how it is stored and distributed.
+  const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
+  const libraryKey = ["teacher-library", language]
+
+  const { data } = useSWR<LibraryData>(libraryKey, () => getLibrary(language), {
     revalidateOnFocus: false,
+    keepPreviousData: false,
   })
   const { mutate } = useSWRConfig()
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -103,21 +115,35 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
   }
 
   async function refresh() {
-    await mutate("teacher-library")
+    await mutate(libraryKey)
   }
+
+  // A file from the other IDE must not stay open when the filter changes.
+  useEffect(() => {
+    setSelectedId(null)
+    setDraft("")
+  }, [language])
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(260px,320px)_1fr]">
       {/* Library tree */}
       <div className="flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r">
+        <div className="border-b border-border px-3 pb-3 pt-3">
+          <IdeSwitcher value={language} onChange={setLanguage} />
+        </div>
         <div className="flex items-center justify-between px-3 py-3">
           <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <Library className="h-3.5 w-3.5" />
             My library
           </span>
           <div className="flex items-center gap-1">
-            <NewFolderButton onDone={refresh} />
-            <NewFileButton folders={data?.folders ?? []} onDone={refresh} onCreated={setSelectedId} />
+            <NewFolderButton language={language} onDone={refresh} />
+            <NewFileButton
+              language={language}
+              folders={data?.folders ?? []}
+              onDone={refresh}
+              onCreated={setSelectedId}
+            />
           </div>
         </div>
 
@@ -126,8 +152,8 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
             <p className="px-2 text-sm text-muted-foreground">Loading library...</p>
           ) : data.folders.length === 0 && data.rootFiles.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground text-pretty">
-              Create a folder or file to build reusable tasks, then distribute them to a class or a
-              single student.
+              No {getLanguage(language).label} tasks yet. Create a folder or file to build
+              reusable tasks, then distribute them to a class or a single student.
             </p>
           ) : (
             <ul className="flex flex-col gap-0.5">
@@ -182,7 +208,11 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
               />
             </div>
             <div className="min-h-0 flex-1">
-              <CodeEditor value={draft} onChange={handleChange} />
+              <CodeEditor
+                value={draft}
+                onChange={handleChange}
+                mode={editorModeFor(selected.name)}
+              />
             </div>
           </>
         ) : (
@@ -339,7 +369,13 @@ function FileRow({
   )
 }
 
-function NewFolderButton({ onDone }: { onDone: () => Promise<void> }) {
+function NewFolderButton({
+  language,
+  onDone,
+}: {
+  language: LanguageId
+  onDone: () => Promise<void>
+}) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
@@ -348,7 +384,7 @@ function NewFolderButton({ onDone }: { onDone: () => Promise<void> }) {
     if (!name.trim()) return
     setBusy(true)
     try {
-      await createLibraryFolder(name)
+      await createLibraryFolder(name, language)
       setName("")
       await onDone()
       setOpen(false)
@@ -396,10 +432,12 @@ function NewFolderButton({ onDone }: { onDone: () => Promise<void> }) {
 }
 
 function NewFileButton({
+  language,
   folders,
   onDone,
   onCreated,
 }: {
+  language: LanguageId
   folders: LibFolder[]
   onDone: () => Promise<void>
   onCreated: (id: number) => void
@@ -408,12 +446,17 @@ function NewFileButton({
   const [name, setName] = useState("")
   const [folderId, setFolderId] = useState<string>("root")
   const [busy, setBusy] = useState(false)
+  const def = getLanguage(language)
 
   async function submit() {
     if (!name.trim()) return
     setBusy(true)
     try {
-      const created = await createLibraryFile(name, folderId === "root" ? null : Number(folderId))
+      const created = await createLibraryFile(
+        name,
+        folderId === "root" ? null : Number(folderId),
+        language,
+      )
       setName("")
       await onDone()
       onCreated(created.id)
@@ -435,7 +478,7 @@ function NewFileButton({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New task file</DialogTitle>
+          <DialogTitle>New {def.label} task file</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
@@ -444,12 +487,17 @@ function NewFileButton({
               id="libfilename"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="exercise_1.py"
+              placeholder={language === "html" ? "index.html" : "exercise_1.py"}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
               }}
               autoFocus
             />
+            <p className="text-xs text-muted-foreground">
+              {def.extensions.length > 1
+                ? `Use ${def.extensions.join(", ")}. ${def.extensions[0]} is added if you omit one.`
+                : `${def.extensions[0]} is added automatically if omitted.`}
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="libfolder">Folder</Label>

@@ -17,12 +17,12 @@ import {
 } from "@/lib/entitlements"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-
-const STARTER = `# Welcome to your Python file!
-# Write code below and press Run to execute it in your browser.
-
-print("Hello, world!")
-`
+import {
+  normaliseFileName,
+  starterContentFor,
+  toLanguageId,
+  type LanguageId,
+} from "@/lib/ide/languages"
 
 async function assertEnrolled(studentId: string, classId: number) {
   const [row] = await db
@@ -33,20 +33,38 @@ async function assertEnrolled(studentId: string, classId: number) {
 }
 
 // ---------- Student: manage own files & folders ----------
-export async function getStudentFiles(classId: number) {
+/**
+ * Every student-facing read is scoped to one IDE. The language filter is
+ * applied in SQL rather than in the client, so switching IDE cannot leak the
+ * other IDE's tree even momentarily.
+ */
+export async function getStudentFiles(classId: number, languageInput: LanguageId) {
   const student = await requireUser()
+  const language = toLanguageId(languageInput)
   await assertEnrolled(student.id, classId)
 
   const [folders, files] = await Promise.all([
     db
       .select()
       .from(studentFolders)
-      .where(and(eq(studentFolders.classId, classId), eq(studentFolders.studentId, student.id)))
+      .where(
+        and(
+          eq(studentFolders.classId, classId),
+          eq(studentFolders.studentId, student.id),
+          eq(studentFolders.language, language),
+        ),
+      )
       .orderBy(asc(studentFolders.name)),
     db
       .select()
       .from(codeFiles)
-      .where(and(eq(codeFiles.classId, classId), eq(codeFiles.studentId, student.id)))
+      .where(
+        and(
+          eq(codeFiles.classId, classId),
+          eq(codeFiles.studentId, student.id),
+          eq(codeFiles.language, language),
+        ),
+      )
       .orderBy(asc(codeFiles.name)),
   ])
 
@@ -60,18 +78,27 @@ export async function getStudentFiles(classId: number) {
   }
 }
 
-export async function createFile(classId: number, name: string, folderId: number | null = null) {
+export async function createFile(
+  classId: number,
+  name: string,
+  folderId: number | null = null,
+  languageInput: LanguageId = "python",
+) {
   const student = await requireUser()
+  const language = toLanguageId(languageInput)
   await assertEnrolled(student.id, classId)
 
   // Enforced here, on the server, before anything is written. The UI hint is a
-  // convenience; this is the actual limit.
-  await assertCanCreateFile(student.id)
+  // convenience; this is the actual limit. Quota is per IDE.
+  await assertCanCreateFile(student.id, language)
 
-  const clean = name.trim().endsWith(".py") ? name.trim() : `${name.trim()}.py`
-  if (!clean || clean === ".py") throw new Error("Enter a file name")
+  // Rejects an extension belonging to another IDE, so the stored `language`
+  // column and the file's actual type can never disagree.
+  const normalised = normaliseFileName(name, language)
+  if (!normalised.ok) throw new Error(normalised.error)
+  const clean = normalised.name
 
-  // Make sure a provided folder belongs to this student in this class.
+  // A provided folder must belong to this student, in this class, in this IDE.
   if (folderId !== null) {
     const [folder] = await db
       .select()
@@ -81,6 +108,7 @@ export async function createFile(classId: number, name: string, folderId: number
           eq(studentFolders.id, folderId),
           eq(studentFolders.studentId, student.id),
           eq(studentFolders.classId, classId),
+          eq(studentFolders.language, language),
         ),
       )
     if (!folder) throw new Error("Folder not found")
@@ -88,25 +116,37 @@ export async function createFile(classId: number, name: string, folderId: number
 
   const [created] = await db
     .insert(codeFiles)
-    .values({ classId, studentId: student.id, folderId, name: clean, content: STARTER })
+    .values({
+      classId,
+      studentId: student.id,
+      folderId,
+      name: clean,
+      language,
+      content: starterContentFor(clean),
+    })
     .returning()
 
   revalidatePath("/student")
   return created
 }
 
-export async function createStudentFolder(classId: number, name: string) {
+export async function createStudentFolder(
+  classId: number,
+  name: string,
+  languageInput: LanguageId = "python",
+) {
   const student = await requireUser()
+  const language = toLanguageId(languageInput)
   await assertEnrolled(student.id, classId)
 
-  await assertCanCreateFolder(student.id)
+  await assertCanCreateFolder(student.id, language)
 
   const clean = name.trim()
   if (!clean) throw new Error("Enter a folder name")
 
   const [created] = await db
     .insert(studentFolders)
-    .values({ classId, studentId: student.id, name: clean })
+    .values({ classId, studentId: student.id, name: clean, language })
     .returning()
 
   revalidatePath("/student")
@@ -152,8 +192,9 @@ export async function deleteFile(fileId: number) {
 }
 
 // ---------- Teacher: read student files in a class ----------
-export async function getClassTree(classId: number) {
+export async function getClassTree(classId: number, languageInput: LanguageId = "python") {
   const teacher = await requireUser()
+  const language = toLanguageId(languageInput)
   await requireTeacherCapability(teacher.id)
 
   const [cls] = await db
@@ -179,7 +220,7 @@ export async function getClassTree(classId: number) {
     ? await db
         .select()
         .from(codeFiles)
-        .where(eq(codeFiles.classId, classId))
+        .where(and(eq(codeFiles.classId, classId), eq(codeFiles.language, language)))
         .orderBy(desc(codeFiles.updatedAt))
     : []
 
@@ -187,7 +228,12 @@ export async function getClassTree(classId: number) {
     ? await db
         .select()
         .from(studentFolders)
-        .where(eq(studentFolders.classId, classId))
+        .where(
+          and(
+            eq(studentFolders.classId, classId),
+            eq(studentFolders.language, language),
+          ),
+        )
         .orderBy(asc(studentFolders.name))
     : []
 

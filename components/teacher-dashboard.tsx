@@ -22,6 +22,15 @@ import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import { getClassTree, setFileStatus } from "@/app/actions/files"
 import { FileComments } from "@/components/file-comments"
 import { TeacherLibrary } from "@/components/teacher-library"
+import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { HtmlPreview } from "@/components/ide/html-preview"
+import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
+import {
+  DEFAULT_LANGUAGE,
+  editorModeFor,
+  getLanguage,
+  type LanguageId,
+} from "@/lib/ide/languages"
 import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -249,14 +258,22 @@ function ClassDetail({
   cls: ClassWithStudents
   pyodide: ReturnType<typeof usePyodide>
 }) {
-  const { data } = useSWR(["class-tree", cls.id], () => getClassTree(cls.id), {
+  // Teachers review one IDE at a time, mirroring how pupils work in it.
+  const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
+  const treeKey = ["class-tree", cls.id, language]
+
+  const { data } = useSWR(treeKey, () => getClassTree(cls.id, language), {
     revalidateOnFocus: true,
     // Poll so students' newly saved work appears without a manual refresh.
     refreshInterval: 6000,
   })
   const [selected, setSelected] = useState<{ student: TreeStudent; file: TreeFile } | null>(null)
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
+  const [runId, setRunId] = useState(0)
   const [marking, setMarking] = useState(false)
+
+  const isWeb = language === "html"
 
   const { status, loadError, awaitingInput, interactive, run, submitInput } = pyodide
 
@@ -272,10 +289,34 @@ function ClassDetail({
   // Clear the previous output whenever the teacher opens a different file.
   useEffect(() => {
     setConsoleLines([])
+    setPreviewDoc(null)
   }, [selected?.file.id])
+
+  // A selection from the other IDE is meaningless once the filter changes.
+  useEffect(() => {
+    setSelected(null)
+    setConsoleLines([])
+    setPreviewDoc(null)
+  }, [language])
 
   async function handleRun() {
     if (!currentFile) return
+
+    if (isWeb) {
+      // Preview the pupil's whole project, so their linked CSS and JS apply
+      // exactly as they do in the pupil's own workspace.
+      const studentFiles =
+        data?.students.find((s) => s.id === selected?.student.id)?.files ?? []
+      setPreviewDoc(
+        buildPreviewDocument(
+          studentFiles.map((f) => ({ name: f.name, content: f.content })),
+          currentFile.name,
+        ),
+      )
+      setRunId((n) => n + 1)
+      return
+    }
+
     setConsoleLines([])
     await run(currentFile.content, (text, kind) => {
       setConsoleLines((prev) => [...prev, { text, kind }])
@@ -288,7 +329,7 @@ function ClassDetail({
     setMarking(true)
     try {
       await setFileStatus(currentFile.id, next)
-      await mutate(["class-tree", cls.id])
+      await mutate(treeKey)
       toast.success(next === "done" ? "Marked as done" : "Marked as unmarked")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update status")
@@ -320,6 +361,9 @@ function ClassDetail({
       <div className="grid flex-1 gap-0 lg:grid-cols-[minmax(260px,340px)_1fr]">
         {/* Tree */}
         <div className="border-b border-border p-3 lg:border-b-0 lg:border-r">
+          <div className="mb-3">
+            <IdeSwitcher value={language} onChange={setLanguage} />
+          </div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <FolderTree className="h-3.5 w-3.5" />
             {cls.name}
@@ -383,19 +427,19 @@ function ClassDetail({
                     size="sm"
                     variant="secondary"
                     onClick={handleRun}
-                    disabled={status === "loading" || status === "running"}
+                    disabled={!isWeb && (status === "loading" || status === "running")}
                   >
-                    {status === "loading" ? (
+                    {!isWeb && status === "loading" ? (
                       <>
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
                       </>
-                    ) : status === "running" ? (
+                    ) : !isWeb && status === "running" ? (
                       <>
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
                       </>
                     ) : (
                       <>
-                        <Play className="mr-1.5 h-4 w-4" /> Run
+                        <Play className="mr-1.5 h-4 w-4" /> {isWeb ? "Preview" : "Run"}
                       </>
                     )}
                   </Button>
@@ -404,20 +448,33 @@ function ClassDetail({
               <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
                 <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
                   <div className="min-h-0 border-b border-border">
-                    <CodeEditor value={currentFile.content} readOnly />
+                    <CodeEditor
+                      value={currentFile.content}
+                      readOnly
+                      mode={editorModeFor(currentFile.name)}
+                    />
                   </div>
                   <div className="min-h-0">
-                    <PythonConsole
-                      lines={
-                        loadError
-                          ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                          : consoleLines
-                      }
-                      running={status === "running"}
-                      awaitingInput={awaitingInput}
-                      interactive={interactive}
-                      onSubmitInput={handleSubmitInput}
-                    />
+                    {isWeb ? (
+                      <HtmlPreview build={previewDoc} runId={runId} />
+                    ) : (
+                      <PythonConsole
+                        lines={
+                          loadError
+                            ? [
+                                {
+                                  text: `Failed to load Python runtime: ${loadError}`,
+                                  kind: "err",
+                                },
+                              ]
+                            : consoleLines
+                        }
+                        running={status === "running"}
+                        awaitingInput={awaitingInput}
+                        interactive={interactive}
+                        onSubmitInput={handleSubmitInput}
+                      />
+                    )}
                   </div>
                 </div>
                 {/* Feedback thread for this student's file */}
@@ -430,7 +487,8 @@ function ClassDetail({
             <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
               <div className="flex flex-col items-center gap-2">
                 <FileCode className="h-8 w-8 text-muted-foreground/60" />
-                Select a student file from the tree to view their code.
+                Select a student {getLanguage(language).label} file from the tree to view
+                their code.
               </div>
             </div>
           )}

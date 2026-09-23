@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
+import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 
 // This module is the ONLY place allowed to decide what a user may do.
 // Nothing reads user.accountType or user.subscriptionStatus to make a decision
@@ -42,7 +43,6 @@ export type TeacherLimits = {
   maxLibraryFolders: number | null
 }
 
-export const FREE_LIMITS: Limits = { maxFiles: 2, maxFolders: 1 }
 export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null }
 
 /**
@@ -133,7 +133,6 @@ export type Entitlement = {
   plan: EntitlementPlan
   source: EntitlementSource
   isPro: boolean
-  limits: Limits
   /**
    * Teaching capability is separate from the student workspace quota. Buying
    * Student Pro must never unlock Teacher Pro features, so these limits are
@@ -201,7 +200,7 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
   const finalise = (
     fields: Pick<
       Entitlement,
-      "plan" | "source" | "isPro" | "limits" | "currentPeriodEnd" | "cancelAtPeriodEnd"
+      "plan" | "source" | "isPro" | "currentPeriodEnd" | "cancelAtPeriodEnd"
     >,
   ): Entitlement => {
     const hasTeacherPro =
@@ -235,7 +234,6 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
         plan: "school",
         source: "school",
         isPro: true,
-        limits: UNLIMITED,
         currentPeriodEnd: schoolPlan.currentPeriodEnd,
         cancelAtPeriodEnd: schoolPlan.cancelAtPeriodEnd,
       })
@@ -260,7 +258,6 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
       plan: individual.plan === "teacher_pro" ? "teacher_pro" : "student_pro",
       source: "individual",
       isPro: true,
-      limits: UNLIMITED,
       currentPeriodEnd: individual.currentPeriodEnd,
       cancelAtPeriodEnd: individual.cancelAtPeriodEnd,
     })
@@ -270,11 +267,22 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
     plan: "free",
     source: "free",
     isPro: false,
-    limits: FREE_LIMITS,
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false,
   })
 })
+
+/**
+ * Workspace quota for one IDE.
+ *
+ * Allowances are per-IDE by design: the free tier is meant to let a pupil try
+ * each IDE properly, so opening HTML does not eat into the Python allowance.
+ * Pro lifts every IDE at once.
+ */
+export function limitsFor(entitlement: Entitlement, language: LanguageId): Limits {
+  if (entitlement.isPro) return UNLIMITED
+  return getLanguage(language).freeLimits
+}
 
 export async function getCurrentEntitlement() {
   const me = await requireUser()
@@ -291,13 +299,17 @@ export async function getCurrentEntitlement() {
  * distribution to yourself, are both blocked — otherwise a teacher-role account
  * could mint itself unlimited uncounted files.
  */
-export const getUsage = cache(async (userId: string) => {
+export const getUsage = cache(async (userId: string, language: LanguageId) => {
   const [[files], [folders]] = await Promise.all([
     db
       .select({ value: count() })
       .from(codeFiles)
       .where(
-        and(eq(codeFiles.studentId, userId), eq(codeFiles.assignedByTeacher, false)),
+        and(
+          eq(codeFiles.studentId, userId),
+          eq(codeFiles.assignedByTeacher, false),
+          eq(codeFiles.language, language),
+        ),
       ),
     db
       .select({ value: count() })
@@ -306,6 +318,7 @@ export const getUsage = cache(async (userId: string) => {
         and(
           eq(studentFolders.studentId, userId),
           eq(studentFolders.assignedByTeacher, false),
+          eq(studentFolders.language, language),
         ),
       ),
   ])
@@ -354,30 +367,30 @@ export class EntitlementError extends Error {
   }
 }
 
-export async function assertCanCreateFile(userId: string) {
+export async function assertCanCreateFile(userId: string, language: LanguageId) {
   const [entitlement, usage] = await Promise.all([
     getEntitlement(userId),
-    getUsage(userId),
+    getUsage(userId, language),
   ])
-  const max = entitlement.limits.maxFiles
+  const max = limitsFor(entitlement, language).maxFiles
   if (max !== null && usage.files >= max) {
     throw new EntitlementError(
       "file_limit",
-      `Free plan is limited to ${max} files. Upgrade to create more.`,
+      `The free plan includes ${max} ${getLanguage(language).label} files. Upgrade to create more.`,
     )
   }
 }
 
-export async function assertCanCreateFolder(userId: string) {
+export async function assertCanCreateFolder(userId: string, language: LanguageId) {
   const [entitlement, usage] = await Promise.all([
     getEntitlement(userId),
-    getUsage(userId),
+    getUsage(userId, language),
   ])
-  const max = entitlement.limits.maxFolders
+  const max = limitsFor(entitlement, language).maxFolders
   if (max !== null && usage.folders >= max) {
     throw new EntitlementError(
       "folder_limit",
-      `Free plan is limited to ${max} folder. Upgrade to create more.`,
+      `The free plan includes ${max} ${getLanguage(language).label} folder. Upgrade to create more.`,
     )
   }
 }
