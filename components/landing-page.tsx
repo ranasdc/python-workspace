@@ -228,21 +228,22 @@ export function LandingPage() {
             <span className="shimmer-text">Run your code right in the browser</span>
           </div>
         </Reveal>
-      <Reveal delay={80}>
-        <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          More than just an IDE built for teachers and students
-        </h1>
-      </Reveal>
-      <Reveal delay={120}>
-        <div 
-          className="mt-4 inline-block text-base font-semibold text-emerald-400 px-2 py-1"
-          style={{
-            animation: 'halo-pulse 4s ease-in-out infinite'
-          }}
-        >
-          ✨ <span className="emerald-shimmer">Code in <span className="font-bold">Python & HTML</span> — with more programming languages coming soon !</span>
-        </div>
-      </Reveal>
+        <Reveal delay={80}>
+          <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
+            <span>More than just</span> an IDE built for teachers and students
+          </h1>
+        </Reveal>
+        <Reveal delay={120}>
+          <div
+            className="mt-4 inline-block px-2 py-1 text-base font-semibold text-emerald-400"
+            style={{ animation: "halo-pulse 4s ease-in-out infinite" }}
+          >
+            <span aria-hidden="true">✨ </span>
+            <span className="emerald-shimmer">
+              Code in <strong className="font-bold">Python &amp; HTML</strong> — with more programming languages coming soon !
+            </span>
+          </div>
+        </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
             Students write and run code in a clean editor. Their code flows straight to the
