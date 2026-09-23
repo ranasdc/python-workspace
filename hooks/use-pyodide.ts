@@ -132,11 +132,22 @@ declare global {
   }
 }
 
-export function usePyodide() {
+/**
+ * @param enabled Gate the initial download. The runtime is several megabytes,
+ *   so the HTML IDE should not fetch it — but once it has loaded we keep it,
+ *   because tearing it down on every IDE switch would mean paying that cost
+ *   again on the way back. `enabled` therefore latches on rather than toggling.
+ */
+export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
   const [status, setStatus] = useState<RunStatus>("loading")
   const [loadError, setLoadError] = useState<string | null>(null)
   const [awaitingInput, setAwaitingInput] = useState(false)
   const [interactive, setInteractive] = useState(false)
+  const [shouldLoad, setShouldLoad] = useState(enabled)
+
+  useEffect(() => {
+    if (enabled) setShouldLoad(true)
+  }, [enabled])
 
   // Worker-mode refs
   const workerRef = useRef<Worker | null>(null)
@@ -150,6 +161,8 @@ export function usePyodide() {
   const mainInputResolveRef = useRef<((text: string) => void) | null>(null)
 
   useEffect(() => {
+    if (!shouldLoad) return
+
     const canSAB =
       typeof SharedArrayBuffer !== "undefined" &&
       typeof window !== "undefined" &&
@@ -245,7 +258,7 @@ export function usePyodide() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [shouldLoad])
 
   const run = useCallback(
     (code: string, onOutput: OutputFn): Promise<void> => {

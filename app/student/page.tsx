@@ -8,6 +8,7 @@ import { getEntitlement } from "@/lib/entitlements"
 import { AppHeader } from "@/components/app-header"
 import { StudentWorkspaceWithFreemium } from "@/components/student-workspace-with-freemium"
 import { StudentOnboarding } from "@/components/student-onboarding"
+import { DEFAULT_LANGUAGE, isLanguageId, type LanguageId } from "@/lib/ide/languages"
 
 export default async function StudentPage() {
   const sessionUser = await getSessionUser()
@@ -18,15 +19,19 @@ export default async function StudentPage() {
 
   let classes = await getStudentClasses()
 
-  // Determine if the user has already chosen an account type.
+  // Determine if the user has already chosen an account type, and which IDE
+  // they were last using so the workspace resumes where they left off.
   let accountType: string | null = null
+  let initialLanguage: LanguageId = DEFAULT_LANGUAGE
   try {
     const [record] = await db
-      .select({ accountType: userTable.accountType })
+      .select({ accountType: userTable.accountType, lastIde: userTable.lastIde })
       .from(userTable)
       .where(eq(userTable.id, sessionUser.id))
       .limit(1)
     accountType = record?.accountType ?? null
+    // A stale or unknown value simply falls back to the default IDE.
+    if (isLanguageId(record?.lastIde)) initialLanguage = record.lastIde
   } catch (error) {
     // Safe to swallow: accountType only decides whether to show onboarding.
     // It grants nothing, so a read failure degrades to "show onboarding"
@@ -49,7 +54,10 @@ export default async function StudentPage() {
     <div className="flex h-svh flex-col">
       <AppHeader name={sessionUser.name} role="student" />
       {showOnboarding && <StudentOnboarding />}
-      <StudentWorkspaceWithFreemium initialClasses={classes} />
+      <StudentWorkspaceWithFreemium
+        initialClasses={classes}
+        initialLanguage={initialLanguage}
+      />
     </div>
   )
 }

@@ -22,6 +22,9 @@ export const user = pgTable("user", {
   subscriptionStatus: text("subscriptionStatus").default("free"), // "free" | "monthly" | "yearly"
   createdFilesCount: integer("createdFilesCount").notNull().default(0),
   createdFoldersCount: integer("createdFoldersCount").notNull().default(0),
+  // Last IDE the user had open, so they resume where they left off. Null
+  // means "never chose" and resolves to the platform default.
+  lastIde: text("lastIde"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
@@ -113,6 +116,9 @@ export const studentFolders = pgTable("student_folder", {
   classId: integer("classId").notNull(),
   studentId: text("studentId").notNull(),
   name: text("name").notNull(),
+  // Which IDE this folder belongs to. Defaulting to "python" backfills every
+  // pre-existing row, so the Python IDE sees exactly what it saw before.
+  language: text("language").notNull().default("python"),
   assignedByTeacher: boolean("assignedByTeacher").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
@@ -124,6 +130,9 @@ export const codeFiles = pgTable("code_file", {
   // Null = file lives at the class root (outside any folder).
   folderId: integer("folderId"),
   name: text("name").notNull(),
+  // The IDE that owns this file. Every read is scoped by it, which is what
+  // keeps Python files out of the HTML IDE and vice versa.
+  language: text("language").notNull().default("python"),
   content: text("content").notNull().default(""),
   // Teacher marking: "unmarked" | "done"
   status: text("status").notNull().default("unmarked"),
@@ -149,6 +158,8 @@ export const libraryFolders = pgTable("library_folder", {
   id: serial("id").primaryKey(),
   teacherId: text("teacherId").notNull(),
   name: text("name").notNull(),
+  // Mirrors student storage so a distributed folder keeps its IDE.
+  language: text("language").notNull().default("python"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -158,6 +169,7 @@ export const libraryFiles = pgTable("library_file", {
   teacherId: text("teacherId").notNull(),
   folderId: integer("folderId"),
   name: text("name").notNull(),
+  language: text("language").notNull().default("python"),
   content: text("content").notNull().default(""),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),

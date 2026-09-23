@@ -211,6 +211,46 @@ textarea.pycharm-code::placeholder {
   background: transparent;
 }
 
+/* HTML / CSS / JS tokens, kept in the same IntelliJ light family so the
+   editor looks like one product across every IDE. */
+.code-highlight .token.tag {
+  color: #0033b3;
+}
+.code-highlight .token.tag .token.punctuation {
+  color: #0033b3;
+}
+.code-highlight .token.attr-name {
+  color: #174ad4;
+}
+.code-highlight .token.attr-value {
+  color: #067d17;
+}
+.code-highlight .token.attr-value .token.punctuation {
+  color: #067d17;
+}
+.code-highlight .token.doctype {
+  color: #8c8c8c;
+  font-style: italic;
+}
+.code-highlight .token.selector {
+  color: #0033b3;
+}
+.code-highlight .token.property {
+  color: #871094;
+}
+.code-highlight .token.unit,
+.code-highlight .token.hexcode {
+  color: #1750eb;
+}
+.code-highlight .token.important,
+.code-highlight .token.atrule .token.rule {
+  color: #9e880d;
+  font-weight: 600;
+}
+.code-highlight .token.regex {
+  color: #264eff;
+}
+
 /* ------------------------------------------------------------------ */
 /* Hero "code transfer" animation keyframes                            */
 /* ------------------------------------------------------------------ */

@@ -1,10 +1,19 @@
 "use client"
 
 import type React from "react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
+import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { HtmlPreview } from "@/components/ide/html-preview"
+import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
+import {
+  DEFAULT_LANGUAGE,
+  editorModeFor,
+  getLanguage,
+  type LanguageId,
+} from "@/lib/ide/languages"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { ErrorHelper } from "@/components/error-helper"
 import { Button } from "@/components/ui/button"
@@ -27,7 +36,7 @@ import {
   deleteStudentFolder,
 } from "@/app/actions/files"
 import { joinClass } from "@/app/actions/classes"
-import { SUBSCRIPTION_INFO_KEY } from "@/lib/swr-keys"
+import { subscriptionInfoKey } from "@/lib/swr-keys"
 import { FileComments } from "@/components/file-comments"
 import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
@@ -63,6 +72,7 @@ type FileItem = {
   studentId: string
   folderId: number | null
   name: string
+  language: string
   content: string
   status: string
   markedAt: Date | null
@@ -76,6 +86,7 @@ type FolderItem = {
   classId: number
   studentId: string
   name: string
+  language: string
   assignedByTeacher: boolean
   createdAt: Date
   files: FileItem[]
@@ -92,13 +103,19 @@ export function StudentWorkspace({
   isFreeUser,
   canCreateFile,
   canCreateFolder,
+  language = DEFAULT_LANGUAGE,
+  onLanguageChange,
 }: { 
   initialClasses: ClassItem[]
   onLimitReached?: (type: "file" | "folder") => void
   isFreeUser?: boolean
   canCreateFile?: boolean
   canCreateFolder?: boolean
+  language?: LanguageId
+  onLanguageChange?: (next: LanguageId) => void
 }) {
+  const languageDef = getLanguage(language)
+  const isWeb = language === "html"
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
@@ -107,16 +124,29 @@ export function StudentWorkspace({
   const [draft, setDraft] = useState("")
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  // Snapshot of the page as it was when Run was last pressed, plus a counter
+  // that forces the iframe to remount so each run starts from a clean document.
+  const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
+  const [runId, setRunId] = useState(0)
 
-  const { status, loadError, awaitingInput, interactive, run, submitInput } = usePyodide()
+  const { status, loadError, awaitingInput, interactive, run, submitInput } = usePyodide({
+    // Python is a multi-megabyte download; don't pay for it in the HTML IDE.
+    enabled: !isWeb,
+  })
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const filesKey = activeClassId ? ["files", activeClassId] : null
-  const { data: tree } = useSWR<FileTree>(filesKey, () => getStudentFiles(activeClassId!), {
-    revalidateOnFocus: true,
-    // Poll so teacher-distributed files and marking updates show up live.
-    refreshInterval: 6000,
-  })
+  // The language is part of the cache key, so switching IDE fetches its own
+  // tree instead of briefly rendering the other IDE's files.
+  const filesKey = activeClassId ? ["files", activeClassId, language] : null
+  const { data: tree } = useSWR<FileTree>(
+    filesKey,
+    () => getStudentFiles(activeClassId!, language),
+    {
+      revalidateOnFocus: true,
+      // Poll so teacher-distributed files and marking updates show up live.
+      refreshInterval: 6000,
+    },
+  )
 
   // Flatten every file (root + inside folders) for selection lookups.
   const allFiles: FileItem[] = tree
@@ -146,6 +176,13 @@ export function StudentWorkspace({
     }
   }, [activeFileId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Output belongs to the IDE that produced it. Leaving a Python traceback on
+  // screen after switching to HTML would be actively confusing.
+  useEffect(() => {
+    setConsoleLines([])
+    setPreviewDoc(null)
+  }, [language])
+
   const persist = useCallback(
     async (fileId: number, content: string) => {
       setSaveState("saving")
@@ -166,8 +203,31 @@ export function StudentWorkspace({
     }, 800)
   }
 
+  /**
+   * The current project as the preview should see it: saved content for every
+   * file, but the live draft for the one being edited, so pressing Run always
+   * reflects what is on screen rather than the last autosave.
+   */
+  const previewFiles = useMemo(
+    () =>
+      allFiles.map((f) => ({
+        name: f.name,
+        content: f.id === activeFileId ? draft : f.content,
+      })),
+    // allFiles is rebuilt each render; tree/draft are what actually change it.
+    [tree, activeFileId, draft], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
   async function handleRun() {
     if (!activeFile) return
+
+    if (isWeb) {
+      setPreviewDoc(buildPreviewDocument(previewFiles, activeFile.name))
+      setRunId((n) => n + 1)
+      if (activeFileId) persist(activeFileId, draft)
+      return
+    }
+
     setConsoleLines([])
     await run(draft, (text, kind) => {
       setConsoleLines((prev) => [...prev, { text, kind }])
@@ -192,14 +252,20 @@ export function StudentWorkspace({
     }
     
     try {
-      const created = await createFile(activeClassId, name, folderId)
-      await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
+      const created = await createFile(activeClassId, name, folderId, language)
+      await Promise.all([mutate(filesKey), mutate(subscriptionInfoKey(language))])
       setActiveFileId(created.id)
       toast.success(`Created ${created.name}`)
-    } catch {
-      // The server is the real gate; if it refuses, show the upgrade path.
-      await mutate(SUBSCRIPTION_INFO_KEY)
-      onLimitReached?.("file")
+    } catch (e) {
+      await mutate(subscriptionInfoKey(language))
+      // A rejected name is a mistake to correct, not a reason to sell an
+      // upgrade, so only a genuine quota refusal opens the modal.
+      const message = e instanceof Error ? e.message : ""
+      if (/free plan/i.test(message)) {
+        onLimitReached?.("file")
+      } else {
+        throw e instanceof Error ? e : new Error("Could not create file")
+      }
     }
   }
 
@@ -213,24 +279,29 @@ export function StudentWorkspace({
     }
     
     try {
-      const created = await createStudentFolder(activeClassId, name)
-      await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
+      const created = await createStudentFolder(activeClassId, name, language)
+      await Promise.all([mutate(filesKey), mutate(subscriptionInfoKey(language))])
       toast.success(`Created folder ${created.name}`)
-    } catch {
-      await mutate(SUBSCRIPTION_INFO_KEY)
-      onLimitReached?.("folder")
+    } catch (e) {
+      await mutate(subscriptionInfoKey(language))
+      const message = e instanceof Error ? e.message : ""
+      if (/free plan/i.test(message)) {
+        onLimitReached?.("folder")
+      } else {
+        throw e instanceof Error ? e : new Error("Could not create folder")
+      }
     }
   }
 
   async function handleDeleteFile(fileId: number) {
     await deleteFile(fileId)
-    await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
+    await Promise.all([mutate(filesKey), mutate(subscriptionInfoKey(language))])
     toast.success("File deleted")
   }
 
   async function handleDeleteFolder(folderId: number) {
     await deleteStudentFolder(folderId)
-    await Promise.all([mutate(filesKey), mutate(SUBSCRIPTION_INFO_KEY)])
+    await Promise.all([mutate(filesKey), mutate(subscriptionInfoKey(language))])
     toast.success("Folder deleted")
   }
 
@@ -242,7 +313,9 @@ export function StudentWorkspace({
     .map((l) => l.text)
     .join("")
     .trim()
-  const showErrorHelper = Boolean(errorText) && status !== "running" && !!activeFileId
+  // Python-only: the helper explains tracebacks, which the HTML IDE never has.
+  const showErrorHelper =
+    !isWeb && Boolean(errorText) && status !== "running" && !!activeFileId
 
   if (classes.length === 0 && !isFreeUser) {
     return <EmptyState onJoined={(c) => {
@@ -255,6 +328,15 @@ export function StudentWorkspace({
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Sidebar: classes + files */}
       <aside className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-72 lg:border-b-0 lg:border-r">
+        {onLanguageChange && (
+          <div className="border-b border-border p-3">
+            <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
+              IDE
+            </Label>
+            <IdeSwitcher value={language} onChange={onLanguageChange} />
+          </div>
+        )}
+
         <div className="border-b border-border p-3">
           <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
             Class
@@ -293,7 +375,10 @@ export function StudentWorkspace({
           <Label className="text-xs uppercase tracking-wide text-muted-foreground">Files</Label>
           <div className="flex items-center gap-0.5">
             <NewFolderDialog onCreate={handleCreateFolder} />
-            <NewFileDialog onCreate={(name) => handleCreateFile(name, null)} />
+            <NewFileDialog
+              language={language}
+              onCreate={(name) => handleCreateFile(name, null)}
+            />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">
@@ -301,7 +386,7 @@ export function StudentWorkspace({
             <p className="px-2 text-sm text-muted-foreground">Loading...</p>
           ) : !hasAnyFiles && tree.folders.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground">
-              No files yet. Create a file or folder to start.
+              No {languageDef.label} files yet. Create a file or folder to start.
             </p>
           ) : (
             <>
@@ -310,6 +395,7 @@ export function StudentWorkspace({
                   key={folder.id}
                   folder={folder}
                   folderIndex={index}
+                  language={language}
                   activeFileId={activeFileId}
                   onSelectFile={setActiveFileId}
                   onDeleteFile={handleDeleteFile}
@@ -355,19 +441,21 @@ export function StudentWorkspace({
           <Button
             size="sm"
             onClick={handleRun}
-            disabled={!activeFile || status === "loading" || status === "running"}
+            disabled={
+              !activeFile || (!isWeb && (status === "loading" || status === "running"))
+            }
           >
-            {status === "loading" ? (
+            {!isWeb && status === "loading" ? (
               <>
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
               </>
-            ) : status === "running" ? (
+            ) : !isWeb && status === "running" ? (
               <>
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
               </>
             ) : (
               <>
-                <Play className="mr-1.5 h-4 w-4" /> Run
+                <Play className="mr-1.5 h-4 w-4" /> {isWeb ? "Preview" : "Run"}
               </>
             )}
           </Button>
@@ -376,7 +464,12 @@ export function StudentWorkspace({
         <div className="grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
           <div className="min-h-0 border-b border-border lg:border-b-0 lg:border-r">
             {activeFile ? (
-              <CodeEditor value={draft} onChange={handleEditorChange} />
+              <CodeEditor
+                value={draft}
+                onChange={handleEditorChange}
+                // Follows the file, not the IDE, so .css highlights as CSS.
+                mode={editorModeFor(activeFile.name)}
+              />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
                 <div className="flex flex-col items-center gap-2">
@@ -387,26 +480,37 @@ export function StudentWorkspace({
             )}
           </div>
           <div className="flex min-h-0 flex-col">
-            <div className="min-h-0 flex-1">
-              <PythonConsole
-                lines={
-                  loadError
-                    ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                    : consoleLines
-                }
-                running={status === "running"}
-                awaitingInput={awaitingInput}
-                interactive={interactive}
-                onSubmitInput={handleSubmitInput}
-              />
-            </div>
-            {showErrorHelper && (
-              <ErrorHelper
-                key={`${activeFileId}:${errorText}`}
-                error={errorText}
-                code={draft}
-                fileId={activeFileId!}
-              />
+            {isWeb ? (
+              <HtmlPreview build={previewDoc} runId={runId} />
+            ) : (
+              <>
+                <div className="min-h-0 flex-1">
+                  <PythonConsole
+                    lines={
+                      loadError
+                        ? [
+                            {
+                              text: `Failed to load Python runtime: ${loadError}`,
+                              kind: "err",
+                            },
+                          ]
+                        : consoleLines
+                    }
+                    running={status === "running"}
+                    awaitingInput={awaitingInput}
+                    interactive={interactive}
+                    onSubmitInput={handleSubmitInput}
+                  />
+                </div>
+                {showErrorHelper && (
+                  <ErrorHelper
+                    key={`${activeFileId}:${errorText}`}
+                    error={errorText}
+                    code={draft}
+                    fileId={activeFileId!}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
@@ -470,6 +574,7 @@ function FileRow({
 function StudentFolderRow({
   folder,
   folderIndex,
+  language,
   activeFileId,
   onSelectFile,
   onDeleteFile,
@@ -478,6 +583,7 @@ function StudentFolderRow({
 }: {
   folder: FolderItem
   folderIndex: number
+  language: LanguageId
   activeFileId: number | null
   onSelectFile: (id: number) => void
   onDeleteFile: (id: number) => void
@@ -511,6 +617,7 @@ function StudentFolderRow({
         </button>
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <NewFileDialog
+            language={language}
             onCreate={onCreateFile}
             trigger={
               <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="New file in folder">
@@ -559,15 +666,18 @@ function SaveIndicator({ state }: { state: "idle" | "saving" | "saved" }) {
 }
 
 function NewFileDialog({
+  language,
   onCreate,
   trigger,
 }: {
+  language: LanguageId
   onCreate: (name: string) => Promise<void>
   trigger?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
+  const def = getLanguage(language)
 
   async function submit() {
     if (!name.trim()) return
@@ -596,7 +706,7 @@ function NewFileDialog({
       )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Python file</DialogTitle>
+          <DialogTitle>New {def.label} file</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="filename">File name</Label>
@@ -604,13 +714,17 @@ function NewFileDialog({
             id="filename"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="exercise_1.py"
+            placeholder={language === "html" ? "index.html" : "exercise_1.py"}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
             }}
             autoFocus
           />
-          <p className="text-xs text-muted-foreground">.py is added automatically if omitted.</p>
+          <p className="text-xs text-muted-foreground">
+            {def.extensions.length > 1
+              ? `Use ${def.extensions.join(", ")}. ${def.extensions[0]} is added if you omit one.`
+              : `${def.extensions[0]} is added automatically if omitted.`}
+          </p>
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={busy}>

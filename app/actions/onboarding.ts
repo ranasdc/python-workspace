@@ -5,7 +5,8 @@ import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { user } from "@/lib/db/schema"
 import { getSessionUser, requireUser } from "@/lib/session"
-import { getEntitlement, getUsage } from "@/lib/entitlements"
+import { getEntitlement, getUsage, limitsFor } from "@/lib/entitlements"
+import { getLanguage, toLanguageId, type LanguageId } from "@/lib/ide/languages"
 
 /**
  * Records the student's onboarding choice.
@@ -27,32 +28,51 @@ export async function setAccountType(accountType: "class" | "individual") {
     .where(eq(user.id, sessionUser.id))
 }
 
-export async function canCreateFile(userId?: string): Promise<boolean> {
+export async function canCreateFile(
+  languageInput: LanguageId = "python",
+  userId?: string,
+): Promise<boolean> {
   const me = await requireUser()
   // Callers may only ask about themselves.
   if (userId && userId !== me.id) throw new Error("Unauthorized")
 
-  const [entitlement, usage] = await Promise.all([getEntitlement(me.id), getUsage(me.id)])
-  const max = entitlement.limits.maxFiles
+  const language = toLanguageId(languageInput)
+  const [entitlement, usage] = await Promise.all([
+    getEntitlement(me.id),
+    getUsage(me.id, language),
+  ])
+  const max = limitsFor(entitlement, language).maxFiles
   return max === null || usage.files < max
 }
 
-export async function canCreateFolder(userId?: string): Promise<boolean> {
+export async function canCreateFolder(
+  languageInput: LanguageId = "python",
+  userId?: string,
+): Promise<boolean> {
   const me = await requireUser()
   if (userId && userId !== me.id) throw new Error("Unauthorized")
 
-  const [entitlement, usage] = await Promise.all([getEntitlement(me.id), getUsage(me.id)])
-  const max = entitlement.limits.maxFolders
+  const language = toLanguageId(languageInput)
+  const [entitlement, usage] = await Promise.all([
+    getEntitlement(me.id),
+    getUsage(me.id, language),
+  ])
+  const max = limitsFor(entitlement, language).maxFolders
   return max === null || usage.folders < max
 }
 
-export async function getUserSubscriptionInfo() {
+/**
+ * Usage and limits for one IDE. The caller passes the IDE it is displaying, so
+ * the tier bar always shows the same quota the server will enforce.
+ */
+export async function getUserSubscriptionInfo(languageInput: LanguageId = "python") {
   const sessionUser = await getSessionUser()
   if (!sessionUser) throw new Error("Not authenticated")
 
+  const language = toLanguageId(languageInput)
   const [entitlement, usage, [record]] = await Promise.all([
     getEntitlement(sessionUser.id),
-    getUsage(sessionUser.id),
+    getUsage(sessionUser.id, language),
     db
       .select({ accountType: user.accountType, isFirstLogin: user.isFirstLogin })
       .from(user)
@@ -60,7 +80,11 @@ export async function getUserSubscriptionInfo() {
       .limit(1),
   ])
 
+  const limits = limitsFor(entitlement, language)
+
   return {
+    language,
+    languageLabel: getLanguage(language).label,
     // Cosmetic fields, kept so existing UI keeps working.
     accountType: record?.accountType ?? null,
     isFirstLogin: record?.isFirstLogin ?? true,
@@ -74,8 +98,8 @@ export async function getUserSubscriptionInfo() {
     plan: entitlement.plan,
     source: entitlement.source,
     isPro: entitlement.isPro,
-    maxFiles: entitlement.limits.maxFiles,
-    maxFolders: entitlement.limits.maxFolders,
+    maxFiles: limits.maxFiles,
+    maxFolders: limits.maxFolders,
     schoolId: entitlement.schoolId,
     schoolRole: entitlement.schoolRole,
     schoolUnpaid: entitlement.schoolUnpaid,
