@@ -51,6 +51,7 @@ import {
   CheckCircle2,
   Circle,
   Folder,
+  Sparkles,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -125,6 +126,14 @@ export function TeacherDashboard({
   const list = classes ?? []
   const activeClass = list.find((c) => c.id === activeClassId) ?? null
 
+  // Derived from the live class list (not the initial plan snapshot) so the
+  // limit flips the moment the free teacher's first class is created.
+  const atClassLimit =
+    !!planStatus &&
+    !planStatus.hasTeacherPro &&
+    planStatus.limits.maxClasses !== null &&
+    list.length >= planStatus.limits.maxClasses
+
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Classes list */}
@@ -156,6 +165,7 @@ export function TeacherDashboard({
             Your classes
           </Label>
           <CreateClassDialog
+            atLimit={atClassLimit}
             onCreated={async (id) => {
               await mutate("teacher-classes")
               setActiveClassId(id)
@@ -666,16 +676,35 @@ function JoinCodeBadge({ code }: { code: string }) {
   )
 }
 
-function CreateClassDialog({ onCreated }: { onCreated: (id: number) => Promise<void> }) {
+function CreateClassDialog({
+  onCreated,
+  atLimit = false,
+}: {
+  onCreated: (id: number) => Promise<void>
+  atLimit?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Set if the server rejects the create for the class cap — a safety net for
+  // the case where the client's snapshot lagged behind the real count.
+  const [limitReached, setLimitReached] = useState(false)
+
+  const showUpgrade = atLimit || limitReached
 
   async function action(formData: FormData) {
     setBusy(true)
     try {
-      const created = await createClass(formData)
-      await onCreated(created.id)
-      toast.success(`Class "${created.name}" created`)
+      const result = await createClass(formData)
+      if (!result.ok) {
+        if (result.code === "class_limit") {
+          setLimitReached(true)
+        } else {
+          toast.error(result.message)
+        }
+        return
+      }
+      await onCreated(result.class.id)
+      toast.success(`Class "${result.class.name}" created`)
       setOpen(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create class")
@@ -685,34 +714,90 @@ function CreateClassDialog({ onCreated }: { onCreated: (id: number) => Promise<v
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        // Reset the server-driven fallback when the dialog closes so a later
+        // Pro upgrade shows the form again without a reload.
+        if (!next) setLimitReached(false)
+      }}
+    >
       <DialogTrigger
         render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Create class" />}
       >
         <Plus className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create a class</DialogTitle>
-        </DialogHeader>
-        <form action={action} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Class name</Label>
-            <Input id="name" name="name" placeholder="Intro to Python — Period 3" required autoFocus />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="description">Description (optional)</Label>
-            <Textarea id="description" name="description" placeholder="What is this class about?" rows={3} />
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={busy}>
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create class
-            </Button>
-          </DialogFooter>
-        </form>
+        {showUpgrade ? (
+          <ClassLimitUpgrade />
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Create a class</DialogTitle>
+            </DialogHeader>
+            <form action={action} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Class name</Label>
+                <Input id="name" name="name" placeholder="Intro to Python — Period 3" required autoFocus />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="description">Description (optional)</Label>
+                <Textarea id="description" name="description" placeholder="What is this class about?" rows={3} />
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={busy}>
+                  {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create class
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Shown in place of the create form when a free teacher has already used their
+ * one included class. Turns a dead end into an upgrade path.
+ */
+function ClassLimitUpgrade() {
+  const perks = [
+    "Unlimited classes",
+    "Unlimited students in every class",
+    "An unlimited resource library",
+  ]
+  return (
+    <>
+      <DialogHeader>
+        <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Sparkles className="h-5 w-5" />
+        </div>
+        <DialogTitle>You&apos;ve used your free class</DialogTitle>
+      </DialogHeader>
+      <p className="text-sm text-muted-foreground text-pretty">
+        The free teacher plan includes a single class so you can try everything out.
+        Upgrade to Teacher Pro to run as many classes as you need.
+      </p>
+      <ul className="mt-1 flex flex-col gap-2.5">
+        {perks.map((perk) => (
+          <li key={perk} className="flex items-start gap-2.5 text-sm">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Check className="h-3 w-3" />
+            </span>
+            <span>{perk}</span>
+          </li>
+        ))}
+      </ul>
+      <DialogFooter className="mt-2">
+        <Button render={<Link href="/pricing" />} nativeButton={false}>
+          <Sparkles className="mr-2 h-4 w-4" />
+          Upgrade to Teacher Pro
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 
