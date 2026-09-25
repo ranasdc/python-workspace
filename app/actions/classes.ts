@@ -14,6 +14,7 @@ import {
   isSubscriptionLive,
   requireTeacherCapability,
   EntitlementError,
+  type EntitlementCode,
 } from "@/lib/entitlements"
 import { clearFailures, countRecentFailures, recordFailures } from "@/lib/rate-limit"
 import { and, desc, eq, inArray } from "drizzle-orm"
@@ -69,14 +70,33 @@ async function allocateJoinCode() {
 }
 
 // ---------- Teacher ----------
-export async function createClass(formData: FormData) {
+
+export type CreateClassResult =
+  | { ok: true; class: typeof classes.$inferSelect }
+  | { ok: false; code: EntitlementCode; message: string }
+
+export async function createClass(formData: FormData): Promise<CreateClassResult> {
   const teacher = await requireUser()
-  // Also enforces the free-tier class cap.
-  await assertCanCreateClass(teacher.id)
+
+  // Entitlement failures (e.g. the free-tier one-class cap) are an expected
+  // outcome, not a crash, so they are RETURNED rather than thrown: a thrown
+  // Server Action error has its message redacted in production and reaches the
+  // client as a generic "Server Components render" digest, which is useless for
+  // prompting an upgrade. Returned values cross the boundary intact.
+  try {
+    await assertCanCreateClass(teacher.id)
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { ok: false, code: error.code, message: error.message }
+    }
+    throw error
+  }
 
   const name = String(formData.get("name") || "").trim()
   const description = String(formData.get("description") || "").trim()
-  if (!name) throw new Error("Class name is required")
+  if (!name) {
+    return { ok: false, code: "forbidden", message: "Class name is required." }
+  }
 
   const joinCode = await allocateJoinCode()
 
@@ -95,7 +115,7 @@ export async function createClass(formData: FormData) {
     .returning()
 
   revalidatePath("/teacher")
-  return created
+  return { ok: true, class: created }
 }
 
 export async function getTeacherClasses() {
