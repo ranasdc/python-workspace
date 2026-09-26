@@ -46,7 +46,9 @@ import {
   Check,
   Send,
   Library,
+  Sparkles,
 } from "lucide-react"
+import Link from "next/link"
 
 type LibFile = {
   id: number
@@ -379,12 +381,23 @@ function NewFolderButton({
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
+  // Set when the server rejects the create for the free library folder cap, so
+  // the dialog swaps the form for an upgrade prompt instead of a raw error.
+  const [limitReached, setLimitReached] = useState(false)
 
   async function submit() {
     if (!name.trim()) return
     setBusy(true)
     try {
-      await createLibraryFolder(name, language)
+      const result = await createLibraryFolder(name, language)
+      if (!result.ok) {
+        if (result.code === "library_folder_limit") {
+          setLimitReached(true)
+        } else {
+          toast.error(result.message)
+        }
+        return
+      }
       setName("")
       await onDone()
       setOpen(false)
@@ -397,35 +410,50 @@ function NewFolderButton({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setLimitReached(false)
+      }}
+    >
       <DialogTrigger
         render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New folder" />}
       >
         <FolderPlus className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New folder</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="foldername">Folder name</Label>
-          <Input
-            id="foldername"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Week 1 — Variables"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
-            }}
-            autoFocus
+        {limitReached ? (
+          <LibraryLimitUpgrade
+            title="You've reached your free folders"
+            description="The free teacher plan includes a single library folder so you can try things out. Upgrade to Teacher Pro to organize your tasks into as many folders as you like."
           />
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create folder
-          </Button>
-        </DialogFooter>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>New folder</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="foldername">Folder name</Label>
+              <Input
+                id="foldername"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Week 1 — Variables"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
+                }}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button onClick={submit} disabled={busy}>
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create folder
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -446,22 +474,33 @@ function NewFileButton({
   const [name, setName] = useState("")
   const [folderId, setFolderId] = useState<string>("root")
   const [busy, setBusy] = useState(false)
+  // Set when the server rejects the create for the free library file cap, so
+  // the dialog swaps the form for an upgrade prompt instead of a raw error.
+  const [limitReached, setLimitReached] = useState(false)
   const def = getLanguage(language)
 
   async function submit() {
     if (!name.trim()) return
     setBusy(true)
     try {
-      const created = await createLibraryFile(
+      const result = await createLibraryFile(
         name,
         folderId === "root" ? null : Number(folderId),
         language,
       )
+      if (!result.ok) {
+        if (result.code === "library_file_limit") {
+          setLimitReached(true)
+        } else {
+          toast.error(result.message)
+        }
+        return
+      }
       setName("")
       await onDone()
-      onCreated(created.id)
+      onCreated(result.file.id)
       setOpen(false)
-      toast.success(`Created ${created.name}`)
+      toast.success(`Created ${result.file.name}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create file")
     } finally {
@@ -470,60 +509,121 @@ function NewFileButton({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setLimitReached(false)
+      }}
+    >
       <DialogTrigger
         render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New file" />}
       >
         <Plus className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New {def.label} task file</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="libfilename">File name</Label>
-            <Input
-              id="libfilename"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={language === "html" ? "index.html" : "exercise_1.py"}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
-              }}
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">
-              {def.extensions.length > 1
-                ? `Use ${def.extensions.join(", ")}. ${def.extensions[0]} is added if you omit one.`
-                : `${def.extensions[0]} is added automatically if omitted.`}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="libfolder">Folder</Label>
-            <select
-              id="libfolder"
-              value={folderId}
-              onChange={(e) => setFolderId(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="root">Library root (no folder)</option>
-              {folders.map((f) => (
-                <option key={f.id} value={String(f.id)}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create file
-          </Button>
-        </DialogFooter>
+        {limitReached ? (
+          <LibraryLimitUpgrade
+            title="You've reached your free library files"
+            description="The free teacher plan includes a handful of library files to get you started. Upgrade to Teacher Pro for an unlimited library of reusable tasks."
+          />
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>New {def.label} task file</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="libfilename">File name</Label>
+                <Input
+                  id="libfilename"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={language === "html" ? "index.html" : "exercise_1.py"}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
+                  }}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  {def.extensions.length > 1
+                    ? `Use ${def.extensions.join(", ")}. ${def.extensions[0]} is added if you omit one.`
+                    : `${def.extensions[0]} is added automatically if omitted.`}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="libfolder">Folder</Label>
+                <select
+                  id="libfolder"
+                  value={folderId}
+                  onChange={(e) => setFolderId(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="root">Library root (no folder)</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={String(f.id)}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={submit} disabled={busy}>
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create file
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Shown in place of a create form when a free teacher hits a library cap.
+ * Mirrors the class-limit upgrade prompt so the free tier always turns a dead
+ * end into an upgrade path rather than a raw error toast.
+ */
+function LibraryLimitUpgrade({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  const perks = [
+    "An unlimited resource library",
+    "Unlimited folders to organize tasks",
+    "Unlimited classes and students",
+  ]
+  return (
+    <>
+      <DialogHeader>
+        <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Sparkles className="h-5 w-5" />
+        </div>
+        <DialogTitle>{title}</DialogTitle>
+      </DialogHeader>
+      <p className="text-sm text-muted-foreground text-pretty">{description}</p>
+      <ul className="mt-1 flex flex-col gap-2.5">
+        {perks.map((perk) => (
+          <li key={perk} className="flex items-start gap-2.5 text-sm">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Check className="h-3 w-3" />
+            </span>
+            <span>{perk}</span>
+          </li>
+        ))}
+      </ul>
+      <DialogFooter className="mt-2">
+        <Button render={<Link href="/pricing" />} nativeButton={false}>
+          <Sparkles className="mr-2 h-4 w-4" />
+          Upgrade to Teacher Pro
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 
