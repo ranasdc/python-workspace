@@ -114,6 +114,32 @@ function Reveal({
   )
 }
 
+function FooterColumn({
+  heading,
+  links,
+}: {
+  heading: string
+  links: { label: string; href: string }[]
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold">{heading}</h3>
+      <ul className="mt-4 flex flex-col gap-3">
+        {links.map((link) => (
+          <li key={link.label}>
+            <Link
+              href={link.href}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {link.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 const sections = [
   {
     id: "students",
@@ -140,6 +166,11 @@ const sections = [
     imageAlt: "Illustration of a teacher reviewing student code on a dashboard",
     points: ["One-click class creation", "Run any student file", "Shareable join codes"],
     accent: "chart-2",
+    highlight: {
+      badge: "New",
+      title: "AI task generation",
+      desc: "Describe a topic, year group and learning objective — get a ready-to-assign task draft in seconds, then edit anything before it reaches students.",
+    },
   },
   {
     id: "organized",
@@ -225,6 +256,9 @@ export function LandingPage() {
               {s.eyebrow}
             </a>
           ))}
+          <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
+            Pricing
+          </Link>
         </nav>
         <div className="flex items-center gap-2">
           <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost">
@@ -391,6 +425,39 @@ export function LandingPage() {
                     </li>
                   ))}
                 </ul>
+
+                {"highlight" in s && s.highlight && (
+                  <div
+                    className="group relative mt-6 overflow-hidden rounded-2xl border-2 p-5"
+                    style={{
+                      borderColor: "color-mix(in oklch, var(--primary) 45%, transparent)",
+                      background:
+                        "linear-gradient(120deg, color-mix(in oklch, var(--primary) 12%, transparent), color-mix(in oklch, var(--primary) 4%, transparent) 55%, transparent)",
+                      animation: "border-glow 10s ease-in-out infinite",
+                    }}
+                  >
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/20 blur-2xl"
+                    />
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-semibold">{s.highlight.title}</h3>
+                          <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
+                            {s.highlight.badge}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-sm text-muted-foreground text-pretty">
+                          {s.highlight.desc}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </Reveal>
 
               {/* Interactive animation */}
@@ -428,8 +495,59 @@ export function LandingPage() {
         </Reveal>
       </section>
 
-      <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
-        <LogoWordmark className="text-sm" /> — the classroom IDE for Python, HTML, and more.
+      <footer className="border-t border-border">
+        <div className="mx-auto w-full max-w-6xl px-6 py-14">
+          <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+            <div className="max-w-xs">
+              <Logo iconClassName="h-8 w-8" textClassName="text-base" />
+              <p className="mt-3 text-sm text-muted-foreground text-pretty">
+                The classroom IDE for Python, HTML and more — write, run and review real code
+                without leaving the browser.
+              </p>
+            </div>
+
+            <FooterColumn
+              heading="Product"
+              links={[
+                { label: "For students", href: "#students" },
+                { label: "For teachers", href: "#teachers" },
+                { label: "Always organized", href: "#organized" },
+                { label: "Pricing", href: "/pricing" },
+              ]}
+            />
+            <FooterColumn
+              heading="Company"
+              links={[
+                { label: "About us", href: "#" },
+                { label: "Contact", href: "#" },
+                { label: "Blog", href: "#" },
+              ]}
+            />
+            <FooterColumn
+              heading="Get started"
+              links={[
+                { label: "Create account", href: "/sign-up" },
+                { label: "Sign in", href: "/sign-in" },
+                { label: "For schools", href: "/pricing#school-plans" },
+              ]}
+            />
+          </div>
+
+          <div className="mt-12 flex flex-col items-center gap-4 border-t border-border/60 pt-6 text-sm text-muted-foreground sm:flex-row sm:justify-between">
+            <span>
+              © {new Date().getFullYear()} <LogoWordmark className="text-sm" />. All rights
+              reserved.
+            </span>
+            <div className="flex items-center gap-5">
+              <a href="#" className="transition-colors hover:text-foreground">
+                Privacy
+              </a>
+              <a href="#" className="transition-colors hover:text-foreground">
+                Terms
+              </a>
+            </div>
+          </div>
+        </div>
       </footer>
     </main>
   )

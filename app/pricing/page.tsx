@@ -22,11 +22,28 @@ export default async function PricingPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-16">
-      <header className="flex flex-col items-center text-center">
-        <Link href="/" className="mb-6 flex items-center gap-2">
-          <LogoIcon className="h-10 w-10" />
-          <LogoWordmark className="text-xl" />
+      <nav className="mb-12 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <LogoIcon className="h-9 w-9" />
+          <LogoWordmark className="text-lg" />
         </Link>
+        {sessionUser ? (
+          <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>
+            Go to dashboard
+          </Link>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link href="/sign-in" className={buttonVariants({ variant: "ghost" })}>
+              Sign in
+            </Link>
+            <Link href="/sign-up" className={buttonVariants({})}>
+              Get started
+            </Link>
+          </div>
+        )}
+      </nav>
+
+      <header className="flex flex-col items-center text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
           Simple pricing for learners, teachers and schools
         </h1>
