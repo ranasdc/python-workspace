@@ -1,10 +1,11 @@
 import "server-only"
 
 import { cache } from "react"
-import { and, count, eq } from "drizzle-orm"
+import { and, count, eq, gte } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
+  aiTaskUsage,
   classes,
   codeFiles,
   enrollments,
@@ -33,6 +34,8 @@ export type Limits = {
   /** null means unlimited. */
   maxFiles: number | null
   maxFolders: number | null
+  /** How many files a single folder may hold. null means unlimited. */
+  maxFilesPerFolder: number | null
 }
 
 export type TeacherLimits = {
@@ -43,7 +46,7 @@ export type TeacherLimits = {
   maxLibraryFolders: number | null
 }
 
-export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null }
+export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null, maxFilesPerFolder: null }
 
 /**
  * An unpaid teacher can genuinely trial the product — run one real class,
@@ -51,9 +54,9 @@ export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null }
  */
 export const TEACHER_FREE_LIMITS: TeacherLimits = {
   maxClasses: 1,
-  maxStudentsPerClass: 30,
-  maxLibraryFiles: 5,
-  maxLibraryFolders: 1,
+  maxStudentsPerClass: 5,
+  maxLibraryFiles: 2,
+  maxLibraryFolders: 2,
 }
 
 export const TEACHER_UNLIMITED: TeacherLimits = {
@@ -61,6 +64,27 @@ export const TEACHER_UNLIMITED: TeacherLimits = {
   maxStudentsPerClass: null,
   maxLibraryFiles: null,
   maxLibraryFolders: null,
+}
+
+/**
+ * AI task generation policy, per plan.
+ *
+ * `enabled` gates the feature; `monthlyLimit` caps successful generations per
+ * calendar month (null = unlimited). These are intentionally the ONLY place the
+ * policy lives, so the numbers can be tuned later without touching feature
+ * code. The paid tiers currently generate without a numeric cap; set a number
+ * here to start enforcing one — usage is already metered, so enforcement turns
+ * on the moment a limit is set. Attaching a task by hand is always free and
+ * never touches this policy.
+ */
+export const AI_TASK_POLICY: Record<
+  EntitlementPlan,
+  { enabled: boolean; monthlyLimit: number | null }
+> = {
+  free: { enabled: false, monthlyLimit: 0 },
+  student_pro: { enabled: false, monthlyLimit: 0 },
+  teacher_pro: { enabled: true, monthlyLimit: null },
+  school: { enabled: true, monthlyLimit: null },
 }
 
 /** Stripe statuses that still grant access. */
@@ -141,6 +165,10 @@ export type Entitlement = {
   isTeacher: boolean
   hasTeacherPro: boolean
   teacherLimits: TeacherLimits
+  /** Whether this plan may generate tasks with AI. Manual tasks are always allowed. */
+  canGenerateAiTasks: boolean
+  /** null = unlimited generations per month. */
+  aiTaskMonthlyLimit: number | null
   schoolId: number | null
   schoolRole: SchoolRole | null
   /** True when the user belongs to a school whose plan is not currently paid. */
@@ -205,12 +233,15 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
   ): Entitlement => {
     const hasTeacherPro =
       isTeacher && (fields.plan === "school" || fields.plan === "teacher_pro")
+    const aiPolicy = AI_TASK_POLICY[fields.plan]
     return {
       ...base,
       ...fields,
       isTeacher,
       hasTeacherPro,
       teacherLimits: hasTeacherPro ? TEACHER_UNLIMITED : TEACHER_FREE_LIMITS,
+      canGenerateAiTasks: isTeacher && aiPolicy.enabled,
+      aiTaskMonthlyLimit: aiPolicy.monthlyLimit,
     }
   }
 
@@ -347,6 +378,29 @@ export const getTeacherUsage = cache(async (userId: string) => {
   }
 })
 
+/** First instant of the current calendar month, in the server's timezone. */
+function startOfMonth(): Date {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1)
+}
+
+/**
+ * AI generations used this month, counted against the account that actually
+ * pays. A school teacher's usage is billed to the school so one teacher cannot
+ * exhaust another's allowance and the cap applies to the whole institution;
+ * an individual teacher is billed to themselves.
+ */
+export const getAiTaskUsageThisMonth = cache(async (entitlement: Entitlement) => {
+  const since = startOfMonth()
+  const where =
+    entitlement.source === "school" && entitlement.schoolId !== null
+      ? and(eq(aiTaskUsage.schoolId, entitlement.schoolId), gte(aiTaskUsage.createdAt, since))
+      : and(eq(aiTaskUsage.teacherId, entitlement.userId), gte(aiTaskUsage.createdAt, since))
+
+  const [row] = await db.select({ value: count() }).from(aiTaskUsage).where(where)
+  return row?.value ?? 0
+})
+
 // ---------- Guards ----------
 
 export type EntitlementCode =
@@ -356,6 +410,8 @@ export type EntitlementCode =
   | "student_limit"
   | "library_file_limit"
   | "library_folder_limit"
+  | "ai_not_available"
+  | "ai_limit"
   | "forbidden"
 
 export class EntitlementError extends Error {
@@ -391,6 +447,39 @@ export async function assertCanCreateFolder(userId: string, language: LanguageId
     throw new EntitlementError(
       "folder_limit",
       `The free plan includes ${max} ${getLanguage(language).label} folder. Upgrade to create more.`,
+    )
+  }
+}
+
+/**
+ * Caps how many files a free user may keep inside one folder. Teacher-assigned
+ * files are exempt for the same reason they are exempt from the account quota:
+ * distributed work must not count against the recipient's allowance.
+ */
+export async function assertCanAddFileToFolder(
+  userId: string,
+  language: LanguageId,
+  folderId: number,
+) {
+  const entitlement = await getEntitlement(userId)
+  const max = limitsFor(entitlement, language).maxFilesPerFolder
+  if (max === null) return
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(codeFiles)
+    .where(
+      and(
+        eq(codeFiles.folderId, folderId),
+        eq(codeFiles.studentId, userId),
+        eq(codeFiles.assignedByTeacher, false),
+      ),
+    )
+
+  if ((row?.value ?? 0) >= max) {
+    throw new EntitlementError(
+      "file_limit",
+      `The free plan allows ${max} file per folder. Upgrade to add more.`,
     )
   }
 }
@@ -448,6 +537,43 @@ export async function assertCanCreateLibraryFolder(userId: string) {
       `The free teacher plan includes ${max} library folder. Upgrade to Teacher Pro for more.`,
     )
   }
+}
+
+/**
+ * Gate for AI task generation. Returns the resolved entitlement so the caller
+ * can record usage against the same account this checked. Manual task creation
+ * never calls this — only AI generation is gated and metered.
+ */
+export async function assertCanGenerateAiTask(userId: string) {
+  const entitlement = await requireTeacherCapability(userId)
+
+  if (!entitlement.canGenerateAiTasks) {
+    throw new EntitlementError(
+      "ai_not_available",
+      "AI task generation is a Teacher Pro feature. Upgrade to generate tasks with AI, or write the task yourself.",
+    )
+  }
+
+  const limit = entitlement.aiTaskMonthlyLimit
+  if (limit !== null) {
+    const used = await getAiTaskUsageThisMonth(entitlement)
+    if (used >= limit) {
+      throw new EntitlementError(
+        "ai_limit",
+        `You have used all ${limit} AI task generations for this month. They reset at the start of next month.`,
+      )
+    }
+  }
+
+  return entitlement
+}
+
+/** Records one successful AI generation against the paying account. */
+export async function recordAiTaskUsage(entitlement: Entitlement) {
+  await db.insert(aiTaskUsage).values({
+    teacherId: entitlement.userId,
+    schoolId: entitlement.source === "school" ? entitlement.schoolId : null,
+  })
 }
 
 /**

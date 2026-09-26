@@ -17,6 +17,8 @@ export type LanguageLimits = {
   /** null means unlimited. */
   maxFiles: number | null
   maxFolders: number | null
+  /** How many files a single folder may hold. null means unlimited. */
+  maxFilesPerFolder: number | null
 }
 
 export type LanguageDef = {
@@ -50,7 +52,7 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     // Indigo, the product's own primary hue.
     accent: "var(--chart-1)",
     extensions: [".py"],
-    freeLimits: { maxFiles: 2, maxFolders: 1 },
+    freeLimits: { maxFiles: 2, maxFolders: 1, maxFilesPerFolder: 1 },
   },
   html: {
     id: "html",
@@ -60,7 +62,7 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     // indigo, so the two IDEs are told apart at a glance rather than read.
     accent: "var(--chart-4)",
     extensions: [".html", ".htm", ".css", ".js"],
-    freeLimits: { maxFiles: 3, maxFolders: 1 },
+    freeLimits: { maxFiles: 2, maxFolders: 1, maxFilesPerFolder: 1 },
   },
 }
 

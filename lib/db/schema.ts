@@ -139,9 +139,14 @@ export const codeFiles = pgTable("code_file", {
   markedAt: timestamp("markedAt"),
   // True when a teacher distributed this file to the student.
   assignedByTeacher: boolean("assignedByTeacher").notNull().default(false),
+  // When this file was distributed from a teacher's library file, it points
+  // back at that source. It is how a student's copy finds the task attached to
+  // the original: the task lives once, on the library file, and every copy
+  // reads it live. Null for a student's own files.
+  sourceLibraryFileId: integer("sourceLibraryFileId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-})
+  })
 
 // Teacher comments left on a specific student file.
 export const fileComments = pgTable("file_comment", {
@@ -173,9 +178,45 @@ export const libraryFiles = pgTable("library_file", {
   content: text("content").notNull().default(""),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-})
+  })
 
-// ---------- Schools, membership & entitlements ----------
+  // ---------- Attached tasks ----------
+
+  // A task is an optional instruction sheet attached to exactly one library
+  // file. The library file is the single source of truth: distributed student
+  // copies never store their own task, they reference this row through
+  // codeFiles.sourceLibraryFileId, so a teacher edit reaches every student.
+  // The one-task-per-file rule is enforced by the unique constraint.
+  export const fileTasks = pgTable("file_task", {
+  id: serial("id").primaryKey(),
+  libraryFileId: integer("libraryFileId").notNull().unique(),
+  teacherId: text("teacherId").notNull(),
+  title: text("title").notNull(),
+  instructions: text("instructions").notNull(),
+  // Optional pedagogy metadata, also used as the seed for AI generation.
+  topic: text("topic"),
+  difficulty: text("difficulty"),
+  yearGroup: text("yearGroup"),
+  learningObjective: text("learningObjective"),
+  // "manual" | "ai" — how the current instructions were produced.
+  origin: text("origin").notNull().default("manual"),
+  // Bumped on every save so a student client can tell the task changed.
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  })
+
+  // One row per successful AI task generation. Usage is billed to the school
+  // when the teacher is covered by a school plan, otherwise to the teacher, so
+  // a configurable monthly cap can be enforced against the right account.
+  export const aiTaskUsage = pgTable("ai_task_usage", {
+  id: serial("id").primaryKey(),
+  teacherId: text("teacherId").notNull(),
+  schoolId: integer("schoolId"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  })
+
+  // ---------- Schools, membership & entitlements ----------
 
 export const schools = pgTable("school", {
   id: serial("id").primaryKey(),

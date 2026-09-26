@@ -6,11 +6,13 @@ import {
   codeFiles,
   enrollments,
   fileComments,
+  fileTasks,
   studentFolders,
   user,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import {
+  assertCanAddFileToFolder,
   assertCanCreateFile,
   assertCanCreateFolder,
   requireTeacherCapability,
@@ -68,13 +70,40 @@ export async function getStudentFiles(classId: number, languageInput: LanguageId
       .orderBy(asc(codeFiles.name)),
   ])
 
+  // A file carries a task only if it was assigned from a library file that has
+  // one. Resolve that in a single query so each file can show a "View task"
+  // affordance without a per-file round-trip.
+  const sourceIds = Array.from(
+    new Set(files.map((f) => f.sourceLibraryFileId).filter((id): id is number => id !== null)),
+  )
+  const taskRows = sourceIds.length
+    ? await db
+        .select({
+          libraryFileId: fileTasks.libraryFileId,
+          title: fileTasks.title,
+          instructions: fileTasks.instructions,
+        })
+        .from(fileTasks)
+        .where(inArray(fileTasks.libraryFileId, sourceIds))
+    : []
+  const taskBySource = new Map(taskRows.map((r) => [r.libraryFileId, r]))
+  const decorate = (f: (typeof files)[number]) => {
+    const task = f.sourceLibraryFileId !== null ? taskBySource.get(f.sourceLibraryFileId) : undefined
+    return {
+      ...f,
+      hasTask: Boolean(task),
+      taskTitle: task?.title ?? null,
+      taskInstructions: task?.instructions ?? null,
+    }
+  }
+
   return {
     folders: folders.map((folder) => ({
       ...folder,
-      files: files.filter((f) => f.folderId === folder.id),
+      files: files.filter((f) => f.folderId === folder.id).map(decorate),
     })),
     // Files not inside any folder live at the class root.
-    rootFiles: files.filter((f) => f.folderId === null),
+    rootFiles: files.filter((f) => f.folderId === null).map(decorate),
   }
 }
 
@@ -112,6 +141,9 @@ export async function createFile(
         ),
       )
     if (!folder) throw new Error("Folder not found")
+
+    // A folder has its own free-tier ceiling on top of the per-IDE file cap.
+    await assertCanAddFileToFolder(student.id, language, folderId)
   }
 
   const [created] = await db
@@ -156,6 +188,19 @@ export async function createStudentFolder(
 // Delete a folder and every file inside it (scoped to this student).
 export async function deleteStudentFolder(folderId: number) {
   const student = await requireUser()
+
+  const [folder] = await db
+    .select()
+    .from(studentFolders)
+    .where(and(eq(studentFolders.id, folderId), eq(studentFolders.studentId, student.id)))
+  if (!folder) throw new Error("Folder not found")
+
+  // Work handed down by a teacher belongs to the assignment, not the student,
+  // so it can never be removed from the student side.
+  if (folder.assignedByTeacher) {
+    throw new Error("This folder was assigned by your teacher and can't be deleted.")
+  }
+
   await db
     .delete(codeFiles)
     .where(and(eq(codeFiles.folderId, folderId), eq(codeFiles.studentId, student.id)))
@@ -184,6 +229,19 @@ export async function saveFile(fileId: number, content: string) {
 
 export async function deleteFile(fileId: number) {
   const student = await requireUser()
+
+  const [file] = await db
+    .select()
+    .from(codeFiles)
+    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
+  if (!file) throw new Error("File not found")
+
+  // A teacher-assigned file is part of the class work and is not the student's
+  // to delete.
+  if (file.assignedByTeacher) {
+    throw new Error("This file was assigned by your teacher and can't be deleted.")
+  }
+
   await db
     .delete(codeFiles)
     .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
