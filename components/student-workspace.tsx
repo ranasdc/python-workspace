@@ -37,6 +37,7 @@ import {
 import { joinClass } from "@/app/actions/classes"
 import { subscriptionInfoKey } from "@/lib/swr-keys"
 import { FileComments } from "@/components/file-comments"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -548,13 +549,21 @@ function FileRow({
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-chart-3" aria-label="Marked done" />
         )}
       </button>
-      <button
-        onClick={onDelete}
-        className="opacity-0 transition-opacity group-hover:opacity-100"
-        aria-label={`Delete ${file.name}`}
-      >
-        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-      </button>
+      {!file.assignedByTeacher && (
+        <ConfirmDialog
+          title="Delete file?"
+          description={`"${file.name}" will be permanently deleted. This can't be undone.`}
+          onConfirm={onDelete}
+          trigger={
+            <button
+              className="opacity-0 transition-opacity group-hover:opacity-100"
+              aria-label={`Delete ${file.name}`}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+            </button>
+          }
+        />
+      )}
     </div>
   )
 }
@@ -613,9 +622,18 @@ function StudentFolderRow({
               </Button>
             }
           />
-          <button onClick={() => onDeleteFolder(folder.id)} aria-label={`Delete folder ${folder.name}`}>
-            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-          </button>
+          {!folder.assignedByTeacher && (
+            <ConfirmDialog
+              title="Delete folder?"
+              description={`"${folder.name}" and every file inside it will be permanently deleted. This can't be undone.`}
+              onConfirm={() => onDeleteFolder(folder.id)}
+              trigger={
+                <button aria-label={`Delete folder ${folder.name}`}>
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                </button>
+              }
+            />
+          )}
         </div>
       </div>
       {open &&

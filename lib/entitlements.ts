@@ -33,6 +33,8 @@ export type Limits = {
   /** null means unlimited. */
   maxFiles: number | null
   maxFolders: number | null
+  /** How many files a single folder may hold. null means unlimited. */
+  maxFilesPerFolder: number | null
 }
 
 export type TeacherLimits = {
@@ -43,7 +45,7 @@ export type TeacherLimits = {
   maxLibraryFolders: number | null
 }
 
-export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null }
+export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null, maxFilesPerFolder: null }
 
 /**
  * An unpaid teacher can genuinely trial the product — run one real class,
@@ -51,9 +53,9 @@ export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null }
  */
 export const TEACHER_FREE_LIMITS: TeacherLimits = {
   maxClasses: 1,
-  maxStudentsPerClass: 30,
-  maxLibraryFiles: 5,
-  maxLibraryFolders: 1,
+  maxStudentsPerClass: 5,
+  maxLibraryFiles: 2,
+  maxLibraryFolders: 2,
 }
 
 export const TEACHER_UNLIMITED: TeacherLimits = {
@@ -391,6 +393,39 @@ export async function assertCanCreateFolder(userId: string, language: LanguageId
     throw new EntitlementError(
       "folder_limit",
       `The free plan includes ${max} ${getLanguage(language).label} folder. Upgrade to create more.`,
+    )
+  }
+}
+
+/**
+ * Caps how many files a free user may keep inside one folder. Teacher-assigned
+ * files are exempt for the same reason they are exempt from the account quota:
+ * distributed work must not count against the recipient's allowance.
+ */
+export async function assertCanAddFileToFolder(
+  userId: string,
+  language: LanguageId,
+  folderId: number,
+) {
+  const entitlement = await getEntitlement(userId)
+  const max = limitsFor(entitlement, language).maxFilesPerFolder
+  if (max === null) return
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(codeFiles)
+    .where(
+      and(
+        eq(codeFiles.folderId, folderId),
+        eq(codeFiles.studentId, userId),
+        eq(codeFiles.assignedByTeacher, false),
+      ),
+    )
+
+  if ((row?.value ?? 0) >= max) {
+    throw new EntitlementError(
+      "file_limit",
+      `The free plan allows ${max} file per folder. Upgrade to add more.`,
     )
   }
 }

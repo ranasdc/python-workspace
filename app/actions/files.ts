@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import {
+  assertCanAddFileToFolder,
   assertCanCreateFile,
   assertCanCreateFolder,
   requireTeacherCapability,
@@ -112,6 +113,9 @@ export async function createFile(
         ),
       )
     if (!folder) throw new Error("Folder not found")
+
+    // A folder has its own free-tier ceiling on top of the per-IDE file cap.
+    await assertCanAddFileToFolder(student.id, language, folderId)
   }
 
   const [created] = await db
@@ -156,6 +160,19 @@ export async function createStudentFolder(
 // Delete a folder and every file inside it (scoped to this student).
 export async function deleteStudentFolder(folderId: number) {
   const student = await requireUser()
+
+  const [folder] = await db
+    .select()
+    .from(studentFolders)
+    .where(and(eq(studentFolders.id, folderId), eq(studentFolders.studentId, student.id)))
+  if (!folder) throw new Error("Folder not found")
+
+  // Work handed down by a teacher belongs to the assignment, not the student,
+  // so it can never be removed from the student side.
+  if (folder.assignedByTeacher) {
+    throw new Error("This folder was assigned by your teacher and can't be deleted.")
+  }
+
   await db
     .delete(codeFiles)
     .where(and(eq(codeFiles.folderId, folderId), eq(codeFiles.studentId, student.id)))
@@ -184,6 +201,19 @@ export async function saveFile(fileId: number, content: string) {
 
 export async function deleteFile(fileId: number) {
   const student = await requireUser()
+
+  const [file] = await db
+    .select()
+    .from(codeFiles)
+    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
+  if (!file) throw new Error("File not found")
+
+  // A teacher-assigned file is part of the class work and is not the student's
+  // to delete.
+  if (file.assignedByTeacher) {
+    throw new Error("This file was assigned by your teacher and can't be deleted.")
+  }
+
   await db
     .delete(codeFiles)
     .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))

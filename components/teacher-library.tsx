@@ -37,6 +37,7 @@ import {
   distributeFolder,
 } from "@/app/actions/library"
 import { cn } from "@/lib/utils"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { toast } from "sonner"
 import {
   Plus,
@@ -407,13 +408,19 @@ function FolderNode({
           }
           onConfirm={(classId, studentId) => distributeFolder(folder.id, classId, studentId)}
         />
-        <button
-          onClick={remove}
-          className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-          aria-label={`Delete folder ${folder.name}`}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <ConfirmDialog
+          title="Delete folder?"
+          description={`"${folder.name}" and every file inside it will be permanently deleted. This can't be undone.`}
+          onConfirm={remove}
+          trigger={
+            <button
+              className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              aria-label={`Delete folder ${folder.name}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          }
+        />
       </div>
       {open && (
         <ul className="ml-4 border-l border-border pl-2">
@@ -484,13 +491,19 @@ function FileRow({
         }
         onConfirm={(classId, studentId) => distributeFile(file.id, classId, studentId)}
       />
-      <button
-        onClick={remove}
-        className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-        aria-label={`Delete ${file.name}`}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      <ConfirmDialog
+        title="Delete file?"
+        description={`"${file.name}" will be permanently deleted. This can't be undone.`}
+        onConfirm={remove}
+        trigger={
+          <button
+            className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            aria-label={`Delete ${file.name}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        }
+      />
     </li>
   )
 }
