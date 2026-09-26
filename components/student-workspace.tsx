@@ -714,8 +714,8 @@ export function StudentWorkspace({
           className={cn(
             "flex flex-col overflow-hidden",
             taskFullscreen
-              ? "h-screen max-h-screen w-screen max-w-none rounded-none"
-              : "h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl",
+              ? "h-screen max-h-screen w-screen max-w-none sm:max-w-none rounded-none"
+              : "h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] sm:max-w-[1400px]",
           )}
         >
           <div className="absolute top-2 right-11 flex items-center gap-1">
@@ -754,8 +754,10 @@ export function StudentWorkspace({
               {activeFile?.taskTitle || "Task"}
             </DialogTitle>
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-base leading-relaxed text-foreground">
-            {activeFile?.taskInstructions || "No instructions provided."}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-3xl whitespace-pre-wrap text-base leading-relaxed text-foreground">
+              {activeFile?.taskInstructions || "No instructions provided."}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
