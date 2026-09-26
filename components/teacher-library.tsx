@@ -63,6 +63,10 @@ import {
   Square,
   RotateCcw,
   ClipboardList,
+  ClipboardCheck,
+  Pencil,
+  Maximize2,
+  Minimize2,
   Wand2,
   X,
 } from "lucide-react"
@@ -549,6 +553,7 @@ function TaskComposer({
   const [yearGroup, setYearGroup] = useState("")
   const [learningObjective, setLearningObjective] = useState("")
   const [origin, setOrigin] = useState<"manual" | "ai">("manual")
+  const [fullscreen, setFullscreen] = useState(false)
 
   // AI generation UI state. `aiError` distinguishes an upgrade wall (feature
   // off) or a monthly cap from an ordinary transient failure.
@@ -655,16 +660,64 @@ function TaskComposer({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button size="sm" variant={file.hasTask ? "secondary" : "outline"}>
-            <ClipboardList className="mr-1.5 h-4 w-4" />
-            {file.hasTask ? "Edit task" : "Add task"}
-          </Button>
-        }
-      />
-      <DialogContent className="flex h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl flex-col overflow-hidden">
+    <div className="flex items-center gap-2">
+      {file.hasTask && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="This file has a task attached. Click to edit it."
+          className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ClipboardCheck className="h-3.5 w-3.5 text-chart-4" />
+          Task attached
+        </button>
+      )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger
+          render={
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-chart-4/40 bg-chart-4/10 text-chart-4 hover:bg-chart-4/20 hover:text-chart-4"
+              title={
+                file.hasTask
+                  ? "Edit the task attached to this file"
+                  : "Create a task for this file"
+              }
+            >
+              {file.hasTask ? (
+                <>
+                  <Pencil className="mr-1.5 h-4 w-4" />
+                  Edit task
+                </>
+              ) : (
+                <>
+                  <ClipboardList className="mr-1.5 h-4 w-4" />
+                  Create task
+                </>
+              )}
+            </Button>
+          }
+        />
+      <DialogContent
+        className={cn(
+          "flex flex-col overflow-hidden",
+          fullscreen
+            ? "h-screen max-h-screen w-screen max-w-none rounded-none"
+            : "h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl",
+        )}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setFullscreen((f) => !f)}
+          title={fullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+          aria-label={fullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+          className="absolute top-2 right-11"
+        >
+          {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
         <DialogHeader>
           <DialogTitle>Task for {file.name}</DialogTitle>
         </DialogHeader>
@@ -819,7 +872,8 @@ function TaskComposer({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </div>
   )
 }
 

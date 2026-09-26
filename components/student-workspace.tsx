@@ -57,6 +57,12 @@ import {
   ChevronRight,
   ChevronDown,
   ClipboardList,
+  ClipboardCheck,
+  Pin,
+  PinOff,
+  Maximize2,
+  Minimize2,
+  X,
 } from "lucide-react"
 
 type ClassItem = {
@@ -101,6 +107,30 @@ type FileTree = {
   rootFiles: FileItem[]
 }
 
+// Task "seen" tracking lives client-side so we don't touch the task/DB schema.
+// A task counts as new/updated when its current title+instructions differ from
+// what this browser last saw for that file. Viewing the task records the
+// current signature, which clears the indicator until the teacher edits again.
+function taskSignature(f: { taskTitle?: string | null; taskInstructions?: string | null }) {
+  return `${f.taskTitle ?? ""}\u0000${f.taskInstructions ?? ""}`
+}
+function readTaskSeen(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem("mcp:task-seen") || "{}") as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+function markTaskSeen(fileId: number, signature: string) {
+  try {
+    const seen = readTaskSeen()
+    seen[String(fileId)] = signature
+    localStorage.setItem("mcp:task-seen", JSON.stringify(seen))
+  } catch {
+    // Private-mode / storage-disabled: the indicator simply won't persist.
+  }
+}
+
 export function StudentWorkspace({ 
   initialClasses,
   onLimitReached,
@@ -131,6 +161,12 @@ export function StudentWorkspace({
   // that forces the iframe to remount so each run starts from a clean document.
   const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
   const [runId, setRunId] = useState(0)
+  // Task viewer presentation state (does not affect the editor / code).
+  const [taskFullscreen, setTaskFullscreen] = useState(false)
+  const [taskPinned, setTaskPinned] = useState(false)
+  const [taskPanelWidth, setTaskPanelWidth] = useState(360)
+  const [seenTick, setSeenTick] = useState(0)
+  const resizeState = useRef<{ startX: number; startW: number } | null>(null)
 
   const { status, loadError, awaitingInput, interactive, run, submitInput } = usePyodide({
     // Python is a multi-megabyte download; don't pay for it in the HTML IDE.
@@ -195,6 +231,76 @@ export function StudentWorkspace({
     },
     [filesKey],
   )
+
+  // Restore the student's preferred task-panel width and per-session pin state.
+  useEffect(() => {
+    try {
+      const w = Number(localStorage.getItem("mcp:task-panel-width"))
+      if (Number.isFinite(w) && w >= 240 && w <= 720) setTaskPanelWidth(w)
+      if (sessionStorage.getItem("mcp:task-pinned") === "1") setTaskPinned(true)
+    } catch {
+      // Storage unavailable — fall back to defaults.
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("mcp:task-pinned", taskPinned ? "1" : "0")
+    } catch {}
+  }, [taskPinned])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("mcp:task-panel-width", String(taskPanelWidth))
+    } catch {}
+  }, [taskPanelWidth])
+
+  // Once the task is on screen (modal or pinned panel), record that this
+  // browser has seen the current version so the "updated" indicator clears.
+  useEffect(() => {
+    if (!activeFile?.hasTask) return
+    if (taskOpen || taskPinned) {
+      markTaskSeen(activeFile.id, taskSignature(activeFile))
+      setSeenTick((t) => t + 1)
+    }
+  }, [
+    taskOpen,
+    taskPinned,
+    activeFile?.id,
+    activeFile?.taskTitle,
+    activeFile?.taskInstructions,
+  ]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const taskUpdated = useMemo(() => {
+    if (!activeFile?.hasTask) return false
+    return readTaskSeen()[String(activeFile.id)] !== taskSignature(activeFile)
+  }, [
+    activeFile?.id,
+    activeFile?.taskTitle,
+    activeFile?.taskInstructions,
+    seenTick,
+  ]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openTask() {
+    if (!activeFile?.hasTask) return
+    setTaskOpen(true)
+  }
+
+  function handleResizeStart(e: React.PointerEvent) {
+    resizeState.current = { startX: e.clientX, startW: taskPanelWidth }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  function handleResizeMove(e: React.PointerEvent) {
+    if (!resizeState.current) return
+    const delta = e.clientX - resizeState.current.startX
+    setTaskPanelWidth(Math.min(720, Math.max(240, resizeState.current.startW + delta)))
+  }
+  function handleResizeEnd(e: React.PointerEvent) {
+    resizeState.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+  }
 
   function handleEditorChange(v: string) {
     setDraft(v)
@@ -411,6 +517,59 @@ export function StudentWorkspace({
         </div>
       </aside>
 
+      {/* Pinned task panel — a resizable companion to the IDE (large screens).
+          It never remounts the editor, so code and cursor position are safe. */}
+      {taskPinned && activeFile?.hasTask && (
+        <div
+          className="relative hidden shrink-0 flex-col border-b border-border bg-card lg:flex lg:border-b-0 lg:border-r"
+          style={{ width: taskPanelWidth }}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <ClipboardList className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate text-sm font-medium">
+                {activeFile.taskTitle || "Task"}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => {
+                  setTaskPinned(false)
+                  setTaskOpen(true)
+                }}
+                title="Unpin — return to the large task view"
+                aria-label="Unpin task"
+              >
+                <PinOff className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setTaskPinned(false)}
+                title="Close task"
+                aria-label="Close task"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-foreground">
+            {activeFile.taskInstructions || "No instructions provided."}
+          </div>
+          <div
+            onPointerDown={handleResizeStart}
+            onPointerMove={handleResizeMove}
+            onPointerUp={handleResizeEnd}
+            className="absolute inset-y-0 -right-1.5 z-10 w-3 cursor-col-resize touch-none"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize task panel"
+          />
+        </div>
+      )}
+
       {/* Editor + console */}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
@@ -434,9 +593,35 @@ export function StudentWorkspace({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {activeFile?.hasTask && (
-              <Button size="sm" variant="outline" onClick={() => setTaskOpen(true)}>
-                <ClipboardList className="mr-1.5 h-4 w-4" /> View task
-              </Button>
+              <>
+                <button
+                  type="button"
+                  onClick={openTask}
+                  title="View the task attached to this file"
+                  className={cn(
+                    "hidden items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex",
+                    taskUpdated ? "text-chart-4" : "text-muted-foreground",
+                  )}
+                >
+                  <ClipboardCheck className="h-3.5 w-3.5 text-chart-4" />
+                  {taskUpdated ? "Task updated" : "Task attached"}
+                </button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={openTask}
+                  title="View the task attached to this file"
+                  className="relative border-chart-4/40 bg-chart-4/10 text-chart-4 hover:bg-chart-4/20 hover:text-chart-4"
+                >
+                  <ClipboardList className="mr-1.5 h-4 w-4" /> View task
+                  {taskUpdated && (
+                    <span
+                      className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-chart-4 ring-2 ring-card"
+                      aria-hidden="true"
+                    />
+                  )}
+                </Button>
+              </>
             )}
           <Button
             size="sm"
@@ -525,9 +710,46 @@ export function StudentWorkspace({
       </div>
 
       <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-        <DialogContent className="flex h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl flex-col overflow-hidden">
+        <DialogContent
+          className={cn(
+            "flex flex-col overflow-hidden",
+            taskFullscreen
+              ? "h-screen max-h-screen w-screen max-w-none rounded-none"
+              : "h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl",
+          )}
+        >
+          <div className="absolute top-2 right-11 flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                setTaskPinned(true)
+                setTaskOpen(false)
+              }}
+              title="Pin task beside the editor"
+              aria-label="Pin task beside the editor"
+              className="hidden lg:inline-flex"
+            >
+              <Pin className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTaskFullscreen((f) => !f)}
+              title={taskFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+              aria-label={taskFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+            >
+              {taskFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 pr-24">
               <ClipboardList className="h-5 w-5 text-primary" />
               {activeFile?.taskTitle || "Task"}
             </DialogTitle>
