@@ -703,8 +703,8 @@ function TaskComposer({
         className={cn(
           "flex flex-col overflow-hidden",
           fullscreen
-            ? "h-screen max-h-screen w-screen max-w-none rounded-none"
-            : "h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl",
+            ? "h-screen max-h-screen w-screen max-w-none sm:max-w-none rounded-none"
+            : "h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] sm:max-w-[1400px]",
         )}
       >
         <Button
@@ -727,14 +727,14 @@ function TaskComposer({
             <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading task...
           </p>
         ) : (
-          <div className="grid min-h-0 flex-1 gap-4 overflow-auto lg:grid-cols-2">
-            {/* AI generator */}
-            <div className="h-fit rounded-lg border border-border bg-muted/40 p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto lg:flex-row lg:overflow-hidden">
+            {/* AI generator sidebar */}
+            <aside className="shrink-0 rounded-lg border border-border bg-muted/40 p-4 lg:w-[320px] lg:overflow-y-auto">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                 <Sparkles className="h-4 w-4 text-chart-4" />
                 Generate with AI
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="task-topic" className="text-xs">
                     Topic
@@ -781,7 +781,7 @@ function TaskComposer({
                 </div>
               </div>
               {aiError && (
-                <div className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {aiError.message}
                   {(aiError.code === "ai_not_available" || aiError.code === "ai_limit") && (
                     <>
@@ -797,7 +797,7 @@ function TaskComposer({
                 type="button"
                 size="sm"
                 variant="secondary"
-                className="mt-2"
+                className="mt-3 w-full"
                 onClick={generate}
                 disabled={generating}
               >
@@ -811,36 +811,38 @@ function TaskComposer({
                   </>
                 )}
               </Button>
-            </div>
+            </aside>
 
-            {/* Editable task */}
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="task-title">Title</Label>
-              <Input
-                id="task-title"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value)
-                  setOrigin("manual")
-                }}
-                placeholder="Short task name"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="task-instructions">Instructions</Label>
-              <Textarea
-                id="task-instructions"
-                value={instructions}
-                onChange={(e) => {
-                  setInstructions(e.target.value)
-                  setOrigin("manual")
-                }}
-                rows={9}
-                placeholder="What should the student do? Write clear, step-by-step instructions."
-              />
-              <p className="text-xs text-muted-foreground">
-                Students see this exactly as written. You can edit anything the AI drafts.
-              </p>
+            {/* Editable task main area */}
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="task-title">Title</Label>
+                <Input
+                  id="task-title"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value)
+                    setOrigin("manual")
+                  }}
+                  placeholder="Short task name"
+                />
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-1">
+                <Label htmlFor="task-instructions">Instructions</Label>
+                <Textarea
+                  id="task-instructions"
+                  value={instructions}
+                  onChange={(e) => {
+                    setInstructions(e.target.value)
+                    setOrigin("manual")
+                  }}
+                  className="min-h-[180px] flex-1 resize-none"
+                  placeholder="What should the student do? Write clear, step-by-step instructions."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Students see this exactly as written. You can edit anything the AI drafts.
+                </p>
+              </div>
             </div>
           </div>
         )}
