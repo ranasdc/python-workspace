@@ -57,7 +57,6 @@ import {
   ChevronRight,
   ChevronDown,
   ClipboardList,
-  ClipboardCheck,
   Pin,
   PinOff,
   Maximize2,
@@ -593,35 +592,21 @@ export function StudentWorkspace({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {activeFile?.hasTask && (
-              <>
-                <button
-                  type="button"
-                  onClick={openTask}
-                  title="View the task attached to this file"
-                  className={cn(
-                    "hidden items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex",
-                    taskUpdated ? "text-chart-4" : "text-muted-foreground",
-                  )}
-                >
-                  <ClipboardCheck className="h-3.5 w-3.5 text-chart-4" />
-                  {taskUpdated ? "Task updated" : "Task attached"}
-                </button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={openTask}
-                  title="View the task attached to this file"
-                  className="relative border-chart-4/40 bg-chart-4/10 text-chart-4 hover:bg-chart-4/20 hover:text-chart-4"
-                >
-                  <ClipboardList className="mr-1.5 h-4 w-4" /> View task
-                  {taskUpdated && (
-                    <span
-                      className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-chart-4 ring-2 ring-card"
-                      aria-hidden="true"
-                    />
-                  )}
-                </Button>
-              </>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openTask}
+                title="View the task attached to this file"
+                className="relative border-chart-4/40 bg-chart-4/10 text-chart-4 hover:bg-chart-4/20 hover:text-chart-4"
+              >
+                <ClipboardList className="mr-1.5 h-4 w-4" /> View task
+                {taskUpdated && (
+                  <span
+                    className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-chart-4 ring-2 ring-card"
+                    aria-hidden="true"
+                  />
+                )}
+              </Button>
             )}
           <Button
             size="sm"
