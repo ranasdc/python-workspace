@@ -14,6 +14,8 @@ import {
   assertCanCreateLibraryFile,
   assertCanCreateLibraryFolder,
   requireTeacherCapability,
+  EntitlementError,
+  type EntitlementCode,
 } from "@/lib/entitlements"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -69,16 +71,36 @@ export async function getLibrary(languageInput: LanguageId = "python") {
 }
 
 // ---------- Folders ----------
+
+// Entitlement failures (e.g. the free-tier library caps) are an expected
+// outcome, not a crash, so they are RETURNED rather than thrown: a thrown
+// Server Action error has its message redacted in production and reaches the
+// client as a generic "Server Components render" digest, useless for prompting
+// an upgrade. Returned values cross the boundary intact.
+export type CreateLibraryFolderResult =
+  | { ok: true; folder: typeof libraryFolders.$inferSelect }
+  | { ok: false; code: EntitlementCode; message: string }
+
 export async function createLibraryFolder(
   name: string,
   languageInput: LanguageId = "python",
-) {
+): Promise<CreateLibraryFolderResult> {
   const teacher = await requireTeacher()
   const language = toLanguageId(languageInput)
-  await assertCanCreateLibraryFolder(teacher.id)
+
+  try {
+    await assertCanCreateLibraryFolder(teacher.id)
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { ok: false, code: error.code, message: error.message }
+    }
+    throw error
+  }
 
   const clean = name.trim()
-  if (!clean) throw new Error("Folder name is required")
+  if (!clean) {
+    return { ok: false, code: "forbidden", message: "Folder name is required" }
+  }
 
   const [created] = await db
     .insert(libraryFolders)
@@ -86,7 +108,7 @@ export async function createLibraryFolder(
     .returning()
 
   revalidatePath("/teacher")
-  return created
+  return { ok: true, folder: created }
 }
 
 export async function deleteLibraryFolder(folderId: number) {
@@ -104,17 +126,31 @@ export async function deleteLibraryFolder(folderId: number) {
 
 // ---------- Files ----------
 
+export type CreateLibraryFileResult =
+  | { ok: true; file: typeof libraryFiles.$inferSelect }
+  | { ok: false; code: EntitlementCode; message: string }
+
 export async function createLibraryFile(
   name: string,
   folderId: number | null,
   languageInput: LanguageId = "python",
-) {
+): Promise<CreateLibraryFileResult> {
   const teacher = await requireTeacher()
   const language = toLanguageId(languageInput)
-  await assertCanCreateLibraryFile(teacher.id)
+
+  try {
+    await assertCanCreateLibraryFile(teacher.id)
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { ok: false, code: error.code, message: error.message }
+    }
+    throw error
+  }
 
   const normalised = normaliseFileName(name, language)
-  if (!normalised.ok) throw new Error(normalised.error)
+  if (!normalised.ok) {
+    return { ok: false, code: "forbidden", message: normalised.error }
+  }
   const clean = normalised.name
 
   // The folder must belong to this teacher and sit in the same IDE.
@@ -129,7 +165,9 @@ export async function createLibraryFile(
           eq(libraryFolders.language, language),
         ),
       )
-    if (!folder) throw new Error("Folder not found")
+    if (!folder) {
+      return { ok: false, code: "forbidden", message: "Folder not found" }
+    }
   }
 
   const [created] = await db
@@ -144,7 +182,7 @@ export async function createLibraryFile(
     .returning()
 
   revalidatePath("/teacher")
-  return created
+  return { ok: true, file: created }
 }
 
 export async function saveLibraryFile(fileId: number, content: string) {
