@@ -1,8 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import { CodeEditor } from "@/components/code-editor"
+import { usePyodide } from "@/hooks/use-pyodide"
+import { HtmlPreview } from "@/components/ide/html-preview"
+import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
+import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import {
   DEFAULT_LANGUAGE,
@@ -47,6 +51,9 @@ import {
   Send,
   Library,
   Sparkles,
+  Play,
+  Square,
+  RotateCcw,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -89,6 +96,15 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Teachers run the exact same execution path students get: Pyodide for
+  // Python, the sandboxed iframe preview for HTML. No separate IDE.
+  const isWeb = language === "html"
+  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
+  const [runId, setRunId] = useState(0)
+  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } =
+    usePyodide({ enabled: !isWeb })
+
   const allFiles = data ? [...data.rootFiles, ...data.folders.flatMap((f) => f.files)] : []
   const selected = allFiles.find((f) => f.id === selectedId) ?? null
 
@@ -97,6 +113,9 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
       setDraft(selected.content)
       setSaveState("idle")
     }
+    // Output belongs to the file that produced it; switching files clears it.
+    setConsoleLines([])
+    setPreviewDoc(null)
   }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = useCallback(
@@ -124,7 +143,44 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
   useEffect(() => {
     setSelectedId(null)
     setDraft("")
+    setConsoleLines([])
+    setPreviewDoc(null)
   }, [language])
+
+  /**
+   * The library as the preview should see it: saved content for every file,
+   * but the live draft for the one being edited, so Run reflects what is on
+   * screen and cross-file links (e.g. style.css from index.html) resolve.
+   */
+  const previewFiles = useMemo(
+    () =>
+      allFiles.map((f) => ({
+        name: f.name,
+        content: f.id === selectedId ? draft : f.content,
+      })),
+    [data, selectedId, draft], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  async function handleRun() {
+    if (!selected) return
+    if (isWeb) {
+      setPreviewDoc(buildPreviewDocument(previewFiles, selected.name))
+      setRunId((n) => n + 1)
+      if (selectedId) persist(selectedId, draft)
+      return
+    }
+    setConsoleLines([])
+    await run(draft, (text, kind) =>
+      setConsoleLines((prev) => [...prev, { text, kind }]),
+    )
+    // Keep the tested code saved right after running, matching the student IDE.
+    if (selectedId) persist(selectedId, draft)
+  }
+
+  function handleSubmitInput(text: string) {
+    setConsoleLines((prev) => [...prev, { text: text + "\n", kind: "in" }])
+    submitInput(text)
+  }
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(260px,320px)_1fr]">
@@ -203,18 +259,86 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
                   </span>
                 )}
               </div>
-              <DistributeDialog
-                classes={classes}
-                label={`Distribute ${selected.name}`}
-                onConfirm={(classId, studentId) => distributeFile(selected.id, classId, studentId)}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                {!isWeb && status === "running" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={stop}
+                    title="Stop the running program"
+                  >
+                    <Square className="mr-1.5 h-4 w-4" /> Stop
+                  </Button>
+                )}
+                {!isWeb && status !== "running" && consoleLines.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setConsoleLines([])}
+                    title="Clear the console output"
+                  >
+                    <RotateCcw className="mr-1.5 h-4 w-4" /> Reset
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={handleRun}
+                  disabled={!isWeb && (status === "loading" || status === "running")}
+                  title={isWeb ? "Render your page" : "Run your code"}
+                >
+                  {!isWeb && status === "loading" ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
+                    </>
+                  ) : !isWeb && status === "running" ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-1.5 h-4 w-4" /> {isWeb ? "Run / Preview" : "Run code"}
+                    </>
+                  )}
+                </Button>
+                <DistributeDialog
+                  classes={classes}
+                  label={`Distribute ${selected.name}`}
+                  onConfirm={(classId, studentId) => distributeFile(selected.id, classId, studentId)}
+                />
+              </div>
             </div>
-            <div className="min-h-0 flex-1">
-              <CodeEditor
-                value={draft}
-                onChange={handleChange}
-                mode={editorModeFor(selected.name)}
-              />
+            <div className="grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
+              <div className="min-h-0 border-b border-border lg:border-b-0 lg:border-r">
+                <CodeEditor
+                  value={draft}
+                  onChange={handleChange}
+                  mode={editorModeFor(selected.name)}
+                />
+              </div>
+              <div className="flex min-h-0 flex-col">
+                {isWeb ? (
+                  <HtmlPreview build={previewDoc} runId={runId} />
+                ) : (
+                  <div className="min-h-0 flex-1">
+                    <PythonConsole
+                      lines={
+                        loadError
+                          ? [
+                              {
+                                text: `Failed to load Python runtime: ${loadError}`,
+                                kind: "err",
+                              },
+                            ]
+                          : consoleLines
+                      }
+                      running={status === "running"}
+                      awaitingInput={awaitingInput}
+                      interactive={interactive}
+                      onSubmitInput={handleSubmitInput}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </>
         ) : (
