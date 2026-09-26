@@ -36,6 +36,13 @@ import {
   distributeFile,
   distributeFolder,
 } from "@/app/actions/library"
+import {
+  getLibraryTask,
+  saveLibraryTask,
+  deleteLibraryTask,
+  type LibraryTask,
+} from "@/app/actions/tasks"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { toast } from "sonner"
@@ -55,6 +62,9 @@ import {
   Play,
   Square,
   RotateCcw,
+  ClipboardList,
+  Wand2,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -66,6 +76,7 @@ type LibFile = {
   content: string
   createdAt: Date
   updatedAt: Date
+  hasTask?: boolean
 }
 type LibFolder = {
   id: number
@@ -301,6 +312,11 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
                     </>
                   )}
                 </Button>
+                <TaskComposer
+                  key={selected.id}
+                  file={selected}
+                  onChanged={refresh}
+                />
                 <DistributeDialog
                   classes={classes}
                   label={`Distribute ${selected.name}`}
@@ -477,6 +493,12 @@ function FileRow({
       <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-2 text-left">
         <FileCode className="h-3.5 w-3.5 shrink-0 text-primary" />
         <span className="truncate">{file.name}</span>
+        {file.hasTask && (
+          <ClipboardList
+            className="h-3.5 w-3.5 shrink-0 text-chart-4"
+            aria-label="Has a task"
+          />
+        )}
       </button>
       <DistributeDialog
         classes={classes}
@@ -506,6 +528,305 @@ function FileRow({
       />
     </li>
   )
+}
+
+function TaskComposer({
+  file,
+  onChanged,
+}: {
+  file: LibFile
+  onChanged: () => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [existing, setExisting] = useState<LibraryTask | null>(null)
+
+  const [title, setTitle] = useState("")
+  const [instructions, setInstructions] = useState("")
+  const [topic, setTopic] = useState("")
+  const [difficulty, setDifficulty] = useState("")
+  const [yearGroup, setYearGroup] = useState("")
+  const [learningObjective, setLearningObjective] = useState("")
+  const [origin, setOrigin] = useState<"manual" | "ai">("manual")
+
+  // AI generation UI state. `aiError` distinguishes an upgrade wall (feature
+  // off) or a monthly cap from an ordinary transient failure.
+  const [generating, setGenerating] = useState(false)
+  const [aiError, setAiError] = useState<{ message: string; code?: string } | null>(null)
+
+  // Load the current task each time the dialog opens, so it always reflects the
+  // saved state even after edits elsewhere.
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    setLoading(true)
+    getLibraryTask(file.id)
+      .then((task) => {
+        if (!active) return
+        setExisting(task)
+        setTitle(task?.title ?? "")
+        setInstructions(task?.instructions ?? "")
+        setTopic(task?.topic ?? "")
+        setDifficulty(task?.difficulty ?? "")
+        setYearGroup(task?.yearGroup ?? "")
+        setLearningObjective(task?.learningObjective ?? "")
+        setOrigin(task?.origin === "ai" ? "ai" : "manual")
+      })
+      .finally(() => active && setLoading(false))
+    return () => {
+      active = false
+    }
+  }, [open, file.id])
+
+  async function generate() {
+    setGenerating(true)
+    setAiError(null)
+    try {
+      const res = await fetch("/api/generate-task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: languageOfFile(file.name),
+          topic,
+          difficulty,
+          yearGroup,
+          learningObjective,
+          fileName: file.name,
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAiError({ message: payload.error ?? "Could not generate a task.", code: payload.code })
+        return
+      }
+      setTitle(payload.title ?? "")
+      setInstructions(payload.instructions ?? "")
+      setOrigin("ai")
+      toast.success("Draft task generated — review and save it")
+    } catch {
+      setAiError({ message: "Could not reach the task generator. Please try again." })
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function save() {
+    setBusy(true)
+    try {
+      const result = await saveLibraryTask(file.id, {
+        title,
+        instructions,
+        topic,
+        difficulty,
+        yearGroup,
+        learningObjective,
+        origin,
+      })
+      if (!result.ok) {
+        toast.error(result.message)
+        return
+      }
+      await onChanged()
+      setOpen(false)
+      toast.success("Task saved")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save task")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeTask() {
+    setBusy(true)
+    try {
+      await deleteLibraryTask(file.id)
+      setExisting(null)
+      setTitle("")
+      setInstructions("")
+      await onChanged()
+      setOpen(false)
+      toast.success("Task removed")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not remove task")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button size="sm" variant={file.hasTask ? "secondary" : "outline"}>
+            <ClipboardList className="mr-1.5 h-4 w-4" />
+            {file.hasTask ? "Edit task" : "Add task"}
+          </Button>
+        }
+      />
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Task for {file.name}</DialogTitle>
+        </DialogHeader>
+
+        {loading ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading task...
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {/* AI generator */}
+            <div className="rounded-lg border border-border bg-muted/40 p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="h-4 w-4 text-chart-4" />
+                Generate with AI
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="task-topic" className="text-xs">
+                    Topic
+                  </Label>
+                  <Input
+                    id="task-topic"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g. for loops, lists"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="task-difficulty" className="text-xs">
+                    Difficulty
+                  </Label>
+                  <Input
+                    id="task-difficulty"
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value)}
+                    placeholder="e.g. beginner"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="task-year" className="text-xs">
+                    Year group / age
+                  </Label>
+                  <Input
+                    id="task-year"
+                    value={yearGroup}
+                    onChange={(e) => setYearGroup(e.target.value)}
+                    placeholder="e.g. Year 9"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="task-objective" className="text-xs">
+                    Learning objective
+                  </Label>
+                  <Input
+                    id="task-objective"
+                    value={learningObjective}
+                    onChange={(e) => setLearningObjective(e.target.value)}
+                    placeholder="e.g. use a loop to sum numbers"
+                  />
+                </div>
+              </div>
+              {aiError && (
+                <div className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {aiError.message}
+                  {(aiError.code === "ai_not_available" || aiError.code === "ai_limit") && (
+                    <>
+                      {" "}
+                      <Link href="/pricing" className="font-medium underline">
+                        See plans
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="mt-2"
+                onClick={generate}
+                disabled={generating}
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Generating
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="mr-1.5 h-4 w-4" /> Generate draft
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Editable task */}
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="task-title">Title</Label>
+              <Input
+                id="task-title"
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value)
+                  setOrigin("manual")
+                }}
+                placeholder="Short task name"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="task-instructions">Instructions</Label>
+              <Textarea
+                id="task-instructions"
+                value={instructions}
+                onChange={(e) => {
+                  setInstructions(e.target.value)
+                  setOrigin("manual")
+                }}
+                rows={9}
+                placeholder="What should the student do? Write clear, step-by-step instructions."
+              />
+              <p className="text-xs text-muted-foreground">
+                Students see this exactly as written. You can edit anything the AI drafts.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          {existing ? (
+            <ConfirmDialog
+              title="Remove task?"
+              description={`The task on "${file.name}" will be deleted. Students who already have this file will no longer see a task. This can't be undone.`}
+              confirmLabel="Remove task"
+              onConfirm={removeTask}
+              trigger={
+                <Button variant="ghost" className="text-destructive" disabled={busy}>
+                  <X className="mr-1.5 h-4 w-4" /> Remove task
+                </Button>
+              }
+            />
+          ) : (
+            <span />
+          )}
+          <Button onClick={save} disabled={busy || loading}>
+            {busy ? (
+              <>
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Saving
+              </>
+            ) : (
+              "Save task"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// The library file's language is implied by its extension, matching how the
+// rest of the IDE resolves it.
+function languageOfFile(name: string): LanguageId {
+  return name.toLowerCase().endsWith(".html") ? "html" : "python"
 }
 
 function NewFolderButton({

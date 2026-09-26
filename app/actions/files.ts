@@ -6,6 +6,7 @@ import {
   codeFiles,
   enrollments,
   fileComments,
+  fileTasks,
   studentFolders,
   user,
 } from "@/lib/db/schema"
@@ -69,13 +70,40 @@ export async function getStudentFiles(classId: number, languageInput: LanguageId
       .orderBy(asc(codeFiles.name)),
   ])
 
+  // A file carries a task only if it was assigned from a library file that has
+  // one. Resolve that in a single query so each file can show a "View task"
+  // affordance without a per-file round-trip.
+  const sourceIds = Array.from(
+    new Set(files.map((f) => f.sourceLibraryFileId).filter((id): id is number => id !== null)),
+  )
+  const taskRows = sourceIds.length
+    ? await db
+        .select({
+          libraryFileId: fileTasks.libraryFileId,
+          title: fileTasks.title,
+          instructions: fileTasks.instructions,
+        })
+        .from(fileTasks)
+        .where(inArray(fileTasks.libraryFileId, sourceIds))
+    : []
+  const taskBySource = new Map(taskRows.map((r) => [r.libraryFileId, r]))
+  const decorate = (f: (typeof files)[number]) => {
+    const task = f.sourceLibraryFileId !== null ? taskBySource.get(f.sourceLibraryFileId) : undefined
+    return {
+      ...f,
+      hasTask: Boolean(task),
+      taskTitle: task?.title ?? null,
+      taskInstructions: task?.instructions ?? null,
+    }
+  }
+
   return {
     folders: folders.map((folder) => ({
       ...folder,
-      files: files.filter((f) => f.folderId === folder.id),
+      files: files.filter((f) => f.folderId === folder.id).map(decorate),
     })),
     // Files not inside any folder live at the class root.
-    rootFiles: files.filter((f) => f.folderId === null),
+    rootFiles: files.filter((f) => f.folderId === null).map(decorate),
   }
 }
 

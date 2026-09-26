@@ -56,6 +56,7 @@ import {
   FolderOpen,
   ChevronRight,
   ChevronDown,
+  ClipboardList,
 } from "lucide-react"
 
 type ClassItem = {
@@ -77,6 +78,9 @@ type FileItem = {
   status: string
   markedAt: Date | null
   assignedByTeacher: boolean
+  hasTask?: boolean
+  taskTitle?: string | null
+  taskInstructions?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -120,6 +124,7 @@ export function StudentWorkspace({
   )
   const [activeFileId, setActiveFileId] = useState<number | null>(null)
   const [draft, setDraft] = useState("")
+  const [taskOpen, setTaskOpen] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
   // Snapshot of the page as it was when Run was last pressed, plus a counter
@@ -427,6 +432,12 @@ export function StudentWorkspace({
               </span>
             )}
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {activeFile?.hasTask && (
+              <Button size="sm" variant="outline" onClick={() => setTaskOpen(true)}>
+                <ClipboardList className="mr-1.5 h-4 w-4" /> View task
+              </Button>
+            )}
           <Button
             size="sm"
             onClick={handleRun}
@@ -448,6 +459,7 @@ export function StudentWorkspace({
               </>
             )}
           </Button>
+          </div>
         </div>
 
         <div className="grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
@@ -511,6 +523,20 @@ export function StudentWorkspace({
           </div>
         )}
       </div>
+
+      <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-primary" />
+              {activeFile?.taskTitle || "Task"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+            {activeFile?.taskInstructions || "No instructions provided."}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

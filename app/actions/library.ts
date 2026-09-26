@@ -5,6 +5,7 @@ import {
   classes,
   codeFiles,
   enrollments,
+  fileTasks,
   libraryFiles,
   libraryFolders,
   studentFolders,
@@ -60,13 +61,25 @@ export async function getLibrary(languageInput: LanguageId = "python") {
       .orderBy(asc(libraryFiles.name)),
   ])
 
+  // Which of these files carry a task, in one query, so the tree can badge
+  // them without an extra round-trip per file.
+  const fileIds = files.map((f) => f.id)
+  const taskRows = fileIds.length
+    ? await db
+        .select({ libraryFileId: fileTasks.libraryFileId })
+        .from(fileTasks)
+        .where(inArray(fileTasks.libraryFileId, fileIds))
+    : []
+  const withTask = new Set(taskRows.map((r) => r.libraryFileId))
+  const decorate = (f: (typeof files)[number]) => ({ ...f, hasTask: withTask.has(f.id) })
+
   return {
     folders: folders.map((f) => ({
       ...f,
-      files: files.filter((file) => file.folderId === f.id),
+      files: files.filter((file) => file.folderId === f.id).map(decorate),
     })),
     // Files not inside any folder live at the library root.
-    rootFiles: files.filter((f) => f.folderId === null),
+    rootFiles: files.filter((f) => f.folderId === null).map(decorate),
   }
 }
 
@@ -270,6 +283,7 @@ async function copyFilesToStudents(
     language: string
     content: string
     assignedByTeacher: boolean
+    sourceLibraryFileId: number
   }[] = []
 
   for (const student of recipientIds) {
@@ -286,6 +300,9 @@ async function copyFilesToStudents(
         language: file.language,
         content: file.content,
         assignedByTeacher: true,
+        // Points back at the library file so the student's copy resolves the
+        // teacher's current task text, and picks up later edits to it.
+        sourceLibraryFileId: file.id,
       })
     }
   }
