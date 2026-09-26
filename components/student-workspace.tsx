@@ -525,14 +525,14 @@ export function StudentWorkspace({
       </div>
 
       <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="flex h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-primary" />
               {activeFile?.taskTitle || "Task"}
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-base leading-relaxed text-foreground">
             {activeFile?.taskInstructions || "No instructions provided."}
           </div>
         </DialogContent>
