@@ -664,7 +664,7 @@ function TaskComposer({
           </Button>
         }
       />
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-auto">
+      <DialogContent className="flex h-[88vh] max-h-[88vh] w-[92vw] max-w-6xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Task for {file.name}</DialogTitle>
         </DialogHeader>
@@ -674,9 +674,9 @@ function TaskComposer({
             <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading task...
           </p>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-auto lg:grid-cols-2">
             {/* AI generator */}
-            <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <div className="h-fit rounded-lg border border-border bg-muted/40 p-3">
               <div className="mb-2 flex items-center gap-2 text-sm font-medium">
                 <Sparkles className="h-4 w-4 text-chart-4" />
                 Generate with AI
