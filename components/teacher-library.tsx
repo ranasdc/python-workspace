@@ -63,7 +63,6 @@ import {
   Square,
   RotateCcw,
   ClipboardList,
-  ClipboardCheck,
   Pencil,
   Maximize2,
   Minimize2,
@@ -661,17 +660,6 @@ function TaskComposer({
 
   return (
     <div className="flex items-center gap-2">
-      {file.hasTask && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          title="This file has a task attached. Click to edit it."
-          className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ClipboardCheck className="h-3.5 w-3.5 text-chart-4" />
-          Task attached
-        </button>
-      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger
           render={
