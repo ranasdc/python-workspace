@@ -144,6 +144,9 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
   const [awaitingInput, setAwaitingInput] = useState(false)
   const [interactive, setInteractive] = useState(false)
   const [shouldLoad, setShouldLoad] = useState(enabled)
+  // Bumped by stop() to tear down and re-create the worker, which is how a
+  // runaway program gets interrupted.
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     if (enabled) setShouldLoad(true)
@@ -258,7 +261,7 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
     return () => {
       cancelled = true
     }
-  }, [shouldLoad])
+  }, [shouldLoad, reloadToken])
 
   const run = useCallback(
     (code: string, onOutput: OutputFn): Promise<void> => {
@@ -327,5 +330,25 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
     }
   }, [])
 
-  return { status, loadError, awaitingInput, interactive, run, submitInput }
+  // Force-stop a running program. In worker mode the worker is terminated and
+  // the reload token stands up a fresh one, so an infinite loop is genuinely
+  // interrupted. The main-thread fallback cannot interrupt synchronous code,
+  // so it only clears pending input/awaiting state as a best effort.
+  const stop = useCallback(() => {
+    if (workerRef.current) {
+      workerRef.current.terminate()
+      workerRef.current = null
+      resolveRef.current?.()
+      resolveRef.current = null
+      setAwaitingInput(false)
+      setStatus("loading")
+      setReloadToken((t) => t + 1)
+      return
+    }
+    mainInputResolveRef.current = null
+    setAwaitingInput(false)
+    setStatus("ready")
+  }, [])
+
+  return { status, loadError, awaitingInput, interactive, run, submitInput, stop }
 }
