@@ -52,6 +52,11 @@ type Copy = {
     heading: string
     summary: string
   }
+  /**
+   * Quiet way out for people who want neither option. Omitted where one of the
+   * two cards is already the free choice.
+   */
+  skip?: string
 }
 
 const COPY: Record<Role, Copy> = {
@@ -103,6 +108,7 @@ const COPY: Record<Role, Copy> = {
       summary:
         "Unlimited classes and students, a reusable lesson library, marking tools and AI assisted learning for your class.",
     },
+    skip: "Continue on the free plan",
   },
 }
 
@@ -223,18 +229,20 @@ export function WelcomeOnboarding({ role }: { role: Role }) {
               />
             </div>
 
-            <div className="flex justify-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={handleLater}
-                className="text-muted-foreground"
-              >
-                {pending === "later" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                I&apos;ll decide later
-              </Button>
-            </div>
+            {copy.skip && (
+              <div className="flex justify-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={handleLater}
+                  className="text-muted-foreground"
+                >
+                  {pending === "later" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {copy.skip}
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <>
