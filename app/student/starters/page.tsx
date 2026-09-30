@@ -7,7 +7,14 @@ import { StudentStarters } from "@/components/starters/student-starters"
 
 export const metadata: Metadata = { title: "Daily Starter" }
 
-export default async function StudentStartersPage() {
+export default async function StudentStartersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ open?: string }>
+}) {
+  const { open } = await searchParams
+  const openId = Number(open)
+  const initialOpenId = Number.isInteger(openId) && openId > 0 ? openId : null
   const sessionUser = await getSessionUser()
   if (!sessionUser) redirect("/sign-in")
   const entitlement = await getEntitlement(sessionUser.id)
@@ -17,7 +24,7 @@ export default async function StudentStartersPage() {
     <div className="flex min-h-dvh flex-col bg-background">
       <AppHeader name={sessionUser.name} role="student" />
       <main className="flex-1 overflow-y-auto">
-        <StudentStarters />
+        <StudentStarters initialOpenId={initialOpenId} />
       </main>
     </div>
   )
