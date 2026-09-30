@@ -150,6 +150,11 @@ export const dailyStarterResponses = pgTable(
     total: integer("total"),
     startedAt: timestamp("startedAt").notNull().defaultNow(),
     submittedAt: timestamp("submittedAt"),
+    // Frozen on the first submit; retakes only change the fields above.
+    firstAnswers: jsonb("firstAnswers"),
+    firstScore: integer("firstScore"),
+    firstTotal: integer("firstTotal"),
+    firstSubmittedAt: timestamp("firstSubmittedAt"),
   },
   (t) => ({
     uniqResponse: unique().on(t.starterId, t.studentId),
