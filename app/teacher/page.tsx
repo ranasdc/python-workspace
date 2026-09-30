@@ -24,7 +24,7 @@ export default async function TeacherPage() {
       <AppHeader
         name={user.name}
         role="teacher"
-        isSchoolAdmin={entitlement.schoolRole === "school_admin"}
+        isSchoolAdmin={entitlement.schoolRole === "school_admin" && !entitlement.schoolUnpaid}
       />
       <TeacherDashboard initialClasses={classes} planStatus={planStatus} />
     </div>

@@ -152,25 +152,11 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
             <div>
               <h2 className="text-lg font-semibold">Invite codes</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Share these so teachers and students join your school.
+                Share a teacher code with your staff. Students join through their
+                teacher&apos;s class code and are covered by the school plan automatically.
               </p>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy === "code-student"}
-                onClick={() =>
-                  run(
-                    "code-student",
-                    () => createInviteCode(school.id, "student"),
-                    "Student code created",
-                  )
-                }
-              >
-                {busy === "code-student" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                New student code
-              </Button>
               <Button
                 variant="outline"
                 size="sm"

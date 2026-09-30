@@ -61,7 +61,9 @@ export async function createInviteCode(
   options?: { maxUses?: number | null; expiresInDays?: number | null },
 ) {
   const admin = await requireSchoolAdmin(schoolId)
-  if (role !== "student" && role !== "teacher") throw new Error("Invalid role")
+  if (role !== "teacher") {
+    throw new Error("Students join through their teacher's class code, not a school code")
+  }
 
   const expiresAt =
     options?.expiresInDays && options.expiresInDays > 0
