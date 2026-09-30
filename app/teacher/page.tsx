@@ -21,7 +21,11 @@ export default async function TeacherPage() {
 
   return (
     <div className="flex h-svh flex-col">
-      <AppHeader name={user.name} role="teacher" />
+      <AppHeader
+        name={user.name}
+        role="teacher"
+        isSchoolAdmin={entitlement.schoolRole === "school_admin"}
+      />
       <TeacherDashboard initialClasses={classes} planStatus={planStatus} />
     </div>
   )
