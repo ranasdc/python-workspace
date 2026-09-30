@@ -8,6 +8,42 @@ import { getSessionUser, requireUser } from "@/lib/session"
 import { getEntitlement, getUsage, limitsFor } from "@/lib/entitlements"
 import { getLanguage, toLanguageId, type LanguageId } from "@/lib/ide/languages"
 
+/**
+ * The choice a user made on the welcome screen. Purely a record of intent:
+ * access still comes from `lib/entitlements.ts`, so calling this with any
+ * value unlocks nothing.
+ */
+export type OnboardingChoice =
+  | "class"
+  | "individual"
+  | "school"
+  | "teacher_pro"
+  | "later"
+
+const ONBOARDING_CHOICES: readonly OnboardingChoice[] = [
+  "class",
+  "individual",
+  "school",
+  "teacher_pro",
+  "later",
+]
+
+/** Marks the welcome screen as done so it is never shown to this user again. */
+export async function completeOnboarding(choice: OnboardingChoice) {
+  const me = await requireUser()
+  if (!ONBOARDING_CHOICES.includes(choice)) throw new Error("Invalid choice")
+
+  await db
+    .update(user)
+    .set({
+      onboardedAt: new Date(),
+      isFirstLogin: false,
+      // Cosmetic label, kept only for the student choices that have one.
+      ...(choice === "class" || choice === "individual" ? { accountType: choice } : {}),
+    })
+    .where(eq(user.id, me.id))
+}
+
 export async function canCreateFile(
   languageInput: LanguageId = "python",
   userId?: string,

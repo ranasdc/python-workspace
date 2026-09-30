@@ -20,6 +20,9 @@ export const user = pgTable("user", {
   // Freemium model for individual students
   accountType: text("accountType"), // "class" | "individual"
   isFirstLogin: boolean("isFirstLogin").notNull().default(true),
+  // When the user made their first-run choice. Null means the welcome screen
+  // is still due. It records a preference only and grants nothing.
+  onboardedAt: timestamp("onboardedAt"),
   subscriptionStatus: text("subscriptionStatus").default("free"), // "free" | "monthly" | "yearly"
   createdFilesCount: integer("createdFilesCount").notNull().default(0),
   createdFoldersCount: integer("createdFoldersCount").notNull().default(0),
