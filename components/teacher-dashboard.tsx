@@ -24,6 +24,8 @@ import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import { getClassTree, setFileStatus } from "@/app/actions/files"
 import { FileComments } from "@/components/file-comments"
 import { TeacherLibrary } from "@/components/teacher-library"
+import { ClassAiHelpControl } from "@/components/class-ai-help-control"
+import { TeacherStarters } from "@/components/starters/teacher-starters"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
@@ -52,6 +54,7 @@ import {
   Circle,
   Folder,
   Sparkles,
+  Zap,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -117,7 +120,7 @@ export function TeacherDashboard({
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
   )
-  const [view, setView] = useState<"classes" | "library">("classes")
+  const [view, setView] = useState<"classes" | "library" | "starters">("classes")
 
   // Load the Python runtime once for the whole dashboard so switching between
   // student files doesn't re-download Pyodide each time.
@@ -157,6 +160,15 @@ export function TeacherDashboard({
             )}
           >
             <Library className="h-4 w-4" /> Library
+          </button>
+          <button
+            onClick={() => setView("starters")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+              view === "starters" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <Zap className="h-4 w-4" /> Starters
           </button>
         </div>
 
@@ -213,7 +225,9 @@ export function TeacherDashboard({
 
       {/* Main area: class detail or the teacher's library */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {view === "library" ? (
+        {view === "starters" ? (
+          <TeacherStarters classes={list.map((c) => ({ id: c.id, name: c.name }))} />
+        ) : view === "library" ? (
           <TeacherLibrary classes={list} />
         ) : activeClass ? (
           <div className="min-h-0 flex-1 overflow-auto">
@@ -370,7 +384,10 @@ function ClassDetail({
               <p className="text-sm text-muted-foreground">{cls.description}</p>
             )}
           </div>
-          <JoinCodeBadge code={cls.joinCode} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ClassAiHelpControl classId={cls.id} />
+            <JoinCodeBadge code={cls.joinCode} />
+          </div>
         </div>
       </div>
 

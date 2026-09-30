@@ -2,6 +2,8 @@ import { generateText } from "ai"
 
 import { getSessionUser } from "@/lib/session"
 import { rateLimit } from "@/lib/rate-limit"
+import { errorSignature, findUnlock, resolveAiHelpForFile } from "@/lib/ai-help"
+import { AccessError } from "@/lib/class-access"
 
 // Allow the model a little room to respond.
 export const maxDuration = 30
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
     )
   }
 
-  let body: { code?: string; error?: string }
+  let body: { code?: string; error?: string; fileId?: number }
   try {
     body = await req.json()
   } catch {
@@ -30,9 +32,34 @@ export async function POST(req: Request) {
 
   const code = (body.code ?? "").slice(0, 8000)
   const error = (body.error ?? "").slice(0, 4000)
+  const fileId = Number(body.fileId)
 
   if (!error.trim()) {
     return Response.json({ error: "Missing error output" }, { status: 400 })
+  }
+  if (!Number.isInteger(fileId) || fileId <= 0) {
+    return Response.json({ error: "Missing file" }, { status: 400 })
+  }
+
+  // The class setting and unlock time are checked here, not trusted from the
+  // client, so hiding the button is never the only barrier.
+  try {
+    const policy = await resolveAiHelpForFile(sessionUser.id, fileId)
+    if (!policy.enabled) {
+      return Response.json(
+        { error: "Your teacher has turned off AI Help for this class." },
+        { status: 403 },
+      )
+    }
+    const unlock = await findUnlock(sessionUser.id, fileId, errorSignature(error))
+    if (!unlock || unlock.unlockAt.getTime() > Date.now()) {
+      return Response.json({ error: "AI Help is not unlocked yet." }, { status: 403 })
+    }
+  } catch (e) {
+    if (e instanceof AccessError) {
+      return Response.json({ error: e.message }, { status: 404 })
+    }
+    throw e
   }
 
   try {

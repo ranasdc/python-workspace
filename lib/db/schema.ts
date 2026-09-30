@@ -6,6 +6,7 @@ import {
   serial,
   integer,
   unique,
+  jsonb,
 } from "drizzle-orm/pg-core"
 
 // ---------- Better Auth tables ----------
@@ -85,8 +86,75 @@ export const classes = pgTable("class", {
   joinCodeActive: boolean("joinCodeActive").notNull().default(true),
   // Null = the code never expires. Enforced on join when set.
   joinCodeExpiresAt: timestamp("joinCodeExpiresAt"),
+  // Teacher control over AI error help for students in this class.
+  aiHelpEnabled: boolean("aiHelpEnabled").notNull().default(true),
+  // Minutes a student must work on an error before the hint unlocks.
+  aiHelpDelayMinutes: integer("aiHelpDelayMinutes").notNull().default(10),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// Server-side record of when a student asked to unlock AI help for a specific
+// error. The unlock time is decided here, so a client cannot shorten the wait.
+export const aiHelpUnlocks = pgTable(
+  "ai_help_unlock",
+  {
+    id: serial("id").primaryKey(),
+    studentId: text("studentId").notNull(),
+    fileId: integer("fileId").notNull(),
+    signature: text("signature").notNull(),
+    unlockAt: timestamp("unlockAt").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqUnlock: unique().on(t.studentId, t.fileId, t.signature),
+  }),
+)
+
+// One class-level starter: every student in the class gets the same questions.
+export const dailyStarters = pgTable("daily_starter", {
+  id: serial("id").primaryKey(),
+  classId: integer("classId").notNull(),
+  teacherId: text("teacherId").notNull(),
+  title: text("title").notNull(),
+  topic: text("topic").notNull().default(""),
+  language: text("language").notNull().default("python"),
+  difficulty: text("difficulty").notNull().default("mixed"),
+  yearGroup: text("yearGroup").notNull().default(""),
+  objective: text("objective").notNull().default(""),
+  // YYYY-MM-DD, the day the starter is for.
+  starterDate: text("starterDate").notNull(),
+  timeLimitSeconds: integer("timeLimitSeconds").notNull().default(300),
+  allowRetake: boolean("allowRetake").notNull().default(false),
+  questions: jsonb("questions").notNull(),
+  // "draft" | "assigned"
+  status: text("status").notNull().default("draft"),
+  aiGenerated: boolean("aiGenerated").notNull().default(false),
+  // Classroom warm-up presentation state.
+  warmupIndex: integer("warmupIndex").notNull().default(0),
+  warmupRevealed: boolean("warmupRevealed").notNull().default(false),
+  warmupActive: boolean("warmupActive").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// A student's answers to a starter. Answers are saved as they go so the
+// classroom warm-up can show live aggregate progress.
+export const dailyStarterResponses = pgTable(
+  "daily_starter_response",
+  {
+    id: serial("id").primaryKey(),
+    starterId: integer("starterId").notNull(),
+    studentId: text("studentId").notNull(),
+    answers: jsonb("answers").notNull().default({}),
+    score: integer("score"),
+    total: integer("total"),
+    startedAt: timestamp("startedAt").notNull().defaultNow(),
+    submittedAt: timestamp("submittedAt"),
+  },
+  (t) => ({
+    uniqResponse: unique().on(t.starterId, t.studentId),
+  }),
+)
 
 // Failed join-code attempts. Durable because the throttle guards a bearer
 // credential and must hold across serverless instances and cold starts.
