@@ -7,6 +7,7 @@ import { usePyodide } from "@/hooks/use-pyodide"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
+import { RunStopButton } from "@/components/run-stop-button"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import {
   DEFAULT_LANGUAGE,
@@ -59,8 +60,6 @@ import {
   Send,
   Library,
   Sparkles,
-  Play,
-  Square,
   RotateCcw,
   ClipboardList,
   Pencil,
@@ -275,16 +274,6 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {!isWeb && status === "running" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={stop}
-                    title="Stop the running program"
-                  >
-                    <Square className="mr-1.5 h-4 w-4" /> Stop
-                  </Button>
-                )}
                 {!isWeb && status !== "running" && consoleLines.length > 0 && (
                   <Button
                     size="sm"
@@ -295,26 +284,14 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
                     <RotateCcw className="mr-1.5 h-4 w-4" /> Reset
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  onClick={handleRun}
-                  disabled={!isWeb && (status === "loading" || status === "running")}
-                  title={isWeb ? "Render your page" : "Run your code"}
-                >
-                  {!isWeb && status === "loading" ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
-                    </>
-                  ) : !isWeb && status === "running" ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
-                    </>
-                  ) : (
-                    <>
-                      <Play className="mr-1.5 h-4 w-4" /> {isWeb ? "Run / Preview" : "Run code"}
-                    </>
-                  )}
-                </Button>
+                <RunStopButton
+                  isWeb={isWeb}
+                  status={status}
+                  onRun={handleRun}
+                  onStop={stop}
+                  runLabel="Run code"
+                  webLabel="Run / Preview"
+                />
                 <TaskComposer
                   key={selected.id}
                   file={selected}

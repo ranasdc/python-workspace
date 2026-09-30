@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
-import { LogOut } from "lucide-react"
+import { LogOut, Zap } from "lucide-react"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 
 export function AppHeader({
@@ -32,6 +32,15 @@ export function AppHeader({
         </div>
       </Link>
       <div className="flex items-center gap-3">
+        {role === "student" && (
+          <Link
+            href="/student/starters"
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Zap className="h-4 w-4 text-primary" />
+            Daily Starter
+          </Link>
+        )}
         <div className="hidden text-right sm:block">
           <span className="block text-sm font-medium">{name}</span>
         </div>

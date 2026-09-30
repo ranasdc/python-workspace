@@ -1,32 +1,32 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, Lock, Sparkles, Loader2, Clock, RotateCcw } from "lucide-react"
-
-// The student must attempt the fix themselves for this long before AI help is offered.
-const HELP_DELAY_MS = 10 * 60 * 1000 // 10 minutes
+import { AlertTriangle, Lock, Sparkles, Loader2, Clock, RotateCcw, ShieldOff } from "lucide-react"
+import { getAiHelpState, requestAiHelpUnlock, type AiHelpState } from "@/app/actions/ai-help"
 
 type Phase = "prompt" | "counting" | "loading" | "help" | "failed"
 
-function storageKey(fileId: number) {
-  return `pyide-error-help:${fileId}`
+function hintKey(fileId: number) {
+  return `pyide-error-hint:${fileId}`
 }
 
-type Saved = { signature: string; unlockAt: number; help?: string }
-
-function readSaved(fileId: number): Saved | null {
+// Only the delivered hint text is cached locally, to avoid paying for the same
+// hint twice. The unlock timing always comes from the server.
+function readHint(fileId: number, error: string) {
   try {
-    const raw = localStorage.getItem(storageKey(fileId))
-    return raw ? (JSON.parse(raw) as Saved) : null
+    const raw = localStorage.getItem(hintKey(fileId))
+    const saved = raw ? (JSON.parse(raw) as { error: string; help: string }) : null
+    return saved && saved.error === error ? saved.help : null
   } catch {
     return null
   }
 }
 
-function writeSaved(fileId: number, data: Saved) {
+function writeHint(fileId: number, error: string, help: string) {
   try {
-    localStorage.setItem(storageKey(fileId), JSON.stringify(data))
+    localStorage.setItem(hintKey(fileId), JSON.stringify({ error, help }))
   } catch {
     /* ignore quota / unavailable storage */
   }
@@ -41,13 +41,19 @@ export function ErrorHelper({
   code: string
   fileId: number
 }) {
-  const [phase, setPhase] = useState<Phase>("prompt")
-  const [remaining, setRemaining] = useState(HELP_DELAY_MS)
-  const [help, setHelp] = useState("")
+  const { data: policy, mutate } = useSWR<AiHelpState>(
+    ["ai-help", fileId, error],
+    () => getAiHelpState(fileId, error),
+    // Re-check so a teacher toggling the class setting takes effect quickly.
+    { refreshInterval: 20000, revalidateOnFocus: true },
+  )
 
-  const unlockAtRef = useRef<number | null>(null)
+  const [phase, setPhase] = useState<Phase>("prompt")
+  const [help, setHelp] = useState("")
+  const [now, setNow] = useState(() => Date.now())
+  // Difference between server and client clocks, so the countdown is accurate.
+  const skewRef = useRef(0)
   const startedRef = useRef(false)
-  // Keep the latest code without retriggering the fetch callback.
   const codeRef = useRef(code)
   codeRef.current = code
 
@@ -59,67 +65,50 @@ export function ErrorHelper({
       const res = await fetch("/api/error-help", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: codeRef.current, error }),
+        body: JSON.stringify({ code: codeRef.current, error, fileId }),
       })
-      if (!res.ok) throw new Error("Request failed")
-      const data = (await res.json()) as { help?: string; error?: string }
-      if (!data.help) throw new Error(data.error || "No hint returned")
+      const data = (await res.json().catch(() => ({}))) as { help?: string; error?: string }
+      if (!res.ok || !data.help) throw new Error(data.error || "No hint returned")
       setHelp(data.help)
       setPhase("help")
-      writeSaved(fileId, {
-        signature: error,
-        unlockAt: unlockAtRef.current ?? Date.now(),
-        help: data.help,
-      })
+      writeHint(fileId, error, data.help)
     } catch {
       startedRef.current = false
       setPhase("failed")
+      mutate()
     }
-  }, [error, fileId])
+  }, [error, fileId, mutate])
 
-  // On mount (and whenever the error changes), restore any in-progress timer
-  // or already-delivered hint for this exact error so a refresh doesn't reset it.
   useEffect(() => {
-    const saved = readSaved(fileId)
-    if (saved && saved.signature === error) {
-      if (saved.help) {
-        setHelp(saved.help)
-        setPhase("help")
-        return
-      }
-      unlockAtRef.current = saved.unlockAt
-      const left = saved.unlockAt - Date.now()
-      if (left <= 0) {
-        fetchHelp()
-      } else {
-        setRemaining(left)
-        setPhase("counting")
-      }
+    const cached = readHint(fileId, error)
+    if (cached) {
+      setHelp(cached)
+      setPhase("help")
     }
-  }, [error, fileId, fetchHelp])
+  }, [fileId, error])
 
-  // Drive the countdown.
+  // Sync phase with the server policy.
   useEffect(() => {
-    if (phase !== "counting") return
+    if (!policy || phase === "help" || phase === "loading") return
+    skewRef.current = policy.serverNow - Date.now()
+    if (policy.enabled && policy.unlockAt !== null) setPhase("counting")
+  }, [policy, phase])
+
+  useEffect(() => {
+    if (phase !== "counting" || !policy?.unlockAt) return
     const tick = () => {
-      const left = (unlockAtRef.current ?? 0) - Date.now()
-      if (left <= 0) {
-        fetchHelp()
-      } else {
-        setRemaining(left)
-      }
+      const t = Date.now()
+      setNow(t)
+      if (policy.unlockAt! - (t + skewRef.current) <= 0) fetchHelp()
     }
     tick()
     const id = setInterval(tick, 500)
     return () => clearInterval(id)
-  }, [phase, fetchHelp])
+  }, [phase, policy, fetchHelp])
 
-  function unlock() {
-    const at = Date.now() + HELP_DELAY_MS
-    unlockAtRef.current = at
-    setRemaining(HELP_DELAY_MS)
-    setPhase("counting")
-    writeSaved(fileId, { signature: error, unlockAt: at })
+  async function unlock() {
+    const next = await requestAiHelpUnlock(fileId, error)
+    await mutate(next, { revalidate: false })
   }
 
   function retry() {
@@ -127,95 +116,118 @@ export function ErrorHelper({
     fetchHelp()
   }
 
+  const disabled = policy && !policy.enabled && phase !== "help"
+  const delayMs = (policy?.delayMinutes ?? 10) * 60000
+  const remaining = policy?.unlockAt ? Math.max(0, policy.unlockAt - (now + skewRef.current)) : delayMs
   const mins = Math.floor(remaining / 60000)
   const secs = Math.floor((remaining % 60000) / 1000)
   const clock = `${mins}:${String(secs).padStart(2, "0")}`
-  const progress = Math.min(100, Math.max(0, (1 - remaining / HELP_DELAY_MS) * 100))
+  const progress = delayMs === 0 ? 100 : Math.min(100, Math.max(0, (1 - remaining / delayMs) * 100))
 
   return (
     <div className="shrink-0 border-t border-border bg-card">
       <div className="max-h-64 overflow-auto p-3">
-        {phase === "prompt" && (
+        {disabled ? (
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
-              <AlertTriangle className="h-4 w-4" />
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <ShieldOff className="h-4 w-4" />
             </span>
             <div className="flex-1">
-              <p className="text-sm font-semibold">Try resolving the error yourself first</p>
+              <p className="text-sm font-semibold">AI Help is off for this class</p>
               <p className="mt-1 text-sm text-muted-foreground text-pretty">
-                Read the error above carefully and review your code. Working through it on your own
-                is the best way to learn. Still stuck? You can unlock an AI hint.
+                Your teacher has turned off AI Help. Read the error carefully, check the line it
+                points to, and ask your teacher if you are still stuck.
               </p>
-              <Button size="sm" className="mt-3" onClick={unlock}>
-                <Lock className="mr-1.5 h-4 w-4" />
-                Unlock AI help
-              </Button>
             </div>
           </div>
-        )}
-
-        {phase === "counting" && (
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Clock className="h-4 w-4" />
-            </span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold">
-                AI help unlocks in <span className="tabular-nums text-primary">{clock}</span>
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground text-pretty">
-                Keep experimenting while you wait — you might crack it yourself! The hint will appear
-                here automatically when the timer ends.
-              </p>
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-500 ease-linear"
-                  style={{ width: `${progress}%` }}
-                />
+        ) : (
+          <>
+            {phase === "prompt" && (
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">Try resolving the error yourself first</p>
+                  <p className="mt-1 text-sm text-muted-foreground text-pretty">
+                    Read the error above carefully and review your code. Still stuck? Unlock an AI
+                    hint
+                    {policy && policy.delayMinutes > 0
+                      ? ` — it becomes available ${policy.delayMinutes} minute${policy.delayMinutes === 1 ? "" : "s"} after you ask.`
+                      : "."}
+                  </p>
+                  <Button size="sm" className="mt-3" onClick={unlock} disabled={!policy}>
+                    <Lock className="mr-1.5 h-4 w-4" />
+                    Unlock AI help
+                  </Button>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {phase === "loading" && (
-          <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </span>
-            <p className="text-sm text-muted-foreground">Preparing a hint for your error...</p>
-          </div>
-        )}
+            {phase === "counting" && (
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Clock className="h-4 w-4" />
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">
+                    AI help unlocks in <span className="tabular-nums text-primary">{clock}</span>
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground text-pretty">
+                    Keep experimenting while you wait. The hint appears here automatically when the
+                    timer ends.
+                  </p>
+                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-500 ease-linear"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {phase === "help" && (
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-primary">AI hint</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground text-pretty">
-                {help}
-              </p>
-            </div>
-          </div>
-        )}
+            {phase === "loading" && (
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </span>
+                <p className="text-sm text-muted-foreground">Preparing a hint for your error...</p>
+              </div>
+            )}
 
-        {phase === "failed" && (
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold">Couldn&apos;t load a hint</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Something went wrong while generating help.
-              </p>
-              <Button size="sm" variant="outline" className="mt-3 bg-transparent" onClick={retry}>
-                <RotateCcw className="mr-1.5 h-4 w-4" />
-                Try again
-              </Button>
-            </div>
-          </div>
+            {phase === "help" && (
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Sparkles className="h-4 w-4" />
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-primary">AI hint</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground text-pretty">
+                    {help}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {phase === "failed" && (
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">Couldn&apos;t load a hint</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Something went wrong while generating help.
+                  </p>
+                  <Button size="sm" variant="outline" className="mt-3 bg-transparent" onClick={retry}>
+                    <RotateCcw className="mr-1.5 h-4 w-4" />
+                    Try again
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -14,6 +14,7 @@ import {
   type LanguageId,
 } from "@/lib/ide/languages"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
+import { RunStopButton } from "@/components/run-stop-button"
 import { ErrorHelper } from "@/components/error-helper"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,7 +43,6 @@ import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
-  Play,
   Plus,
   FileCode,
   Trash2,
@@ -167,7 +167,7 @@ export function StudentWorkspace({
   const [seenTick, setSeenTick] = useState(0)
   const resizeState = useRef<{ startX: number; startW: number } | null>(null)
 
-  const { status, loadError, awaitingInput, interactive, run, submitInput } = usePyodide({
+  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = usePyodide({
     // Python is a multi-megabyte download; don't pay for it in the HTML IDE.
     enabled: !isWeb,
   })
@@ -608,27 +608,15 @@ export function StudentWorkspace({
                 )}
               </Button>
             )}
-          <Button
-            size="sm"
-            onClick={handleRun}
-            disabled={
-              !activeFile || (!isWeb && (status === "loading" || status === "running"))
-            }
-          >
-            {!isWeb && status === "loading" ? (
-              <>
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
-              </>
-            ) : !isWeb && status === "running" ? (
-              <>
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
-              </>
-            ) : (
-              <>
-                <Play className="mr-1.5 h-4 w-4" /> {isWeb ? "Preview" : "Run"}
-              </>
-            )}
-          </Button>
+          <RunStopButton
+            isWeb={isWeb}
+            status={status}
+            onRun={handleRun}
+            onStop={stop}
+            runLabel="Run"
+            webLabel="Preview"
+            disabled={!activeFile}
+          />
           </div>
         </div>
 

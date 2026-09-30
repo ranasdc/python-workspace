@@ -113,7 +113,13 @@ def __v0_transform_source(code):
 `
 
 export type RunStatus = "loading" | "ready" | "running" | "error"
-export type OutputFn = (text: string, kind: "out" | "err") => void
+export type OutputFn = (text: string, kind: "out" | "err" | "info") => void
+
+const STATE_STOP = 3
+// How long a SIGINT gets to unwind the program before the worker is killed.
+// Covers code that swallows KeyboardInterrupt or is stuck outside bytecode.
+const HARD_STOP_MS = 700
+const STOPPED_MESSAGE = "\nExecution stopped by user.\n"
 
 type PyodideInterface = {
   runPythonAsync: (code: string) => Promise<unknown>
@@ -158,10 +164,27 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
   const dataRef = useRef<Uint8Array | null>(null)
   const outputRef = useRef<OutputFn | null>(null)
   const resolveRef = useRef<(() => void) | null>(null)
+  const interruptRef = useRef<Uint8Array | null>(null)
+  const runningRef = useRef(false)
+  const hardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Main-thread fallback refs
   const pyodideRef = useRef<PyodideInterface | null>(null)
   const mainInputResolveRef = useRef<((text: string) => void) | null>(null)
+  const mainInputRejectRef = useRef<((err: Error) => void) | null>(null)
+  const mainStoppedRef = useRef(false)
+
+  const finishRun = useCallback((stopped: boolean) => {
+    if (hardStopTimerRef.current) {
+      clearTimeout(hardStopTimerRef.current)
+      hardStopTimerRef.current = null
+    }
+    if (stopped) outputRef.current?.(STOPPED_MESSAGE, "info")
+    runningRef.current = false
+    setAwaitingInput(false)
+    resolveRef.current?.()
+    resolveRef.current = null
+  }, [])
 
   useEffect(() => {
     if (!shouldLoad) return
@@ -180,8 +203,10 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
 
       const controlSAB = new SharedArrayBuffer(CONTROL_LEN * Int32Array.BYTES_PER_ELEMENT)
       const dataSAB = new SharedArrayBuffer(DATA_BYTES)
+      const interruptSAB = new SharedArrayBuffer(1)
       controlRef.current = new Int32Array(controlSAB)
       dataRef.current = new Uint8Array(dataSAB)
+      interruptRef.current = new Uint8Array(interruptSAB)
 
       worker.onmessage = (e: MessageEvent) => {
         const m = e.data
@@ -199,10 +224,8 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
             setAwaitingInput(true)
             break
           case "done":
-            setAwaitingInput(false)
             setStatus("ready")
-            resolveRef.current?.()
-            resolveRef.current = null
+            finishRun(Boolean(m.stopped))
             break
           case "fatal":
             setLoadError(m.error || "Failed to load Python runtime")
@@ -211,7 +234,12 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
         }
       }
 
-      worker.postMessage({ type: "init", control: controlSAB, data: dataSAB })
+      worker.postMessage({
+        type: "init",
+        control: controlSAB,
+        data: dataSAB,
+        interrupt: interruptSAB,
+      })
 
       return () => {
         cancelled = true
@@ -242,9 +270,10 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
         pyodide.globals.set(
           "__v0_js_input__",
           (promptText: string) =>
-            new Promise<string>((resolve) => {
+            new Promise<string>((resolve, reject) => {
               void promptText
               mainInputResolveRef.current = resolve
+              mainInputRejectRef.current = reject
               setAwaitingInput(true)
             }),
         )
@@ -270,6 +299,7 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
         return new Promise<void>((resolve) => {
           outputRef.current = onOutput
           resolveRef.current = resolve
+          runningRef.current = true
           setStatus("running")
           workerRef.current!.postMessage({ type: "run", code })
         })
@@ -278,6 +308,9 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
       // Fallback: main-thread execution with inline console input().
       const pyodide = pyodideRef.current
       if (!pyodide) return Promise.resolve()
+      outputRef.current = onOutput
+      mainStoppedRef.current = false
+      runningRef.current = true
       setStatus("running")
       pyodide.setStdout({ batched: (s) => onOutput(s + "\n", "out") })
       pyodide.setStderr({ batched: (s) => onOutput(s + "\n", "err") })
@@ -294,12 +327,17 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
       return pyodide
         .runPythonAsync(transformed)
         .catch((err: unknown) => {
+          if (mainStoppedRef.current) return
           onOutput((err instanceof Error ? err.message : String(err)) + "\n", "err")
         })
         .finally(() => {
+          if (mainStoppedRef.current) onOutput(STOPPED_MESSAGE, "info")
+          mainStoppedRef.current = false
+          runningRef.current = false
           setStatus("ready")
           setAwaitingInput(false)
           mainInputResolveRef.current = null
+          mainInputRejectRef.current = null
         }) as Promise<void>
     },
     [],
@@ -330,25 +368,54 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
     }
   }, [])
 
-  // Force-stop a running program. In worker mode the worker is terminated and
-  // the reload token stands up a fresh one, so an infinite loop is genuinely
-  // interrupted. The main-thread fallback cannot interrupt synchronous code,
-  // so it only clears pending input/awaiting state as a best effort.
+  // Force-stop a running program, including one blocked on input() or stuck in
+  // an infinite loop. Worker mode first raises KeyboardInterrupt through the
+  // interrupt buffer and wakes any blocked input(), which keeps the runtime
+  // warm so the next Run is instant. If the program has not unwound within
+  // HARD_STOP_MS (e.g. it swallows KeyboardInterrupt), the worker is killed
+  // and a fresh one is started, so execution is guaranteed to end.
   const stop = useCallback(() => {
-    if (workerRef.current) {
-      workerRef.current.terminate()
-      workerRef.current = null
-      resolveRef.current?.()
-      resolveRef.current = null
+    const worker = workerRef.current
+    if (worker) {
+      if (!runningRef.current) return
+      const control = controlRef.current
+      if (interruptRef.current) interruptRef.current[0] = 2
+      if (control) {
+        Atomics.store(control, 0, STATE_STOP)
+        Atomics.notify(control, 0)
+      }
       setAwaitingInput(false)
-      setStatus("loading")
-      setReloadToken((t) => t + 1)
+      if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current)
+      hardStopTimerRef.current = setTimeout(() => {
+        hardStopTimerRef.current = null
+        if (!runningRef.current || workerRef.current !== worker) return
+        worker.terminate()
+        workerRef.current = null
+        finishRun(true)
+        setStatus("loading")
+        setReloadToken((t) => t + 1)
+      }, HARD_STOP_MS)
       return
     }
+
+    // Main-thread fallback: rejecting the pending input() unwinds the program.
+    // Synchronous loops cannot run here without freezing the page, so a
+    // pending input() is the only state this path ever needs to cancel.
+    if (!runningRef.current) return
+    mainStoppedRef.current = true
+    const reject = mainInputRejectRef.current
     mainInputResolveRef.current = null
+    mainInputRejectRef.current = null
     setAwaitingInput(false)
-    setStatus("ready")
-  }, [])
+    reject?.(new Error("KeyboardInterrupt"))
+  }, [finishRun])
+
+  useEffect(
+    () => () => {
+      if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current)
+    },
+    [],
+  )
 
   return { status, loadError, awaitingInput, interactive, run, submitInput, stop }
 }

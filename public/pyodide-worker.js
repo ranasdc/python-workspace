@@ -24,12 +24,29 @@ let inputPos = 0
 const STATE_WAITING = 0
 const STATE_READY = 1
 const STATE_EOF = 2
+// Written by the main thread when the user presses Stop while input() is
+// blocked, so the blocked read wakes up instead of waiting forever.
+const STATE_STOP = 3
 
-async function init(controlSAB, dataSAB) {
+// Pyodide checks this buffer between bytecodes; writing 2 (SIGINT) raises
+// KeyboardInterrupt inside the running program, which is how Stop interrupts
+// infinite loops without tearing down the whole runtime.
+let interruptBuf = null
+
+function stopRequested() {
+  return (interruptBuf && interruptBuf[0] !== 0) || Atomics.load(control, 0) === STATE_STOP
+}
+
+async function init(controlSAB, dataSAB, interruptSAB) {
   control = new Int32Array(controlSAB)
   dataBuf = new Uint8Array(dataSAB)
 
   pyodide = await loadPyodide({ indexURL: PYODIDE_URL })
+
+  if (interruptSAB) {
+    interruptBuf = new Uint8Array(interruptSAB)
+    pyodide.setInterruptBuffer(interruptBuf)
+  }
 
   pyodide.setStdout({
     write: (buf) => {
@@ -55,7 +72,8 @@ async function init(controlSAB, dataSAB) {
         self.postMessage({ type: "input" })
         Atomics.wait(control, 0, STATE_WAITING)
 
-        if (Atomics.load(control, 0) === STATE_EOF) return 0 // EOF
+        const state = Atomics.load(control, 0)
+        if (state === STATE_EOF || state === STATE_STOP) return 0 // EOF
 
         const len = Atomics.load(control, 1)
         const bytes = dataBuf.slice(0, len)
@@ -81,7 +99,7 @@ self.onmessage = async (e) => {
   const msg = e.data
   if (msg.type === "init") {
     try {
-      await init(msg.control, msg.data)
+      await init(msg.control, msg.data, msg.interrupt)
     } catch (err) {
       self.postMessage({ type: "fatal", error: err && err.message ? err.message : String(err) })
     }
@@ -91,15 +109,26 @@ self.onmessage = async (e) => {
     if (!pyodide) return
     inputBuffer = ""
     inputPos = 0
+    if (interruptBuf) interruptBuf[0] = 0
+    Atomics.store(control, 0, STATE_WAITING)
+    let stopped = false
     try {
       await pyodide.runPythonAsync(msg.code)
     } catch (err) {
-      self.postMessage({
-        type: "stderr",
-        text: (err && err.message ? err.message : String(err)) + "\n",
-      })
+      stopped = stopRequested()
+      // The KeyboardInterrupt/EOFError traceback caused by Stop is noise; the
+      // main thread prints a single "Execution stopped by user." instead.
+      if (!stopped) {
+        self.postMessage({
+          type: "stderr",
+          text: (err && err.message ? err.message : String(err)) + "\n",
+        })
+      }
     } finally {
-      self.postMessage({ type: "done" })
+      stopped = stopped || stopRequested()
+      if (interruptBuf) interruptBuf[0] = 0
+      Atomics.store(control, 0, STATE_WAITING)
+      self.postMessage({ type: "done", stopped })
     }
   }
 }
