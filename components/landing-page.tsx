@@ -215,15 +215,15 @@ export function LandingPage() {
                 {s.eyebrow}
               </a>
             ))}
-          <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
-            Pricing
-          </Link>
-          <a href="#ai" className="transition-colors hover:text-foreground">
-            AI powered
-          </a>
-          <a href="#organized" className="transition-colors hover:text-foreground">
-            Always organized
-          </a>
+            <a href="#organized" className="transition-colors hover:text-foreground">
+              Always organized
+            </a>
+            <a href="#ai" className="transition-colors hover:text-foreground">
+              AI powered
+            </a>
+            <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
+              Pricing
+            </Link>
         </nav>
         <div className="flex items-center gap-2">
           <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost">
@@ -361,7 +361,6 @@ export function LandingPage() {
         const flipped = i % 2 === 1
         return (
           <Fragment key={s.id}>
-          {s.id === "organized" && <AiPoweredSection />}
           <section
             id={s.id}
             className="scroll-mt-24 border-t border-border/60 py-20 sm:py-28"
@@ -432,6 +431,7 @@ export function LandingPage() {
               </Reveal>
             </div>
           </section>
+          {s.id === "organized" && <AiPoweredSection />}
           </Fragment>
         )
       })}
@@ -478,8 +478,8 @@ export function LandingPage() {
               links={[
                 { label: "For students", href: "#students" },
                 { label: "For teachers", href: "#teachers" },
-                { label: "AI powered", href: "#ai" },
-                { label: "Always organized", href: "#organized" },
+              { label: "Always organized", href: "#organized" },
+              { label: "AI powered", href: "#ai" },
                 { label: "Pricing", href: "/pricing" },
               ]}
             />
