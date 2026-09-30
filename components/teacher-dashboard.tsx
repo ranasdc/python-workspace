@@ -24,6 +24,7 @@ import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import { getClassTree, setFileStatus } from "@/app/actions/files"
 import { FileComments } from "@/components/file-comments"
 import { TeacherLibrary } from "@/components/teacher-library"
+import { JoinSchoolDialog } from "@/components/join-school-dialog"
 import { ClassAiHelpControl } from "@/components/class-ai-help-control"
 import { TeacherStarters } from "@/components/starters/teacher-starters"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
@@ -55,6 +56,7 @@ import {
   Folder,
   Sparkles,
   Zap,
+  School,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -265,6 +267,16 @@ function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
           >
           Upgrade to Teacher Pro
         </Button>
+        {!schoolUnpaid && (
+          <JoinSchoolDialog
+            trigger={
+              <Button size="sm" variant="outline" className="mt-2 w-full">
+                <School className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Join a school with a code
+              </Button>
+            }
+          />
+        )}
       </div>
     </div>
   )
@@ -802,7 +814,8 @@ function ClassLimitUpgrade() {
       </DialogHeader>
       <p className="text-sm text-muted-foreground text-pretty">
         The free teacher plan includes a single class so you can try everything out.
-        Upgrade to Teacher Pro to run as many classes as you need.
+        Upgrade to Teacher Pro to run as many classes as you need, or join your school
+        with the teacher code from your school administrator.
       </p>
       <ul className="mt-1 flex flex-col gap-2.5">
         {perks.map((perk) => (
@@ -815,6 +828,14 @@ function ClassLimitUpgrade() {
         ))}
       </ul>
       <DialogFooter className="mt-2">
+        <JoinSchoolDialog
+          trigger={
+            <Button variant="outline">
+              <School className="mr-2 h-4 w-4" aria-hidden="true" />
+              Join a school
+            </Button>
+          }
+        />
         <Button render={<Link href="/pricing" />} nativeButton={false}>
           <Sparkles className="mr-2 h-4 w-4" />
           Upgrade to Teacher Pro

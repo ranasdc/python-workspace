@@ -21,7 +21,8 @@ export default async function SchoolPage() {
     <div className="flex min-h-svh flex-col">
       <AppHeader
         name={sessionUser.name}
-        role={sessionUser.role === "teacher" ? "teacher" : "student"}
+        role={sessionUser.role === "teacher" || overview ? "teacher" : "student"}
+        isSchoolAdmin={Boolean(overview)}
       />
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
         {overview ? (

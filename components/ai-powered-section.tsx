@@ -324,7 +324,8 @@ const RESULT_STATES = [
 function ClassResultsMock() {
   const phase = usePhase([2600, 4000], 1)
   const r = RESULT_STATES[phase]
-  const hardest = r.perQuestion.indexOf(Math.min(...r.perQuestion))
+  const scores: readonly number[] = r.perQuestion
+  const hardest = scores.indexOf(Math.min(...scores))
 
   return (
     <Window icon={BarChart3} title="Year 9 · Daily Starter" accent="chart-3" meta={<span className="flex items-center gap-1"><Users className="h-3 w-3" /> 28 students</span>}>

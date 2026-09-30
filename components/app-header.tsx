@@ -1,10 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
-import { LogOut, Zap } from "lucide-react"
+import { BookOpen, Building2, LogOut, Zap } from "lucide-react"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
 import { usePendingStarters } from "@/hooks/use-pending-starters"
@@ -12,11 +12,14 @@ import { usePendingStarters } from "@/hooks/use-pending-starters"
 export function AppHeader({
   name,
   role,
+  isSchoolAdmin = false,
 }: {
   name: string
   role: string
+  isSchoolAdmin?: boolean
 }) {
   const router = useRouter()
+  const onSchoolPage = usePathname().startsWith("/school")
   const newCount = usePendingStarters(role === "student").length
 
   async function handleSignOut() {
@@ -59,6 +62,19 @@ export function AppHeader({
                 </span>
               </>
             )}
+          </Link>
+        )}
+        {isSchoolAdmin && (
+          <Link
+            href={onSchoolPage ? "/teacher" : "/school"}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary ring-1 ring-primary/30 transition-colors hover:bg-primary/15"
+          >
+            {onSchoolPage ? (
+              <BookOpen className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Building2 className="h-4 w-4" aria-hidden="true" />
+            )}
+            {onSchoolPage ? "My classes" : "School admin"}
           </Link>
         )}
         <div className="hidden text-right sm:block">
