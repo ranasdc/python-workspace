@@ -205,14 +205,14 @@ function SchoolPlanCard({ plan, signedIn }: { plan: Plan; signedIn: boolean }) {
       </div>
 
       <Link
-        href={signedIn ? "/school" : "/sign-up"}
+        href={signedIn ? "/school" : "/sign-up?next=/school"}
         className={buttonVariants({
           size: "lg",
           variant: "outline",
           className: "mt-6 w-full",
         })}
       >
-        {signedIn ? "Set up your school" : "Create an account"}
+        Set up your school
       </Link>
 
       <ul className="mt-6 space-y-3">
