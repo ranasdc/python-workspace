@@ -199,11 +199,20 @@ function StarterRunner({ starterId, onBack }: { starterId: number; onBack: () =>
     </div>
   )
 
+  const practiceNotice =
+    data.isPractice && data.recordedAttempt ? (
+      <p className="mt-4 rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">Practice attempt.</span> Your teacher only sees your first
+        score ({data.recordedAttempt.score}/{data.recordedAttempt.total}), so this one won&apos;t change it.
+      </p>
+    ) : null
+
   if (data.result) {
     const pct = Math.round((data.result.score / Math.max(1, data.result.total)) * 100)
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-8">
         {header}
+        {practiceNotice}
         <div className="mt-6 rounded-xl border border-border bg-card p-6 text-center">
           <p className="text-sm text-muted-foreground">{data.title}</p>
           <p className="mt-2 text-5xl font-semibold tabular-nums">
@@ -293,6 +302,7 @@ function StarterRunner({ starterId, onBack }: { starterId: number; onBack: () =>
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       {header}
+      {practiceNotice}
 
       <div className="mt-6 flex items-center gap-1.5" aria-label={`Question ${current + 1} of ${data.questions.length}`}>
         {data.questions.map((x, i) => (

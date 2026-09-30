@@ -63,14 +63,33 @@ function questionsOf(starter: StarterRow) {
   return starter.questions as StarterQuestion[]
 }
 
-/** Per-question class totals. Never includes names. */
+type AttemptFields = Pick<
+  ResponseRow,
+  "answers" | "score" | "total" | "submittedAt" | "firstAnswers" | "firstScore" | "firstTotal" | "firstSubmittedAt"
+>
+
+/** What the teacher sees: the first submitted attempt, or the first attempt still in progress. */
+function firstAttempt(r: AttemptFields) {
+  if (r.firstSubmittedAt) {
+    return {
+      answers: (r.firstAnswers ?? {}) as Record<string, string>,
+      score: r.firstScore,
+      total: r.firstTotal,
+      submittedAt: r.firstSubmittedAt,
+    }
+  }
+  return { answers: r.answers as Record<string, string>, score: r.score, total: r.total, submittedAt: r.submittedAt }
+}
+
+/** Per-question class totals from first attempts. Never includes names. */
 function aggregate(questions: StarterQuestion[], responses: ResponseRow[]) {
+  const attempts = responses.map(firstAttempt)
   return questions.map((q) => {
     let answered = 0
     let correct = 0
     const optionCounts: Record<string, number> = {}
-    for (const r of responses) {
-      const a = (r.answers as Record<string, string>)[q.id]
+    for (const r of attempts) {
+      const a = r.answers[q.id]
       if (a === undefined || a === "") continue
       answered++
       if (isCorrect(q, a)) correct++
@@ -111,12 +130,7 @@ export async function listClassStarters(classId: number) {
   const ids = starters.map((s) => s.id)
   const responses = ids.length
     ? await db
-        .select({
-          starterId: dailyStarterResponses.starterId,
-          score: dailyStarterResponses.score,
-          total: dailyStarterResponses.total,
-          submittedAt: dailyStarterResponses.submittedAt,
-        })
+        .select()
         .from(dailyStarterResponses)
         .where(inArray(dailyStarterResponses.starterId, ids))
     : []
@@ -125,7 +139,10 @@ export async function listClassStarters(classId: number) {
   return {
     enrolled,
     starters: starters.map((s) => {
-      const done = responses.filter((r) => r.starterId === s.id && r.submittedAt)
+      const done = responses
+        .filter((r) => r.starterId === s.id)
+        .map(firstAttempt)
+        .filter((r) => r.submittedAt)
       const avg =
         done.length > 0
           ? Math.round((done.reduce((a, r) => a + (r.score ?? 0) / (r.total || 1), 0) / done.length) * 100)
@@ -234,8 +251,9 @@ export async function getStarterResults(starterId: number) {
     enrolled: students.length,
     students: students
       .map((s) => {
-        const r = responses.find((x) => x.studentId === s.id)
-        const answers = (r?.answers ?? {}) as Record<string, string>
+        const row = responses.find((x) => x.studentId === s.id)
+        const r = row ? firstAttempt(row) : null
+        const answers = r?.answers ?? {}
         return {
           id: s.id,
           name: s.name,
@@ -430,6 +448,9 @@ export type StudentStarterDetail = {
   answers: Record<string, string>
   startedAt: number | null
   serverNow: number
+  /** The first submitted attempt: the only one the teacher sees. */
+  recordedAttempt: null | { score: number; total: number }
+  isPractice: boolean
   result: null | {
     score: number
     total: number
@@ -463,6 +484,12 @@ export async function getStudentStarter(starterId: number): Promise<StudentStart
     answers,
     startedAt: response ? response.startedAt.getTime() : null,
     serverNow: Date.now(),
+    recordedAttempt: response?.firstSubmittedAt
+      ? { score: response.firstScore ?? 0, total: response.firstTotal ?? questions.length }
+      : null,
+    isPractice: Boolean(
+      response?.firstSubmittedAt && response.submittedAt?.getTime() !== response.firstSubmittedAt.getTime(),
+    ),
     result: submitted
       ? {
           score: response!.score ?? 0,
@@ -529,9 +556,13 @@ export async function submitStarter(starterId: number, finalAnswers: Record<stri
       }
     }
     const { score, total } = scoreAnswers(questions, answers)
+    const now = new Date()
+    const first = response.firstSubmittedAt
+      ? {}
+      : { firstAnswers: answers, firstScore: score, firstTotal: total, firstSubmittedAt: now }
     await db
       .update(dailyStarterResponses)
-      .set({ answers, score, total, submittedAt: new Date() })
+      .set({ answers, score, total, submittedAt: now, ...first })
       .where(eq(dailyStarterResponses.id, response.id))
   }
   return getStudentStarter(starterId)
