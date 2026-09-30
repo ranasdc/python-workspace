@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function SchoolPage() {
   const sessionUser = await getSessionUser()
-  if (!sessionUser) redirect("/sign-in")
+  if (!sessionUser) redirect("/sign-in?next=/school")
 
   const overview = await getSchoolOverview()
 

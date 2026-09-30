@@ -16,11 +16,22 @@ import { cn } from "@/lib/utils"
 
 type Mode = "sign-in" | "sign-up"
 
-export function AuthForm({ mode }: { mode: Mode }) {
+/**
+ * Only same-origin paths are followed, so a crafted `?next=` cannot bounce a
+ * freshly signed-in user to another site.
+ */
+function safeNext(next?: string) {
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : null
+}
+
+export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
   const router = useRouter()
+  const destination = safeNext(next)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [role, setRole] = useState<"student" | "teacher">("student")
+  const [role, setRole] = useState<"student" | "teacher">(
+    destination === "/school" ? "teacher" : "student",
+  )
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -61,7 +72,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         const { error } = await authClient.signIn.email({ email, password })
         if (error) throw new Error(error.message || "Invalid email or password")
       }
-      router.push("/dashboard")
+      router.push(destination ?? "/dashboard")
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -169,14 +180,20 @@ export function AuthForm({ mode }: { mode: Mode }) {
         {mode === "sign-up" ? (
           <>
             Already have an account?{" "}
-            <Link href="/sign-in" className="font-medium text-primary hover:underline">
+            <Link
+              href={destination ? `/sign-in?next=${encodeURIComponent(destination)}` : "/sign-in"}
+              className="font-medium text-primary hover:underline"
+            >
               Sign in
             </Link>
           </>
         ) : (
           <>
             {"Don't have an account? "}
-            <Link href="/sign-up" className="font-medium text-primary hover:underline">
+            <Link
+              href={destination ? `/sign-up?next=${encodeURIComponent(destination)}` : "/sign-up"}
+              className="font-medium text-primary hover:underline"
+            >
               Sign up
             </Link>
           </>

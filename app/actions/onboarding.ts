@@ -8,26 +8,6 @@ import { getSessionUser, requireUser } from "@/lib/session"
 import { getEntitlement, getUsage, limitsFor } from "@/lib/entitlements"
 import { getLanguage, toLanguageId, type LanguageId } from "@/lib/ide/languages"
 
-/**
- * Records the student's onboarding choice.
- *
- * This used to be an authorization decision: passing "class" made
- * `canCreateFile` return true unconditionally, so any student could unlock the
- * paid tier with a single action call. `accountType` is now nothing more than a
- * UI preference — entitlements come from `lib/entitlements.ts` alone.
- */
-export async function setAccountType(accountType: "class" | "individual") {
-  const sessionUser = await requireUser()
-  if (accountType !== "class" && accountType !== "individual") {
-    throw new Error("Invalid account type")
-  }
-
-  await db
-    .update(user)
-    .set({ accountType, isFirstLogin: false })
-    .where(eq(user.id, sessionUser.id))
-}
-
 export async function canCreateFile(
   languageInput: LanguageId = "python",
   userId?: string,
