@@ -6,6 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { authClient } from "@/lib/auth-client"
+import { checkExistingAccount } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,6 +32,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
     try {
       if (mode === "sign-up") {
+        const existing = await checkExistingAccount(email)
+        if (existing) {
+          setError(
+            `This email is already associated with a ${existing} account. Please sign in instead.`,
+          )
+          return
+        }
         const { error } = await authClient.signUp.email({
           email,
           password,
@@ -38,7 +46,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
           // custom field registered in lib/auth.ts
           role,
         } as Parameters<typeof authClient.signUp.email>[0])
-        if (error) throw new Error(error.message || "Could not create account")
+        if (error) {
+          if (error.code === "USER_ALREADY_EXISTS" || error.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
+            const role = await checkExistingAccount(email)
+            throw new Error(
+              role
+                ? `This email is already associated with a ${role} account. Please sign in instead.`
+                : "An account with this email already exists. Please sign in instead.",
+            )
+          }
+          throw new Error(error.message || "Could not create account")
+        }
       } else {
         const { error } = await authClient.signIn.email({ email, password })
         if (error) throw new Error(error.message || "Invalid email or password")
