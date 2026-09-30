@@ -1,5 +1,8 @@
+import type { ReactNode } from "react"
 import Link from "next/link"
-import { Check } from "lucide-react"
+import { Check, School } from "lucide-react"
+
+import { JoinSchoolDialog } from "@/components/join-school-dialog"
 
 import { getSessionUser } from "@/lib/session"
 import { getEntitlement } from "@/lib/entitlements"
@@ -77,6 +80,38 @@ export default async function PricingPage() {
           plan={PLANS.teacher_pro}
           signedIn={Boolean(sessionUser)}
           hideCheckout={coveredBySchool}
+          footer={
+            coveredBySchool ? null : (
+              <div className="mt-3 rounded-md border border-dashed border-border px-3 py-3 text-center">
+                <p className="text-sm text-muted-foreground text-pretty">
+                  Does your school already subscribe? Join with the teacher code from your
+                  school administrator to get every Pro feature at no personal cost.
+                </p>
+                {sessionUser ? (
+                  <JoinSchoolDialog
+                    trigger={
+                      <Button variant="outline" size="sm" className="mt-3">
+                        <School className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                        Join a school with a code
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <Link
+                    href="/sign-up"
+                    className={buttonVariants({
+                      variant: "outline",
+                      size: "sm",
+                      className: "mt-3",
+                    })}
+                  >
+                    <School className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Sign up, then join your school
+                  </Link>
+                )}
+              </div>
+            )
+          }
         />
       </section>
 
@@ -106,11 +141,13 @@ function PlanCard({
   signedIn,
   highlighted,
   hideCheckout,
+  footer,
 }: {
   plan: Plan
   signedIn: boolean
   highlighted?: boolean
   hideCheckout?: boolean
+  footer?: ReactNode
 }) {
   return (
     <div
@@ -142,6 +179,7 @@ function PlanCard({
             Create an account
           </Link>
         )}
+        {footer}
       </div>
 
       <ul className="mt-6 space-y-3">

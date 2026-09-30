@@ -144,6 +144,14 @@ export async function joinSchoolWithCode(formData: FormData) {
       throw new Error("That invite code has already been fully used")
     }
 
+    // A teacher redeeming a student code would join as a student and lose
+    // their classes' teacher access, so steer them to the right code.
+    if (invite.role === "student" && me.role === "teacher") {
+      throw new Error(
+        "That's a student code. Ask your school administrator for a teacher code.",
+      )
+    }
+
     const { rows: memberRows } = await client.query(
       `SELECT * FROM "school_member" WHERE "userId" = $1 AND "status" = 'active'`,
       [me.id],
@@ -172,10 +180,13 @@ export async function joinSchoolWithCode(formData: FormData) {
       invite.role === "teacher" ? plan.teacherSeatLimit : plan.studentSeatLimit
 
     if (limit !== null && limit !== undefined) {
+      // Admins teach too, so they occupy one of the teacher seats — this
+      // matches the "x of y teachers" figure on the admin dashboard.
+      const seatRoles = invite.role === "teacher" ? ["teacher", "school_admin"] : ["student"]
       const { rows: usedRows } = await client.query(
         `SELECT COUNT(*)::int AS used FROM "school_member"
-         WHERE "schoolId" = $1 AND "status" = 'active' AND "role" = $2`,
-        [invite.schoolId, invite.role],
+         WHERE "schoolId" = $1 AND "status" = 'active' AND "role" = ANY($2::text[])`,
+        [invite.schoolId, seatRoles],
       )
       if (usedRows[0].used >= limit) {
         throw new Error(
