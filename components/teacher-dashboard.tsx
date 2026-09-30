@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
+import { RunStopButton } from "@/components/run-stop-button"
 import { CodeEditor } from "@/components/code-editor"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { Button } from "@/components/ui/button"
@@ -46,7 +47,6 @@ import {
   FolderTree,
   BookOpen,
   Check,
-  Play,
   Library,
   CheckCircle2,
   Circle,
@@ -291,7 +291,7 @@ function ClassDetail({
 
   const isWeb = language === "html"
 
-  const { status, loadError, awaitingInput, interactive, run, submitInput } = pyodide
+  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = pyodide
 
   // Always read the freshest copy of the selected file from the polled tree so
   // status changes and edits stay in sync.
@@ -439,26 +439,15 @@ function ClassDetail({
                     )}
                     {currentFile.status === "done" ? "Mark unmarked" : "Mark as done"}
                   </Button>
-                  <Button
-                    size="sm"
+                  <RunStopButton
+                    isWeb={isWeb}
+                    status={status}
+                    onRun={handleRun}
+                    onStop={stop}
+                    runLabel="Run"
+                    webLabel="Preview"
                     variant="secondary"
-                    onClick={handleRun}
-                    disabled={!isWeb && (status === "loading" || status === "running")}
-                  >
-                    {!isWeb && status === "loading" ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
-                      </>
-                    ) : !isWeb && status === "running" ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-1.5 h-4 w-4" /> {isWeb ? "Preview" : "Run"}
-                      </>
-                    )}
-                  </Button>
+                  />
                 </div>
               </div>
               <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
