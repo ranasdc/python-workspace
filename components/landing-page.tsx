@@ -1,7 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
+import { Reveal } from "@/components/reveal"
+import { AiPoweredSection } from "@/components/ai-powered-section"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { CodeTransferAnimation } from "@/components/code-transfer-animation"
@@ -65,51 +67,6 @@ function ScrollIndicator() {
           />
         </svg>
       </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Scroll-reveal wrapper: fades + slides children in when they enter   */
-/* the viewport, using IntersectionObserver (no data fetching).        */
-/* ------------------------------------------------------------------ */
-function Reveal({
-  children,
-  className = "",
-  delay = 0,
-}: {
-  children: React.ReactNode
-  className?: string
-  delay?: number
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [shown, setShown] = useState(false)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShown(true)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.15 },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  return (
-    <div
-      ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out ${
-        shown ? "translate-y-0 opacity-100 blur-0" : "translate-y-8 opacity-0 blur-sm"
-      } ${className}`}
-    >
-      {children}
     </div>
   )
 }
@@ -251,14 +208,22 @@ export function LandingPage() {
           <Logo iconClassName="h-9 w-9" textClassName="text-lg" showTagline />
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-          {sections.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="transition-colors hover:text-foreground">
-              {s.eyebrow}
+          {sections
+            .filter((s) => s.id !== "organized")
+            .map((s) => (
+              <a key={s.id} href={`#${s.id}`} className="transition-colors hover:text-foreground">
+                {s.eyebrow}
+              </a>
+            ))}
+            <a href="#organized" className="transition-colors hover:text-foreground">
+              Always organized
             </a>
-          ))}
-          <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
-            Pricing
-          </Link>
+            <a href="#ai" className="transition-colors hover:text-foreground">
+              AI powered
+            </a>
+            <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
+              Pricing
+            </Link>
         </nav>
         <div className="flex items-center gap-2">
           <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost">
@@ -395,8 +360,8 @@ export function LandingPage() {
         const Icon = s.icon
         const flipped = i % 2 === 1
         return (
+          <Fragment key={s.id}>
           <section
-            key={s.id}
             id={s.id}
             className="scroll-mt-24 border-t border-border/60 py-20 sm:py-28"
           >
@@ -466,6 +431,8 @@ export function LandingPage() {
               </Reveal>
             </div>
           </section>
+          {s.id === "organized" && <AiPoweredSection />}
+          </Fragment>
         )
       })}
 
@@ -511,7 +478,8 @@ export function LandingPage() {
               links={[
                 { label: "For students", href: "#students" },
                 { label: "For teachers", href: "#teachers" },
-                { label: "Always organized", href: "#organized" },
+              { label: "Always organized", href: "#organized" },
+              { label: "AI powered", href: "#ai" },
                 { label: "Pricing", href: "/pricing" },
               ]}
             />

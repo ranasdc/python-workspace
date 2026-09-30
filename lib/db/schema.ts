@@ -161,6 +161,22 @@ export const dailyStarterResponses = pgTable(
   }),
 )
 
+// One row per personal workspace per day: only the request that wins the
+// insert generates that day's automatic starter, so concurrent polls never
+// create duplicates or spend the AI call twice.
+export const autoStarterClaims = pgTable(
+  "auto_starter_claim",
+  {
+    id: serial("id").primaryKey(),
+    classId: integer("classId").notNull(),
+    starterDate: text("starterDate").notNull(),
+    claimedAt: timestamp("claimedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqClaim: unique().on(t.classId, t.starterDate),
+  }),
+)
+
 // Separate from responses: opening a starter must not start its timer.
 export const dailyStarterOpens = pgTable(
   "daily_starter_open",
