@@ -5,8 +5,9 @@ import type { RunStatus } from "@/hooks/use-pyodide"
 import { cn } from "@/lib/utils"
 import { Loader2, Play, Square } from "lucide-react"
 
-// One Run control for every IDE surface. While Python code is running the
-// same slot turns into Stop, so the action is always where the user expects.
+// One Run control for every IDE surface. Python files always show Run and Stop
+// side by side so Stop is discoverable even for programs that finish instantly;
+// Stop only becomes active while code is running.
 export function RunStopButton({
   isWeb,
   status,
@@ -28,35 +29,25 @@ export function RunStopButton({
   disabled?: boolean
   className?: string
 }) {
-  if (!isWeb && status === "running") {
-    return (
-      <Button
-        size="sm"
-        variant="destructive"
-        onClick={onStop}
-        title="Stop the running program"
-        aria-label="Stop the running program"
-        className={cn("min-w-24", className)}
-      >
-        <Square className="mr-1.5 h-3.5 w-3.5 fill-current" /> Stop
-      </Button>
-    )
-  }
-
+  const running = !isWeb && status === "running"
   const loading = !isWeb && status === "loading"
 
-  return (
+  const runButton = (
     <Button
       size="sm"
       variant={variant}
       onClick={onRun}
-      disabled={disabled || loading}
+      disabled={disabled || loading || running}
       title={isWeb ? "Render your page" : "Run your code"}
-      className={cn("min-w-24", className)}
+      className={cn("min-w-24", isWeb && className)}
     >
       {loading ? (
         <>
           <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Loading Python
+        </>
+      ) : running ? (
+        <>
+          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Running
         </>
       ) : (
         <>
@@ -64,5 +55,23 @@ export function RunStopButton({
         </>
       )}
     </Button>
+  )
+
+  if (isWeb) return runButton
+
+  return (
+    <div className={cn("flex items-center gap-2", className)}>
+      {runButton}
+      <Button
+        size="sm"
+        variant={running ? "destructive" : "outline"}
+        onClick={onStop}
+        disabled={!running}
+        title={running ? "Stop the running program" : "Nothing is running"}
+        aria-label="Stop the running program"
+      >
+        <Square className="mr-1.5 h-3.5 w-3.5 fill-current" /> Stop
+      </Button>
+    </div>
   )
 }
