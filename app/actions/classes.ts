@@ -392,6 +392,7 @@ export async function getStudentClasses() {
       description: classes.description,
       joinCode: classes.joinCode,
       teacherId: classes.teacherId,
+      isPersonal: classes.isPersonal,
     })
     .from(enrollments)
     .innerJoin(classes, eq(enrollments.classId, classes.id))
