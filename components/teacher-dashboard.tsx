@@ -120,7 +120,7 @@ export function TeacherDashboard({
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
   )
-  const [view, setView] = useState<"classes" | "library" | "starters">("classes")
+  const [view, setView] = useState<"classes" | "library">("classes")
 
   // Load the Python runtime once for the whole dashboard so switching between
   // student files doesn't re-download Pyodide each time.
@@ -160,15 +160,6 @@ export function TeacherDashboard({
             )}
           >
             <Library className="h-4 w-4" /> Library
-          </button>
-          <button
-            onClick={() => setView("starters")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-              view === "starters" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            <Zap className="h-4 w-4" /> Starters
           </button>
         </div>
 
@@ -225,9 +216,7 @@ export function TeacherDashboard({
 
       {/* Main area: class detail or the teacher's library */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {view === "starters" ? (
-          <TeacherStarters classes={list.map((c) => ({ id: c.id, name: c.name }))} />
-        ) : view === "library" ? (
+        {view === "library" ? (
           <TeacherLibrary classes={list} />
         ) : activeClass ? (
           <div className="min-h-0 flex-1 overflow-auto">
@@ -288,6 +277,7 @@ function ClassDetail({
   cls: ClassWithStudents
   pyodide: ReturnType<typeof usePyodide>
 }) {
+  const [tab, setTab] = useState<"work" | "starters">("work")
   // Teachers review one IDE at a time, mirroring how pupils work in it.
   const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
   const treeKey = ["class-tree", cls.id, language]
@@ -389,8 +379,34 @@ function ClassDetail({
             <JoinCodeBadge code={cls.joinCode} />
           </div>
         </div>
+        <div role="tablist" aria-label="Class sections" className="-mb-4 mt-3 flex gap-5">
+          {(
+            [
+              { id: "work", label: "Student work", icon: FileCode },
+              { id: "starters", label: "Starters", icon: Zap },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "flex items-center gap-1.5 border-b-2 pb-2.5 text-sm font-medium transition-colors",
+                tab === t.id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <t.icon className="h-4 w-4" /> {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {tab === "starters" ? (
+        <TeacherStarters classId={cls.id} />
+      ) : (
       <div className="grid flex-1 gap-0 lg:grid-cols-[minmax(260px,340px)_1fr]">
         {/* Tree */}
         <div className="border-b border-border p-3 lg:border-b-0 lg:border-r">
@@ -516,6 +532,7 @@ function ClassDetail({
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }

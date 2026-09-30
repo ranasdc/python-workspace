@@ -12,25 +12,10 @@ import { deleteStarter, listClassStarters, setStarterAssigned } from "@/app/acti
 import { StarterComposer, type ComposerInitial } from "@/components/starters/starter-composer"
 import { StarterResults } from "@/components/starters/starter-results"
 
-type ClassOption = { id: number; name: string }
-
-export function TeacherStarters({ classes }: { classes: ClassOption[] }) {
-  const [classId, setClassId] = useState<number | null>(classes[0]?.id ?? null)
-  const { data, mutate } = useSWR(classId ? ["class-starters", classId] : null, () => listClassStarters(classId!))
+export function TeacherStarters({ classId }: { classId: number }) {
+  const { data, mutate } = useSWR(["class-starters", classId], () => listClassStarters(classId))
   const [composer, setComposer] = useState<{ key: number; initial: ComposerInitial | null } | null>(null)
   const [resultsId, setResultsId] = useState<number | null>(null)
-
-  if (classes.length === 0) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="max-w-sm text-center">
-          <Zap className="mx-auto h-8 w-8 text-primary" />
-          <h2 className="mt-3 text-lg font-semibold">Create a class first</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Daily Starters are assigned to a class.</p>
-        </div>
-      </div>
-    )
-  }
 
   async function toggleAssign(id: number, assign: boolean) {
     const r = await setStarterAssigned(id, assign)
@@ -50,29 +35,16 @@ export function TeacherStarters({ classes }: { classes: ClassOption[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+      <div className="mx-auto w-full max-w-5xl px-6 py-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-balance">Daily Starters</h1>
+            <h2 className="text-lg font-semibold text-balance">Daily Starters</h2>
             <p className="mt-1 text-sm text-muted-foreground text-pretty">
               Five quick questions to open every lesson. Present live, or let students take them on
               their own.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <label htmlFor="starter-class" className="sr-only">Class</label>
-            <select
-              id="starter-class"
-              value={classId ?? ""}
-              onChange={(e) => setClassId(Number(e.target.value))}
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
             <Button onClick={() => setComposer({ key: Date.now(), initial: null })}>
               <Plus className="mr-1.5 h-4 w-4" /> New starter
             </Button>
