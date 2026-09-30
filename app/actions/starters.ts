@@ -22,6 +22,8 @@ import {
   type StarterQuestion,
 } from "@/lib/daily-starter"
 import { toLanguageId } from "@/lib/ide/languages"
+import { after } from "next/server"
+import { ensureTodaysAutoStarter, getAutoStarterClass } from "@/lib/auto-starters"
 
 // Small grace so network latency never costs a student their last answer.
 const SUBMIT_GRACE_MS = 15000
@@ -322,12 +324,25 @@ export type StudentStarterSummary = {
   warmupActive: boolean
 }
 
+/**
+ * Classes whose starters a student sees. Individual Student Pro learners have
+ * no teacher, so their personal workspace receives an automatic daily starter.
+ */
+async function starterClassesFor(userId: string) {
+  const teacherClasses = await getStudentTeacherClassIds(userId)
+  if (teacherClasses.length > 0) return { classRows: teacherClasses, autoClass: null }
+  const autoClass = await getAutoStarterClass(userId)
+  return { classRows: autoClass ? [autoClass] : [], autoClass }
+}
+
 export async function getStudentStarters() {
   const me = await requireUser()
-  const classRows = await getStudentTeacherClassIds(me.id)
-  if (classRows.length === 0) return { today: [], history: [] }
+  const { classRows, autoClass } = await starterClassesFor(me.id)
+  if (classRows.length === 0) return { today: [], history: [], preparing: false }
 
   const today = todayInSchoolTime()
+  // Generation can take a few seconds; never hold the page up for it.
+  if (autoClass) after(() => ensureTodaysAutoStarter(me.id, autoClass.id))
   const starters = await db
     .select()
     .from(dailyStarters)
@@ -370,9 +385,11 @@ export async function getStudentStarters() {
     }
   })
 
+  const todaySummaries = summaries.filter((s) => s.starterDate === today || s.warmupActive)
   return {
-    today: summaries.filter((s) => s.starterDate === today || s.warmupActive),
+    today: todaySummaries,
     history: summaries.filter((s) => s.starterDate !== today && !s.warmupActive),
+    preparing: Boolean(autoClass) && todaySummaries.length === 0,
   }
 }
 
@@ -387,8 +404,11 @@ export type PendingStarter = {
 /** Today's starters the student has not opened yet. Drives the banner and header highlight. */
 export async function getPendingStarters(): Promise<PendingStarter[]> {
   const me = await requireUser()
-  const classRows = await getStudentTeacherClassIds(me.id)
+  const { classRows, autoClass } = await starterClassesFor(me.id)
   if (classRows.length === 0) return []
+
+  // This is a background poll, so it can wait for the first generation of the day.
+  if (autoClass) await ensureTodaysAutoStarter(me.id, autoClass.id)
 
   const today = todayInSchoolTime()
   const starters = await db

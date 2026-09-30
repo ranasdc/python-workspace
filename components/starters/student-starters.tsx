@@ -46,7 +46,14 @@ export function StudentStarters({ initialOpenId = null }: { initialOpenId?: numb
         <h2 id="today" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Today</h2>
         <div className="mt-3 flex flex-col gap-3">
           {!data && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
-          {data?.today.length === 0 && (
+          {data?.today.length === 0 && data.preparing && (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center" role="status">
+              <Loader2 className="mx-auto h-7 w-7 animate-spin text-primary" />
+              <p className="mt-3 font-medium">Preparing today&apos;s starter</p>
+              <p className="mt-1 text-sm text-muted-foreground">Your daily warm-up will appear here in a moment.</p>
+            </div>
+          )}
+          {data?.today.length === 0 && !data.preparing && (
             <div className="rounded-xl border border-dashed border-border p-8 text-center">
               <Zap className="mx-auto h-7 w-7 text-primary" />
               <p className="mt-3 font-medium">No starter today</p>
