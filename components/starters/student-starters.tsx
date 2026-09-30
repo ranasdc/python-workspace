@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
+import { PENDING_STARTERS_KEY } from "@/hooks/use-pending-starters"
 import { toast } from "sonner"
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Loader2, Play, Presentation, RotateCcw, Timer, Zap } from "lucide-react"
 
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils"
 import {
   getStudentStarter,
   getStudentStarters,
+  markStarterOpened,
   retakeStarter,
   saveStarterAnswer,
   startStarter,
@@ -19,8 +21,8 @@ import {
 } from "@/app/actions/starters"
 import { QuestionView } from "@/components/starters/question-view"
 
-export function StudentStarters() {
-  const [openId, setOpenId] = useState<number | null>(null)
+export function StudentStarters({ initialOpenId = null }: { initialOpenId?: number | null }) {
+  const [openId, setOpenId] = useState<number | null>(initialOpenId)
   const { data, mutate } = useSWR("student-starters", () => getStudentStarters(), { refreshInterval: 15000 })
 
   if (openId !== null) {
@@ -110,6 +112,7 @@ function StarterRunner({ starterId, onBack }: { starterId: number; onBack: () =>
   const { data, mutate } = useSWR(["student-starter", starterId], () => getStudentStarter(starterId), {
     refreshInterval: (d?: StudentStarterDetail) => (d?.warmup.active && !d.result ? 2000 : 0),
   })
+  const { mutate: mutatePending } = useSWRConfig()
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [index, setIndex] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -126,6 +129,12 @@ function StarterRunner({ starterId, onBack }: { starterId: number; onBack: () =>
       seeded.current = true
     }
   }, [data])
+
+  useEffect(() => {
+    markStarterOpened(starterId)
+      .then(() => mutatePending(PENDING_STARTERS_KEY))
+      .catch(() => {})
+  }, [starterId, mutatePending])
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500)

@@ -15,6 +15,7 @@ import {
 } from "@/lib/ide/languages"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
+import { StarterBanner } from "@/components/starters/starter-banner"
 import { ErrorHelper } from "@/components/error-helper"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -571,6 +572,7 @@ export function StudentWorkspace({
 
       {/* Editor + console */}
       <div className="flex min-h-0 flex-1 flex-col">
+        <StarterBanner />
         <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
             {activeFile ? (

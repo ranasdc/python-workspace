@@ -3,7 +3,7 @@
 import { and, desc, eq, inArray, lte } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { dailyStarters, dailyStarterResponses, enrollments, user } from "@/lib/db/schema"
+import { dailyStarterOpens, dailyStarters, dailyStarterResponses, enrollments, user } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import {
   assertStudentInClass,
@@ -356,6 +356,67 @@ export async function getStudentStarters() {
     today: summaries.filter((s) => s.starterDate === today || s.warmupActive),
     history: summaries.filter((s) => s.starterDate !== today && !s.warmupActive),
   }
+}
+
+export type PendingStarter = {
+  id: number
+  title: string
+  className: string
+  questionCount: number
+  timeLimitSeconds: number
+}
+
+/** Today's starters the student has not opened yet. Drives the banner and header highlight. */
+export async function getPendingStarters(): Promise<PendingStarter[]> {
+  const me = await requireUser()
+  const classRows = await getStudentTeacherClassIds(me.id)
+  if (classRows.length === 0) return []
+
+  const today = todayInSchoolTime()
+  const starters = await db
+    .select()
+    .from(dailyStarters)
+    .where(
+      and(
+        inArray(dailyStarters.classId, classRows.map((c) => c.id)),
+        eq(dailyStarters.status, "assigned"),
+        lte(dailyStarters.starterDate, today),
+      ),
+    )
+    .orderBy(desc(dailyStarters.starterDate), desc(dailyStarters.id))
+    .limit(20)
+
+  const current = starters.filter((s) => s.starterDate === today || s.warmupActive)
+  if (current.length === 0) return []
+  const ids = current.map((s) => s.id)
+
+  const [opens, responses] = await Promise.all([
+    db
+      .select({ starterId: dailyStarterOpens.starterId })
+      .from(dailyStarterOpens)
+      .where(and(eq(dailyStarterOpens.studentId, me.id), inArray(dailyStarterOpens.starterId, ids))),
+    db
+      .select({ starterId: dailyStarterResponses.starterId })
+      .from(dailyStarterResponses)
+      .where(and(eq(dailyStarterResponses.studentId, me.id), inArray(dailyStarterResponses.starterId, ids))),
+  ])
+  const seen = new Set([...opens, ...responses].map((r) => r.starterId))
+
+  return current
+    .filter((s) => !seen.has(s.id))
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      className: classRows.find((c) => c.id === s.classId)?.name ?? "",
+      questionCount: questionsOf(s).length,
+      timeLimitSeconds: s.timeLimitSeconds,
+    }))
+}
+
+export async function markStarterOpened(starterId: number) {
+  const me = await requireUser()
+  await loadAssignedStarterForStudent(me.id, starterId)
+  await db.insert(dailyStarterOpens).values({ starterId, studentId: me.id }).onConflictDoNothing()
 }
 
 export type StudentStarterDetail = {

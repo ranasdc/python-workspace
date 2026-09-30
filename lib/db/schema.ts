@@ -156,6 +156,20 @@ export const dailyStarterResponses = pgTable(
   }),
 )
 
+// Separate from responses: opening a starter must not start its timer.
+export const dailyStarterOpens = pgTable(
+  "daily_starter_open",
+  {
+    id: serial("id").primaryKey(),
+    starterId: integer("starterId").notNull(),
+    studentId: text("studentId").notNull(),
+    openedAt: timestamp("openedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqOpen: unique().on(t.starterId, t.studentId),
+  }),
+)
+
 // Failed join-code attempts. Durable because the throttle guards a bearer
 // credential and must hold across serverless instances and cold starts.
 export const joinAttempts = pgTable("join_attempt", {
