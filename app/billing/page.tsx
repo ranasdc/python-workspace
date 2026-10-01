@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { getSessionUser } from "@/lib/session"
 import { getBillingOverview } from "@/app/actions/billing"
-import { PLANS, formatPrice } from "@/lib/plans"
+import { FREE_ALLOWANCE, PLANS, formatPrice } from "@/lib/plans"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -39,8 +39,14 @@ export default async function BillingPage() {
   const home = me.role === "teacher" ? "/teacher" : "/student"
   const renewsOn = formatDate(entitlement.currentPeriodEnd)
 
+  // Someone else's plan is not a plan of your own: a pupil covered by their
+  // teacher resolves to the Student Pro tier, but has bought nothing, so no
+  // price or renewal date here belongs to them.
+  const coveredByOthers =
+    entitlement.source === "school" || entitlement.source === "teacher"
+
   const paidPlan =
-    entitlement.plan !== "free" && entitlement.plan !== "school"
+    !coveredByOthers && entitlement.plan !== "free" && entitlement.plan !== "school"
       ? PLANS[entitlement.plan]
       : null
 
@@ -64,14 +70,19 @@ export default async function BillingPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>
-                {entitlement.plan === "school"
+                {entitlement.source === "school"
                   ? "Covered by your school"
-                  : (paidPlan?.name ?? "Free")}
+                  : entitlement.source === "teacher"
+                    ? "Covered by your teacher"
+                    : (paidPlan?.name ?? "Free")}
               </CardTitle>
               <CardDescription className="mt-1">
-                {entitlement.plan === "school"
+                {entitlement.source === "school"
                   ? "Your school pays for this. You will never be charged."
-                  : (paidPlan?.blurb ?? "Two files and one folder, free forever.")}
+                  : entitlement.source === "teacher"
+                    ? `${entitlement.coveredByTeacherName ?? "Your teacher"} pays for Teacher Pro, which covers everyone they teach. You will never be charged.`
+                    : (paidPlan?.blurb ??
+                      `${FREE_ALLOWANCE.student}, free forever.`)}
               </CardDescription>
             </div>
             <Badge variant={entitlement.isPro ? "default" : "secondary"}>
@@ -90,7 +101,9 @@ export default async function BillingPage() {
             </div>
           ) : null}
 
-          {renewsOn ? (
+          {/* A teacher's renewal date and cancellation state are that teacher's
+              business, so neither is presented here as if it were the pupil's. */}
+          {renewsOn && entitlement.source !== "teacher" ? (
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">
                 {entitlement.cancelAtPeriodEnd ? "Access ends" : "Renews on"}
@@ -99,10 +112,26 @@ export default async function BillingPage() {
             </div>
           ) : null}
 
-          {entitlement.cancelAtPeriodEnd ? (
+          {entitlement.cancelAtPeriodEnd && entitlement.source !== "teacher" ? (
             <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground">
               This subscription is set to cancel. You keep full access until the date
               above.
+            </p>
+          ) : null}
+
+          {entitlement.source === "teacher" ? (
+            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground">
+              Pro lasts as long as you are in their class and their plan stays active.
+              If either changes you drop back to the free tier —{" "}
+              {FREE_ALLOWANCE.student} — and can subscribe yourself at any time.
+            </p>
+          ) : null}
+
+          {entitlement.source === "individual" && entitlement.coveredByTeacherName ? (
+            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground">
+              {entitlement.coveredByTeacherName}&apos;s Teacher Pro plan already covers
+              you while you are in their class, so this subscription is paying for
+              access you currently get free. Cancel it and you keep every Pro feature.
             </p>
           ) : null}
 
@@ -114,27 +143,33 @@ export default async function BillingPage() {
           ) : null}
         </CardContent>
 
-        <CardFooter className="flex flex-wrap gap-3">
-          {/* A school-covered member has nothing of their own to manage. */}
-          {entitlement.source === "school" ? (
-            <Link href="/school" className={buttonVariants({ variant: "outline" })}>
-              View your school
-            </Link>
-          ) : (
-            <>
-              {hasBillingAccount ? (
-                <ManageBillingButton variant={entitlement.isPro ? "default" : "outline"}>
-                  {entitlement.isPro ? "Manage or cancel" : "Manage billing"}
-                </ManageBillingButton>
-              ) : null}
-              {!entitlement.isPro ? (
-                <Link href="/pricing" className={buttonVariants()}>
-                  See plans
-                </Link>
-              ) : null}
-            </>
-          )}
-        </CardFooter>
+        {/* A pupil covered by their teacher has nothing of their own to
+            manage, and no school page to look at, so the footer goes away. */}
+        {entitlement.source === "teacher" ? null : (
+          <CardFooter className="flex flex-wrap gap-3">
+            {/* A school-covered member has nothing of their own to manage. */}
+            {entitlement.source === "school" ? (
+              <Link href="/school" className={buttonVariants({ variant: "outline" })}>
+                View your school
+              </Link>
+            ) : (
+              <>
+                {hasBillingAccount ? (
+                  <ManageBillingButton
+                    variant={entitlement.isPro ? "default" : "outline"}
+                  >
+                    {entitlement.isPro ? "Manage or cancel" : "Manage billing"}
+                  </ManageBillingButton>
+                ) : null}
+                {!entitlement.isPro ? (
+                  <Link href="/pricing" className={buttonVariants()}>
+                    See plans
+                  </Link>
+                ) : null}
+              </>
+            )}
+          </CardFooter>
+        )}
       </Card>
     </main>
   )

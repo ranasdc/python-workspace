@@ -1,67 +1,66 @@
 "use client"
 
-import Link from "next/link"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useRouter } from "next/navigation"
+
 import { Button } from "@/components/ui/button"
-import { Check } from "lucide-react"
-import { CheckoutButton } from "@/components/checkout-button"
-import { PLANS, formatPrice } from "@/lib/plans"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { PlanChoice } from "@/components/plan-choice"
 
 interface SubscriptionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  limitType?: "file" | "folder"
+  /** Set when the prompt follows a blocked action rather than the Upgrade button. */
+  limitType?: "file" | "folder" | null
+  /** Called once the student's access has actually changed. */
+  onUnlocked?: () => void
 }
 
-export function SubscriptionModal({ open, onOpenChange, limitType }: SubscriptionModalProps) {
-  const plan = PLANS.student_pro
+/**
+ * The upgrade prompt for a free student. It offers the same two routes as the
+ * welcome screen — a class code from their teacher, or Student Pro — because a
+ * pupil whose school already pays should never be asked for money.
+ */
+export function SubscriptionModal({
+  open,
+  onOpenChange,
+  limitType,
+  onUnlocked,
+}: SubscriptionModalProps) {
+  const router = useRouter()
+
+  const description =
+    limitType === "file"
+      ? "You've reached your file limit. There are two ways to unlock unlimited files and folders."
+      : limitType === "folder"
+        ? "You've reached your folder limit. There are two ways to unlock unlimited files and folders."
+        : "Two ways to unlock unlimited files and folders in every IDE."
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Upgrade to {plan.name}</DialogTitle>
-          <DialogDescription>
-            {limitType === "file"
-              ? "You've reached your file limit. Upgrade to create unlimited files and folders."
-              : "You've reached your folder limit. Upgrade to create unlimited files and folders."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="py-6">
-          <div className="rounded-lg border-2 border-primary bg-card p-6">
-            <h3 className="text-lg font-semibold">{plan.name}</h3>
-            <div className="mt-2 flex items-baseline gap-1">
-              <span className="text-4xl font-bold">{formatPrice(plan.priceInPence)}</span>
-              <span className="text-sm text-muted-foreground">/{plan.interval}</span>
-            </div>
-            <CheckoutButton planId={plan.id} className="mt-6 w-full">
-              Upgrade to {plan.name}
-            </CheckoutButton>
-            <div className="mt-6 space-y-3">
-              {plan.features.map((feature) => (
-                <div key={feature} className="flex items-start gap-3">
-                  <Check className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
-                  <span className="text-sm">{feature}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground text-pretty">
-            Part of a school?{" "}
-            <Link href="/pricing" className="font-medium text-primary hover:underline">
-              School plans give every student Pro
-            </Link>{" "}
-            at no cost to you.
-          </p>
-        </div>
-
-        <div className="border-t border-border pt-6">
-          <Button variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
-            Maybe later
-          </Button>
-        </div>
+      <DialogContent className="sm:max-w-2xl">
+        {/* Remounted per opening so a half-finished code entry is never the
+            first thing the student sees next time. */}
+        <PlanChoice
+          key={open ? "open" : "closed"}
+          role="student"
+          title="Unlock the full workspace"
+          description={description}
+          onJoined={() => {
+            onOpenChange(false)
+            onUnlocked?.()
+            router.refresh()
+          }}
+          footer={(busy) => (
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={busy}
+              onClick={() => onOpenChange(false)}
+            >
+              Maybe later
+            </Button>
+          )}
+        />
       </DialogContent>
     </Dialog>
   )

@@ -27,6 +27,16 @@ export type Plan = {
 
 export const CURRENCY = "gbp"
 
+/**
+ * What the free tier actually gives each kind of user, phrased for display.
+ * Kept beside the paid plans so every screen that has to say "you are still on
+ * the free tier" describes it in exactly the same words.
+ */
+export const FREE_ALLOWANCE: Record<"student" | "teacher", string> = {
+  student: "1 folder and 2 files in each IDE",
+  teacher: "1 class with up to 5 students",
+}
+
 export const PLANS: Record<PlanId, Plan> = {
   student_pro: {
     id: "student_pro",
@@ -52,6 +62,7 @@ export const PLANS: Record<PlanId, Plan> = {
     blurb: "For individual teachers running their own classes.",
     features: [
       "Unlimited classes and students",
+      "Every student you teach gets Pro, free",
       "Reusable lesson library",
       "Marking and feedback tools",
       "AI assisted learning for your class",

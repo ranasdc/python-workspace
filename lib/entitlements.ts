@@ -1,7 +1,7 @@
 import "server-only"
 
 import { cache } from "react"
-import { and, count, eq, gte } from "drizzle-orm"
+import { and, count, eq, gte, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
@@ -27,7 +27,7 @@ import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 // through the onboarding action, so they carry no authority.
 
 export type EntitlementPlan = "free" | "student_pro" | "teacher_pro" | "school"
-export type EntitlementSource = "school" | "individual" | "free"
+export type EntitlementSource = "school" | "teacher" | "individual" | "free"
 export type SchoolRole = "student" | "teacher" | "school_admin"
 
 export type Limits = {
@@ -173,8 +173,84 @@ export type Entitlement = {
   schoolRole: SchoolRole | null
   /** True when the user belongs to a school whose plan is not currently paid. */
   schoolUnpaid: boolean
+  /**
+   * Name of the teacher whose Teacher Pro plan covers this pupil, or null.
+   *
+   * Set whenever such a teacher exists, not only when they are the winning
+   * source, so a pupil paying for Student Pro can be told they are buying
+   * access they already have.
+   */
+  coveredByTeacherName: string | null
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd: boolean
+}
+
+/**
+ * Pro reaching a pupil through the teacher who owns one of their classes.
+ *
+ * A teacher paying for Teacher Pro extends the student-side Pro features to
+ * everyone they teach, exactly as a school plan does for its pupils. Only
+ * `teacher_pro` carries this: a teacher who happens to hold Student Pro is
+ * paying for their own workspace and covers nobody.
+ *
+ * The owner's billing row is read directly rather than by recursing into
+ * `getEntitlement`, which could otherwise loop forever between two accounts
+ * that had each joined the other's class.
+ */
+async function findCoveringTeacherPlan(studentId: string) {
+  const candidates = await db
+    .selectDistinct({
+      teacherId: classes.teacherId,
+      teacherName: user.name,
+      status: subscriptions.status,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
+      cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+      stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+    })
+    .from(enrollments)
+    .innerJoin(classes, eq(classes.id, enrollments.classId))
+    .innerJoin(subscriptions, eq(subscriptions.userId, classes.teacherId))
+    .innerJoin(user, eq(user.id, classes.teacherId))
+    .where(
+      and(
+        eq(enrollments.studentId, studentId),
+        // A personal workspace is the teacher's own sandbox rather than a
+        // class they teach, so it passes coverage to nobody.
+        eq(classes.isPersonal, false),
+        eq(subscriptions.plan, "teacher_pro"),
+        inArray(subscriptions.status, [...ACTIVE_STATUSES]),
+      ),
+    )
+
+  // `status` can be stale, so each candidate still has to survive the same
+  // liveness check an individual subscription gets.
+  for (const candidate of candidates) {
+    const live = await resolveLiveRow(candidate, async () => {
+      const [fresh] = await db
+        .select({
+          teacherId: subscriptions.userId,
+          teacherName: user.name,
+          status: subscriptions.status,
+          currentPeriodEnd: subscriptions.currentPeriodEnd,
+          cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+          stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+        })
+        .from(subscriptions)
+        .innerJoin(user, eq(user.id, subscriptions.userId))
+        .where(
+          and(
+            eq(subscriptions.userId, candidate.teacherId),
+            eq(subscriptions.plan, "teacher_pro"),
+          ),
+        )
+        .limit(1)
+      return fresh
+    })
+
+    if (live) return live
+  }
+
+  return null
 }
 
 /**
@@ -183,8 +259,11 @@ export type Entitlement = {
  * Order matters and is deliberate:
  *   1. An active school plan wins. A school student must never be shown or
  *      charged for an individual upgrade.
- *   2. Otherwise an active individual subscription.
- *   3. Otherwise free tier.
+ *   2. Otherwise an active individual subscription. This outranks teacher
+ *      coverage so that someone who pays keeps their own billing state on
+ *      show, and keeps the ability to manage it.
+ *   3. Otherwise cover inherited from a teacher on Teacher Pro.
+ *   4. Otherwise free tier.
  *
  * Wrapped in React `cache` so a single request resolves it once.
  */
@@ -206,6 +285,7 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
     schoolId: null as number | null,
     schoolRole: null as SchoolRole | null,
     schoolUnpaid: false,
+    coveredByTeacherName: null as string | null,
     currentPeriodEnd: null as Date | null,
     cancelAtPeriodEnd: false,
   }
@@ -282,7 +362,18 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
         .limit(1)
     )[0]
 
-  const individual = await resolveLiveRow(await readIndividual(), readIndividual)
+  // Teacher coverage is resolved even when the pupil pays for themselves, so
+  // the billing page can point out that they are buying what they already get.
+  // Teaching accounts are skipped: they never enrol as pupils, and inherited
+  // cover must not be able to reach the teacher-side limits.
+  const [individualRow, covering] = await Promise.all([
+    readIndividual(),
+    isTeacher ? Promise.resolve(null) : findCoveringTeacherPlan(userId),
+  ])
+
+  base.coveredByTeacherName = covering?.teacherName ?? null
+
+  const individual = await resolveLiveRow(individualRow, readIndividual)
 
   if (individual) {
     return finalise({
@@ -291,6 +382,19 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
       isPro: true,
       currentPeriodEnd: individual.currentPeriodEnd,
       cancelAtPeriodEnd: individual.cancelAtPeriodEnd,
+    })
+  }
+
+  if (covering) {
+    return finalise({
+      // Student-side Pro only. Deliberately not `teacher_pro`: that tier is
+      // what lifts the teaching limits, and lending it to a pupil would hand
+      // them the owner's unlimited classes and library.
+      plan: "student_pro",
+      source: "teacher",
+      isPro: true,
+      currentPeriodEnd: covering.currentPeriodEnd,
+      cancelAtPeriodEnd: covering.cancelAtPeriodEnd,
     })
   }
 

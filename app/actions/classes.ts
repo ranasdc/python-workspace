@@ -187,7 +187,19 @@ async function callerIp() {
  * class (and on the school's plan when one applies), so two pupils claiming the
  * last seat at the same instant cannot both succeed.
  */
-export async function joinClass(formData: FormData) {
+/**
+ * Where a pupil's access stands immediately after joining.
+ *
+ * `school`     the class belongs to a school with a live plan, so Pro is on.
+ * `teacher`    the class owner pays for Teacher Pro, which covers their pupils.
+ * `individual` they already pay for Student Pro themselves.
+ * `none`       they joined, but nothing covers them and they stay on free.
+ */
+export type ClassAccess = "school" | "teacher" | "individual" | "none"
+
+export type JoinClassResult = typeof classes.$inferSelect & { access: ClassAccess }
+
+export async function joinClass(formData: FormData): Promise<JoinClassResult> {
   const student = await requireUser()
 
   const ip = await callerIp()
@@ -341,7 +353,21 @@ export async function joinClass(formData: FormData) {
 
     revalidatePath("/student")
     revalidatePath("/school")
-    return target as typeof classes.$inferSelect
+
+    // Holding a valid code is not the same as being entitled. Pro reaches a
+    // pupil either through a paying school, or through a class owner on
+    // Teacher Pro, whose plan covers everyone they teach. Both were resolved
+    // before the transaction opened.
+    const access: ClassAccess =
+      target.schoolId !== null
+        ? "school"
+        : owner.plan === "teacher_pro" && owner.source === "individual"
+          ? "teacher"
+          : mine.isPro
+            ? "individual"
+            : "none"
+
+    return { ...(target as typeof classes.$inferSelect), access }
   } catch (error) {
     await client.query("ROLLBACK")
     throw error
