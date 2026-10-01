@@ -10,11 +10,12 @@ import type { JoinClassResult } from "@/app/actions/classes"
 /**
  * Tell a pupil what joining a class actually got them.
  *
- * Every join succeeds the same way, but only a class inside a paying school
- * unlocks Pro. A flat "you've joined" in the other case leaves the pupil to
- * discover the free-tier limits on their own and blame the product for them,
- * so that outcome gets a full card instead of a line of text: it names the
- * reason, states the allowance they are left on, and offers the ways out.
+ * Every join succeeds the same way, but Pro only follows when someone is
+ * paying: a school on a plan, or the class owner on Teacher Pro. A flat
+ * "you've joined" otherwise leaves the pupil to discover the free-tier limits
+ * on their own and blame the product for them, so that outcome gets a full
+ * card instead of a line of text: it names the reason, states the allowance
+ * they are left on, and points at the two people who can change it.
  */
 export function showClassJoinedToast(
   joined: JoinClassResult,
@@ -24,6 +25,14 @@ export function showClassJoinedToast(
     toast.success(`You've joined ${joined.name}.`, {
       description:
         "Your school's plan covers you, so every Pro feature is unlocked at no cost.",
+    })
+    return
+  }
+
+  if (joined.access === "teacher") {
+    toast.success(`You've joined ${joined.name}.`, {
+      description:
+        "Your teacher's Teacher Pro plan covers everyone they teach, so every Pro feature is unlocked at no cost to you.",
     })
     return
   }
@@ -48,12 +57,13 @@ export function showClassJoinedToast(
             You&apos;ve joined {joined.name}, but Pro isn&apos;t included
           </p>
           <p className="text-sm text-muted-foreground text-pretty">
-            This class isn&apos;t covered by a school plan, so you stay on the free
-            tier: {FREE_ALLOWANCE.student}.
+            Neither a teacher nor a school plan covers this class, so you stay on
+            the free tier: {FREE_ALLOWANCE.student}.
           </p>
           <p className="text-sm text-muted-foreground text-pretty">
-            Ask your teacher whether your school is getting a plan, or upgrade
-            yourself whenever you like.
+            Ask your teacher or tutor whether they have Teacher Pro, or ask your
+            school for a code — either one turns Pro on for you automatically, at
+            no cost.
           </p>
           <div className="mt-1.5 flex items-center gap-2">
             {options?.onSeePlans && (

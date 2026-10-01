@@ -23,6 +23,11 @@ export default async function PricingPage() {
   const entitlement = sessionUser ? await getEntitlement(sessionUser.id) : null
 
   const coveredBySchool = entitlement?.source === "school"
+  // A teacher on Teacher Pro covers every pupil they teach, so a student in
+  // one of their classes has nothing to buy here either.
+  const coveredByTeacher = entitlement?.source === "teacher"
+  const covered = coveredBySchool || coveredByTeacher
+  const coveredLabel = coveredBySchool ? "Covered by your school" : "Covered by your teacher"
   // A teaching account cannot enrol in a class, and a pupil cannot redeem a
   // teacher code, so each card only offers the route its viewer can take.
   const isTeacher = entitlement?.isTeacher ?? false
@@ -60,17 +65,18 @@ export default async function PricingPage() {
               IDE, so quoting "2 files" would be wrong the moment you open the
               HTML IDE, which allows 3. */}
           Start free with a small file allowance in each IDE. Upgrade when you outgrow it
-          — or get everything through your school.
+          — or get everything through a teacher on Teacher Pro, or your school.
         </p>
       </header>
 
-      {coveredBySchool && (
+      {covered && (
         <div
           className="mx-auto mt-10 max-w-2xl rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 text-center text-sm"
           role="status"
         >
-          Your school already covers you. You have full Pro access at no personal cost —
-          there is nothing to buy here.
+          {coveredBySchool
+            ? "Your school already covers you. You have full Pro access at no personal cost — there is nothing to buy here."
+            : "Your teacher's Teacher Pro plan already covers you. You have full Pro access at no personal cost — there is nothing to buy here."}
         </div>
       )}
 
@@ -78,15 +84,16 @@ export default async function PricingPage() {
         <PlanCard
           plan={PLANS.student_pro}
           signedIn={Boolean(sessionUser)}
-          hideCheckout={coveredBySchool}
+          hideCheckout={covered}
+          coveredLabel={coveredLabel}
           highlighted
           footer={
-            coveredBySchool || isTeacher ? null : (
+            covered || isTeacher ? null : (
               <div className="mt-3 rounded-md border border-dashed border-border px-3 py-3 text-center">
                 <p className="text-sm text-muted-foreground text-pretty">
                   Learning with a teacher? Ask them for your class code — they may
-                  already have one for you. If your school subscribes, every Pro feature
-                  is yours at no cost.
+                  already have one for you. If they are on Teacher Pro, or your school
+                  subscribes, every Pro feature is yours at no cost.
                 </p>
                 {sessionUser ? (
                   <JoinClassDialog
@@ -179,12 +186,15 @@ function PlanCard({
   signedIn,
   highlighted,
   hideCheckout,
+  coveredLabel = "Covered by your school",
   footer,
 }: {
   plan: Plan
   signedIn: boolean
   highlighted?: boolean
   hideCheckout?: boolean
+  /** Who is paying instead, shown on the disabled button. */
+  coveredLabel?: string
   footer?: ReactNode
 }) {
   return (
@@ -203,7 +213,7 @@ function PlanCard({
       <div className="mt-6">
         {hideCheckout ? (
           <Button className="w-full" size="lg" disabled>
-            Covered by your school
+            {coveredLabel}
           </Button>
         ) : signedIn ? (
           <CheckoutButton planId={plan.id} className="w-full">

@@ -62,6 +62,7 @@ export const PLANS: Record<PlanId, Plan> = {
     blurb: "For individual teachers running their own classes.",
     features: [
       "Unlimited classes and students",
+      "Every student you teach gets Pro, free",
       "Reusable lesson library",
       "Marking and feedback tools",
       "AI assisted learning for your class",

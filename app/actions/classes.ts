@@ -191,10 +191,11 @@ async function callerIp() {
  * Where a pupil's access stands immediately after joining.
  *
  * `school`     the class belongs to a school with a live plan, so Pro is on.
+ * `teacher`    the class owner pays for Teacher Pro, which covers their pupils.
  * `individual` they already pay for Student Pro themselves.
  * `none`       they joined, but nothing covers them and they stay on free.
  */
-export type ClassAccess = "school" | "individual" | "none"
+export type ClassAccess = "school" | "teacher" | "individual" | "none"
 
 export type JoinClassResult = typeof classes.$inferSelect & { access: ClassAccess }
 
@@ -353,13 +354,18 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
     revalidatePath("/student")
     revalidatePath("/school")
 
-    // Holding a valid code is not the same as being entitled. Pro only follows
-    // when the class belongs to a school with a live plan, which the branch
-    // above has already proven. An independent teacher's class grants nothing
-    // to its pupils — not even when that teacher pays for Teacher Pro, since
-    // that plan covers their teaching tools and not their students' seats.
+    // Holding a valid code is not the same as being entitled. Pro reaches a
+    // pupil either through a paying school, or through a class owner on
+    // Teacher Pro, whose plan covers everyone they teach. Both were resolved
+    // before the transaction opened.
     const access: ClassAccess =
-      target.schoolId !== null ? "school" : mine.isPro ? "individual" : "none"
+      target.schoolId !== null
+        ? "school"
+        : owner.plan === "teacher_pro" && owner.source === "individual"
+          ? "teacher"
+          : mine.isPro
+            ? "individual"
+            : "none"
 
     return { ...(target as typeof classes.$inferSelect), access }
   } catch (error) {
