@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { Check, GraduationCap, School } from "lucide-react"
+import { ArrowRight, Building2, Check, GraduationCap, School } from "lucide-react"
 
 import { JoinSchoolDialog } from "@/components/join-school-dialog"
 import { JoinClassDialog } from "@/components/join-class-dialog"
@@ -80,7 +80,7 @@ export default async function PricingPage() {
         </div>
       )}
 
-      <section className="mt-12 grid gap-6 md:grid-cols-2" aria-label="Individual plans">
+      <section className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-label="Plans">
         <PlanCard
           plan={PLANS.student_pro}
           signedIn={Boolean(sessionUser)}
@@ -158,9 +158,10 @@ export default async function PricingPage() {
             )
           }
         />
+        <SchoolsTeaserCard />
       </section>
 
-      <section className="mt-16" aria-labelledby="school-plans">
+      <section className="mt-16 scroll-mt-8" id="school-plans-section" aria-labelledby="school-plans">
         <div className="flex flex-col items-center text-center">
           <h2 id="school-plans" className="text-2xl font-semibold tracking-tight">
             School plans
@@ -234,6 +235,64 @@ function PlanCard({
         {plan.features.map((feature) => (
           <li key={feature} className="flex items-start gap-3">
             <Check className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" aria-hidden="true" />
+            <span className="text-sm">{feature}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function SchoolsTeaserCard() {
+  const schoolPlans = SCHOOL_PLAN_IDS.map((id) => PLANS[id])
+  const cheapest = schoolPlans.reduce((a, b) => (a.priceInPence <= b.priceInPence ? a : b))
+  const teacherSeats = schoolPlans.map((p) => p.teacherSeatLimit ?? 0)
+  const studentSeats = schoolPlans.map((p) => p.studentSeatLimit ?? 0)
+  const teacherProYearly = PLANS.teacher_pro.priceInPence * 12
+  const breakEvenTeachers = Math.ceil(cheapest.priceInPence / teacherProYearly)
+
+  return (
+    <div className="flex flex-col rounded-lg bg-foreground p-6 text-background md:col-span-2 lg:col-span-1">
+      <span className="mb-2 self-start rounded-full bg-background/15 px-2 py-0.5 text-xs font-medium">
+        Best value for teams
+      </span>
+      <div className="flex items-center gap-2">
+        <Building2 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+        <h3 className="text-lg font-semibold">Schools & departments</h3>
+      </div>
+      <p className="mt-1 text-sm opacity-75 text-pretty">
+        One subscription. Every teacher and student gets Pro.
+      </p>
+      <div className="mt-4 flex items-baseline gap-1">
+        <span className="text-sm opacity-75">from</span>
+        <span className="text-4xl font-bold">{formatPrice(cheapest.priceInPence)}</span>
+        <span className="text-sm opacity-75">/{cheapest.interval}</span>
+      </div>
+
+      <div className="mt-6">
+        <a
+          href="#school-plans-section"
+          className={buttonVariants({ size: "lg", variant: "secondary", className: "w-full" })}
+        >
+          Compare school plans
+          <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
+        </a>
+        <p className="mt-3 rounded-md bg-background/10 px-3 py-3 text-center text-sm text-pretty">
+          Buying for {breakEvenTeachers} or more teachers? {cheapest.name} covers{" "}
+          {cheapest.teacherSeatLimit} teachers for less than {breakEvenTeachers} Teacher Pro
+          subscriptions.
+        </p>
+      </div>
+
+      <ul className="mt-6 space-y-3">
+        {[
+          `${Math.min(...teacherSeats)} to ${Math.max(...teacherSeats)} teacher seats`,
+          `Up to ${Math.max(...studentSeats).toLocaleString("en-GB")} student seats`,
+          "Nobody is ever asked to pay individually",
+          "Central admin and teacher invite codes",
+        ].map((feature) => (
+          <li key={feature} className="flex items-start gap-3">
+            <Check className="mt-0.5 h-5 w-5 flex-shrink-0" aria-hidden="true" />
             <span className="text-sm">{feature}</span>
           </li>
         ))}
