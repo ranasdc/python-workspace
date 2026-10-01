@@ -5,6 +5,7 @@ import { user as userTable } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getStudentClasses, ensurePersonalWorkspace } from "@/app/actions/classes"
 import { getEntitlement } from "@/lib/entitlements"
+import { getHeaderIdentity } from "@/lib/account"
 import { AppHeader } from "@/components/app-header"
 import { StudentWorkspaceWithFreemium } from "@/components/student-workspace-with-freemium"
 import { WelcomeOnboarding } from "@/components/welcome-onboarding"
@@ -52,9 +53,19 @@ export default async function StudentPage() {
     classes = await getStudentClasses()
   }
 
+  const identity = await getHeaderIdentity(sessionUser.id)
+
   return (
     <div className="flex h-svh flex-col">
-      <AppHeader name={sessionUser.name} role="student" />
+      <AppHeader
+        name={sessionUser.name}
+        email={sessionUser.email}
+        image={identity.image}
+        role="student"
+        roleLabel={identity.roleLabel}
+        schoolName={identity.schoolName}
+        isSchoolAdmin={identity.isSchoolAdmin}
+      />
       <StudentWorkspaceWithFreemium
         initialClasses={classes}
         initialLanguage={initialLanguage}

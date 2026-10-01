@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AiUpgradePrompt, useAiUpgradePrompt } from "@/components/ai-upgrade-prompt"
 import { cn } from "@/lib/utils"
 import {
   DIFFICULTIES,
@@ -60,6 +61,7 @@ export function StarterComposer({
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState<null | "draft" | "assign">(null)
   const [errors, setErrors] = useState<string[]>([])
+  const aiPrompt = useAiUpgradePrompt()
 
   async function generate() {
     if (!topic.trim() && !objective.trim()) {
@@ -73,7 +75,17 @@ export function StarterComposer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ classId, topic, language, difficulty, yearGroup, objective }),
       })
-      const data = (await res.json().catch(() => ({}))) as { questions?: StarterQuestion[]; error?: string }
+      const data = (await res.json().catch(() => ({}))) as {
+        questions?: StarterQuestion[]
+        error?: string
+        code?: string
+      }
+      // A teacher without the entitlement is shown the upgrade experience
+      // rather than a toast telling them generation failed.
+      if (!res.ok && aiPrompt.handleRefusal(data)) {
+        onOpenChange(false)
+        return
+      }
       if (!res.ok || !data.questions) throw new Error(data.error || "Generation failed")
       setQuestions(data.questions)
       setAiGenerated(true)
@@ -147,6 +159,7 @@ export function StarterComposer({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1400px]">
         <DialogHeader className="shrink-0 border-b border-border px-6 py-4 text-left">
@@ -275,6 +288,11 @@ export function StarterComposer({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Outside the composer so the upgrade prompt replaces it rather than
+        stacking on top of it. */}
+    <AiUpgradePrompt open={aiPrompt.open} onOpenChange={aiPrompt.setOpen} />
+    </>
   )
 }
 

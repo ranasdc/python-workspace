@@ -153,6 +153,141 @@ export async function getTeacherClasses() {
   }))
 }
 
+/**
+ * What deleting a class would destroy, so the confirmation can be specific
+ * about it instead of asking the teacher to agree to something vague.
+ */
+export async function getClassDeletionSummary(classId: number) {
+  const teacher = await requireUser()
+  const cls = await findOwnedClass(teacher.id, classId)
+
+  const { rows } = await pool.query(
+    `SELECT
+       (SELECT COUNT(*)::int FROM "enrollment" WHERE "classId" = $1) AS students,
+       (SELECT COUNT(*)::int FROM "code_file" WHERE "classId" = $1) AS files,
+       (SELECT COUNT(*)::int FROM "daily_starter" WHERE "classId" = $1) AS starters`,
+    [classId],
+  )
+
+  return {
+    name: cls.name,
+    students: rows[0].students as number,
+    files: rows[0].files as number,
+    starters: rows[0].starters as number,
+  }
+}
+
+/**
+ * The class must belong to the caller, and must be a real class.
+ *
+ * A personal workspace is a pupil's own storage that merely happens to be
+ * modelled as a class, so it is never deletable through the teacher UI — doing
+ * so would wipe an individual learner's files from under them.
+ */
+async function findOwnedClass(teacherId: string, classId: number) {
+  if (!Number.isInteger(classId) || classId <= 0) {
+    throw new EntitlementError("forbidden", "Class not found")
+  }
+
+  // Teaching capability is required, but ownership is what actually authorises
+  // this: being a teacher somewhere must not grant reach into another
+  // teacher's class, not even a colleague's inside the same school.
+  await requireTeacherCapability(teacherId)
+
+  const [cls] = await db
+    .select({ id: classes.id, name: classes.name, isPersonal: classes.isPersonal })
+    .from(classes)
+    .where(and(eq(classes.id, classId), eq(classes.teacherId, teacherId)))
+    .limit(1)
+
+  if (!cls) throw new EntitlementError("forbidden", "Class not found")
+  if (cls.isPersonal) {
+    throw new EntitlementError("forbidden", "Personal workspaces cannot be deleted")
+  }
+  return cls
+}
+
+/**
+ * Permanently delete a class and the data that belongs to it.
+ *
+ * None of the classId columns carry a database-level cascade, so every
+ * dependent row is removed explicitly, children before parents, inside one
+ * transaction: a failure part-way through leaves the class exactly as it was
+ * rather than half-deleted.
+ *
+ * Scope is deliberately limited to data that only exists because of this
+ * class. Student and teacher accounts, the school, every subscription, the
+ * teacher's reusable library (library_file / library_folder) and the tasks
+ * attached to it (file_task) all survive, as do the teacher's other classes
+ * and their AI usage history. The student work inside this class does go —
+ * that is what the confirmation warns about.
+ */
+export async function deleteClass(classId: number) {
+  const teacher = await requireUser()
+  const cls = await findOwnedClass(teacher.id, classId)
+
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+
+    // Re-check ownership under a row lock so a concurrent transfer or a second
+    // delete cannot slip between the check above and the delete below.
+    const { rows: owned } = await client.query(
+      `SELECT "id" FROM "class"
+       WHERE "id" = $1 AND "teacherId" = $2 AND "isPersonal" = false
+       FOR UPDATE`,
+      [classId, teacher.id],
+    )
+    if (owned.length === 0) {
+      await client.query("ROLLBACK")
+      throw new EntitlementError("forbidden", "Class not found")
+    }
+
+    // Grandchildren of the class, reached through its files...
+    await client.query(
+      `DELETE FROM "file_comment"
+       WHERE "fileId" IN (SELECT "id" FROM "code_file" WHERE "classId" = $1)`,
+      [classId],
+    )
+    await client.query(
+      `DELETE FROM "ai_help_unlock"
+       WHERE "fileId" IN (SELECT "id" FROM "code_file" WHERE "classId" = $1)`,
+      [classId],
+    )
+    // ...and through its starters.
+    await client.query(
+      `DELETE FROM "daily_starter_response"
+       WHERE "starterId" IN (SELECT "id" FROM "daily_starter" WHERE "classId" = $1)`,
+      [classId],
+    )
+    await client.query(
+      `DELETE FROM "daily_starter_open"
+       WHERE "starterId" IN (SELECT "id" FROM "daily_starter" WHERE "classId" = $1)`,
+      [classId],
+    )
+
+    // Direct children.
+    await client.query(`DELETE FROM "code_file" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "student_folder" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "enrollment" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "daily_starter" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "auto_starter_claim" WHERE "classId" = $1`, [classId])
+
+    await client.query(`DELETE FROM "class" WHERE "id" = $1`, [classId])
+
+    await client.query("COMMIT")
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
+  }
+
+  revalidatePath("/teacher")
+  revalidatePath("/student")
+  return { ok: true as const, name: cls.name }
+}
+
 // ---------- Student ----------
 
 // Deliberately identical for "no such code", "disabled", "expired" and

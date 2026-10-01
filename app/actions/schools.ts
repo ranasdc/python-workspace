@@ -55,6 +55,44 @@ export async function createSchool(formData: FormData) {
   return school
 }
 
+/** Bounds on a code's reach. A code is a bearer credential, so "unlimited
+ *  uses, never expires" has to be chosen deliberately rather than by typing a
+ *  number large enough to mean the same thing. */
+export const MAX_INVITE_USES = 500
+export const MAX_INVITE_DAYS = 730
+
+/**
+ * Validates the limits an administrator asked for.
+ *
+ * Run on the server for every create and replace, because these two numbers
+ * are what the redemption path later enforces: a forged request asking for a
+ * million uses or a ten-year expiry must be rejected here, not trusted.
+ */
+function normaliseInviteLimits(options?: {
+  maxUses?: number | null
+  expiresInDays?: number | null
+}) {
+  const rawUses = options?.maxUses
+  let maxUses: number | null = null
+  if (rawUses !== null && rawUses !== undefined) {
+    if (!Number.isInteger(rawUses) || rawUses < 1 || rawUses > MAX_INVITE_USES) {
+      throw new Error(`Maximum uses must be a whole number between 1 and ${MAX_INVITE_USES}`)
+    }
+    maxUses = rawUses
+  }
+
+  const rawDays = options?.expiresInDays
+  let expiresAt: Date | null = null
+  if (rawDays !== null && rawDays !== undefined) {
+    if (!Number.isInteger(rawDays) || rawDays < 1 || rawDays > MAX_INVITE_DAYS) {
+      throw new Error(`Expiry must be a whole number of days between 1 and ${MAX_INVITE_DAYS}`)
+    }
+    expiresAt = new Date(Date.now() + rawDays * 86_400_000)
+  }
+
+  return { maxUses, expiresAt }
+}
+
 export async function createInviteCode(
   schoolId: number,
   role: "student" | "teacher",
@@ -65,10 +103,7 @@ export async function createInviteCode(
     throw new Error("Students join through their teacher's class code, not a school code")
   }
 
-  const expiresAt =
-    options?.expiresInDays && options.expiresInDays > 0
-      ? new Date(Date.now() + options.expiresInDays * 86_400_000)
-      : null
+  const { maxUses, expiresAt } = normaliseInviteLimits(options)
 
   let code = makeInviteCode()
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -87,7 +122,7 @@ export async function createInviteCode(
       schoolId: admin.schoolId,
       code,
       role,
-      maxUses: options?.maxUses ?? null,
+      maxUses,
       expiresAt,
       createdBy: admin.user.id,
     })
@@ -95,6 +130,95 @@ export async function createInviteCode(
 
   revalidatePath("/school")
   return created
+}
+
+/**
+ * Replace a code with a fresh one carrying the same limits.
+ *
+ * The old code is disabled rather than deleted: the teachers who joined
+ * through it keep their attribution, and the administrator can still see who
+ * used the code they have just retired.
+ */
+export async function regenerateInviteCode(codeId: number) {
+  const [existing] = await db
+    .select()
+    .from(inviteCodes)
+    .where(eq(inviteCodes.id, codeId))
+    .limit(1)
+  if (!existing) throw new Error("Invite code not found")
+
+  const admin = await requireSchoolAdmin(existing.schoolId)
+
+  // Carry the remaining expiry window across rather than the original date,
+  // which may well be in the past by now.
+  const daysLeft = existing.expiresAt
+    ? Math.max(
+        1,
+        Math.ceil((new Date(existing.expiresAt).getTime() - Date.now()) / 86_400_000),
+      )
+    : null
+
+  await db.update(inviteCodes).set({ active: false }).where(eq(inviteCodes.id, codeId))
+
+  let code = makeInviteCode()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const dup = await db
+      .select({ id: inviteCodes.id })
+      .from(inviteCodes)
+      .where(eq(inviteCodes.code, code))
+      .limit(1)
+    if (dup.length === 0) break
+    code = makeInviteCode()
+  }
+
+  const [created] = await db
+    .insert(inviteCodes)
+    .values({
+      schoolId: admin.schoolId,
+      code,
+      role: existing.role,
+      maxUses: existing.maxUses,
+      expiresAt: daysLeft ? new Date(Date.now() + daysLeft * 86_400_000) : null,
+      createdBy: admin.user.id,
+    })
+    .returning()
+
+  revalidatePath("/school")
+  return created
+}
+
+/**
+ * Who joined on a given code. Scoped to the code's own school and gated on
+ * administrator rights, so one school can never enumerate another's staff.
+ */
+export async function getInviteCodeUsage(codeId: number) {
+  const [row] = await db
+    .select({ schoolId: inviteCodes.schoolId })
+    .from(inviteCodes)
+    .where(eq(inviteCodes.id, codeId))
+    .limit(1)
+  if (!row) throw new Error("Invite code not found")
+
+  await requireSchoolAdmin(row.schoolId)
+
+  return db
+    .select({
+      userId: schoolMembers.userId,
+      name: user.name,
+      email: user.email,
+      role: schoolMembers.role,
+      status: schoolMembers.status,
+      joinedAt: schoolMembers.joinedAt,
+    })
+    .from(schoolMembers)
+    .innerJoin(user, eq(user.id, schoolMembers.userId))
+    .where(
+      and(
+        eq(schoolMembers.invitedByCodeId, codeId),
+        eq(schoolMembers.schoolId, row.schoolId),
+      ),
+    )
+    .orderBy(sql`${schoolMembers.joinedAt} desc`)
 }
 
 export async function setInviteCodeActive(codeId: number, active: boolean) {
@@ -199,11 +323,15 @@ export async function joinSchoolWithCode(formData: FormData) {
       }
     }
 
+    // Recording which code was redeemed is what lets an administrator see who
+    // joined on a given code. Written in the same transaction as the seat
+    // claim, so attribution can never drift from membership.
     await client.query(
-      `INSERT INTO "school_member" ("schoolId", "userId", "role")
-       VALUES ($1, $2, $3)
-       ON CONFLICT ("schoolId", "userId") DO UPDATE SET "status" = 'active'`,
-      [invite.schoolId, me.id, invite.role],
+      `INSERT INTO "school_member" ("schoolId", "userId", "role", "invitedByCodeId")
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT ("schoolId", "userId")
+       DO UPDATE SET "status" = 'active', "invitedByCodeId" = $4`,
+      [invite.schoolId, me.id, invite.role, invite.id],
     )
 
     await client.query(
@@ -286,13 +414,56 @@ export async function getSchoolOverview() {
         .orderBy(schoolMembers.role, user.name)
     : []
 
+  // Each code carries the name of the administrator who issued it and how many
+  // people are currently attributed to it, so the management view can be read
+  // without a second round trip per code.
   const codes = isAdmin
     ? await db
-        .select()
+        .select({
+          id: inviteCodes.id,
+          code: inviteCodes.code,
+          role: inviteCodes.role,
+          maxUses: inviteCodes.maxUses,
+          usedCount: inviteCodes.usedCount,
+          expiresAt: inviteCodes.expiresAt,
+          active: inviteCodes.active,
+          createdAt: inviteCodes.createdAt,
+          createdByName: user.name,
+          joinedCount: sql<number>`(
+            SELECT COUNT(*)::int FROM "school_member" sm
+            WHERE sm."invitedByCodeId" = ${inviteCodes.id}
+              AND sm."status" = 'active'
+          )`,
+        })
         .from(inviteCodes)
+        .leftJoin(user, eq(user.id, inviteCodes.createdBy))
         .where(eq(inviteCodes.schoolId, schoolId))
         .orderBy(sql`${inviteCodes.createdAt} desc`)
     : []
 
   return { school, plan: plan ?? null, seats, members, codes, isAdmin, entitlement }
+}
+
+/** One row of the invite-code management view. */
+export type SchoolInviteCode = {
+  id: number
+  code: string
+  role: string
+  maxUses: number | null
+  usedCount: number
+  expiresAt: Date | null
+  active: boolean
+  createdAt: Date
+  createdByName: string | null
+  joinedCount: number
+}
+
+/** A teacher attributed to a specific invite code. */
+export type InviteCodeMember = {
+  userId: string
+  name: string
+  email: string
+  role: string
+  status: string
+  joinedAt: Date
 }

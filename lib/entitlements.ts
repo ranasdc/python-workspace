@@ -30,6 +30,32 @@ export type EntitlementPlan = "free" | "student_pro" | "teacher_pro" | "school"
 export type EntitlementSource = "school" | "teacher" | "individual" | "free"
 export type SchoolRole = "student" | "teacher" | "school_admin"
 
+/**
+ * The school roles that carry administrative authority.
+ *
+ * Every administrative check — invite codes, member removal, school billing —
+ * resolves through this one list, so a new tier of administrator (a smaller
+ * school's admin, or an MTA-level admin spanning several schools) is granted
+ * those powers by being added here rather than by hunting down each call site.
+ * Only "school_admin" exists today; it is never self-registerable.
+ */
+export const SCHOOL_ADMIN_ROLES = ["school_admin"] as const satisfies readonly SchoolRole[]
+
+/** Whether this user may administer the school they belong to. */
+export function isSchoolAdminRole(role: SchoolRole | null): boolean {
+  return role !== null && (SCHOOL_ADMIN_ROLES as readonly string[]).includes(role)
+}
+
+/**
+ * Who may create, limit, expire, disable and replace teacher invite codes.
+ * The UI uses this to decide what to render; the server actions independently
+ * re-check through `requireSchoolAdmin`, so hiding a button is never the only
+ * thing standing between a user and the code.
+ */
+export function canManageInviteCodes(entitlement: Entitlement): boolean {
+  return entitlement.schoolId !== null && isSchoolAdminRole(entitlement.schoolRole)
+}
+
 export type Limits = {
   /** null means unlimited. */
   maxFiles: number | null
@@ -698,7 +724,9 @@ export async function requireSchoolAdmin(schoolId?: number) {
     .where(
       and(
         eq(schoolMembers.userId, me.id),
-        eq(schoolMembers.role, "school_admin"),
+        // Matched against the shared admin-role list rather than a single
+        // literal, so every administrative action recognises the same roles.
+        inArray(schoolMembers.role, [...SCHOOL_ADMIN_ROLES]),
         eq(schoolMembers.status, "active"),
         ...(schoolId ? [eq(schoolMembers.schoolId, schoolId)] : []),
       ),

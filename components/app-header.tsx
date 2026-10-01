@@ -1,32 +1,35 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { authClient } from "@/lib/auth-client"
-import { Button } from "@/components/ui/button"
-import { BookOpen, Building2, LogOut, Zap } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { BookOpen, Building2, Zap } from "lucide-react"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
+import { ProfileMenu } from "@/components/profile-menu"
 import { cn } from "@/lib/utils"
 import { usePendingStarters } from "@/hooks/use-pending-starters"
 
 export function AppHeader({
   name,
+  email,
+  image,
   role,
+  roleLabel,
+  schoolName = null,
   isSchoolAdmin = false,
 }: {
   name: string
+  email: string
+  image?: string | null
   role: string
+  /** Defaults to the capitalised workspace role when not supplied. */
+  roleLabel?: string
+  /** The school from the user's membership. Absent for independent accounts. */
+  schoolName?: string | null
   isSchoolAdmin?: boolean
 }) {
-  const router = useRouter()
   const onSchoolPage = usePathname().startsWith("/school")
   const newCount = usePendingStarters(role === "student").length
-
-  async function handleSignOut() {
-    await authClient.signOut()
-    router.push("/sign-in")
-    router.refresh()
-  }
+  const label = roleLabel ?? (role === "teacher" ? "Teacher" : "Student")
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-6">
@@ -77,13 +80,14 @@ export function AppHeader({
             {onSchoolPage ? "My classes" : "School admin"}
           </Link>
         )}
-        <div className="hidden text-right sm:block">
-          <span className="block text-sm font-medium">{name}</span>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleSignOut}>
-          <LogOut className="mr-1.5 h-4 w-4" />
-          Sign out
-        </Button>
+        <ProfileMenu
+          name={name}
+          email={email}
+          image={image}
+          roleLabel={label}
+          schoolName={schoolName}
+          isSchoolAdmin={isSchoolAdmin}
+        />
       </div>
     </header>
   )
