@@ -28,13 +28,15 @@ export function StudentWorkspaceWithFreemium({
   initialLanguage?: LanguageId
 }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-  const [limitType, setLimitType] = useState<"file" | "folder">("file")
+  // Null when the student opened the prompt themselves, so it does not claim
+  // they hit a limit they have not actually reached.
+  const [limitType, setLimitType] = useState<"file" | "folder" | null>(null)
   const [language, setLanguage] = useState<LanguageId>(initialLanguage)
 
   // Keyed by IDE, because the free tier is metered per IDE. The workspace
   // revalidates this exact key after every create or delete, so the usage
   // shown here can never drift from what the server will allow.
-  const { data: subscriptionInfo, isLoading } = useSWR(
+  const { data: subscriptionInfo, isLoading, mutate } = useSWR(
     subscriptionInfoKey(language),
     () => getUserSubscriptionInfo(language),
     { revalidateOnFocus: true, keepPreviousData: true },
@@ -87,7 +89,13 @@ export function StudentWorkspaceWithFreemium({
                 </span>{" "}
                 files
               </span>
-              <UpgradeButton onClick={() => setShowUpgradeModal(true)} compact={true} />
+              <UpgradeButton
+                onClick={() => {
+                  setLimitType(null)
+                  setShowUpgradeModal(true)
+                }}
+                compact={true}
+              />
             </div>
           )}
         </div>
@@ -108,6 +116,9 @@ export function StudentWorkspaceWithFreemium({
         open={showUpgradeModal}
         onOpenChange={setShowUpgradeModal}
         limitType={limitType}
+        // Joining a class turns the student Pro, so the allowance shown in the
+        // bar has to be re-read rather than left at its free-tier numbers.
+        onUnlocked={() => void mutate()}
       />
     </>
   )

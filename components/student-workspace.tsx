@@ -36,7 +36,7 @@ import {
   createStudentFolder,
   deleteStudentFolder,
 } from "@/app/actions/files"
-import { joinClass } from "@/app/actions/classes"
+import { JoinClassDialog } from "@/components/join-class-dialog"
 import { subscriptionInfoKey } from "@/lib/swr-keys"
 import { FileComments } from "@/components/file-comments"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -152,6 +152,17 @@ export function StudentWorkspace({
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
   )
+
+  // A class can also be joined from outside this component — the upgrade
+  // prompt offers it too — so adopt anything the server has sent since mount.
+  // Only additions are taken, which keeps a class joined here from vanishing
+  // if a refresh lands before the server knows about it.
+  const [syncedClasses, setSyncedClasses] = useState(initialClasses)
+  if (syncedClasses !== initialClasses) {
+    setSyncedClasses(initialClasses)
+    const missing = initialClasses.filter((c) => !classes.some((p) => p.id === c.id))
+    if (missing.length > 0) setClasses((prev) => [...prev, ...missing])
+  }
   const [activeFileId, setActiveFileId] = useState<number | null>(null)
   const [draft, setDraft] = useState("")
   const [taskOpen, setTaskOpen] = useState(false)
@@ -1018,66 +1029,6 @@ function NewFolderDialog({ onCreate }: { onCreate: (name: string) => Promise<voi
           <Button onClick={submit} disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create folder
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function JoinClassDialog({
-  trigger,
-  onJoined,
-}: {
-  trigger: React.ReactNode
-  onJoined: (c: ClassItem) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [code, setCode] = useState("")
-  const [busy, setBusy] = useState(false)
-
-  async function submit() {
-    setBusy(true)
-    try {
-      const fd = new FormData()
-      fd.set("joinCode", code)
-      const cls = await joinClass(fd)
-      onJoined(cls as ClassItem)
-      toast.success(`Joined ${cls.name}`)
-      setCode("")
-      setOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not join class")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={trigger as React.ReactElement} />
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Join a class</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="joincode">Class join code</Label>
-          <Input
-            id="joincode"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="ABC123"
-            className="font-mono tracking-widest"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit()
-            }}
-            autoFocus
-          />
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Join class
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { Check, School } from "lucide-react"
+import { Check, GraduationCap, School } from "lucide-react"
 
 import { JoinSchoolDialog } from "@/components/join-school-dialog"
+import { JoinClassDialog } from "@/components/join-class-dialog"
 
 import { getSessionUser } from "@/lib/session"
 import { getEntitlement } from "@/lib/entitlements"
@@ -22,6 +23,10 @@ export default async function PricingPage() {
   const entitlement = sessionUser ? await getEntitlement(sessionUser.id) : null
 
   const coveredBySchool = entitlement?.source === "school"
+  // A teaching account cannot enrol in a class, and a pupil cannot redeem a
+  // teacher code, so each card only offers the route its viewer can take.
+  const isTeacher = entitlement?.isTeacher ?? false
+  const isKnownStudent = Boolean(sessionUser) && !isTeacher
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-16">
@@ -75,13 +80,46 @@ export default async function PricingPage() {
           signedIn={Boolean(sessionUser)}
           hideCheckout={coveredBySchool}
           highlighted
+          footer={
+            coveredBySchool || isTeacher ? null : (
+              <div className="mt-3 rounded-md border border-dashed border-border px-3 py-3 text-center">
+                <p className="text-sm text-muted-foreground text-pretty">
+                  Learning with a teacher? Ask them for your class code — they may
+                  already have one for you. If your school subscribes, every Pro feature
+                  is yours at no cost.
+                </p>
+                {sessionUser ? (
+                  <JoinClassDialog
+                    trigger={
+                      <Button variant="outline" size="sm" className="mt-3">
+                        <GraduationCap className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                        Join a class with a code
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <Link
+                    href="/sign-up"
+                    className={buttonVariants({
+                      variant: "outline",
+                      size: "sm",
+                      className: "mt-3",
+                    })}
+                  >
+                    <GraduationCap className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Sign up, then join your class
+                  </Link>
+                )}
+              </div>
+            )
+          }
         />
         <PlanCard
           plan={PLANS.teacher_pro}
           signedIn={Boolean(sessionUser)}
           hideCheckout={coveredBySchool}
           footer={
-            coveredBySchool ? null : (
+            coveredBySchool || isKnownStudent ? null : (
               <div className="mt-3 rounded-md border border-dashed border-border px-3 py-3 text-center">
                 <p className="text-sm text-muted-foreground text-pretty">
                   Does your school already subscribe? Join with the teacher code from your
