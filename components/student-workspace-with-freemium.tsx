@@ -18,6 +18,8 @@ type ClassItem = {
   description: string | null
   joinCode: string
   teacherId: string
+  teacherName?: string | null
+  schoolName?: string | null
 }
 
 export function StudentWorkspaceWithFreemium({

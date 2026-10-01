@@ -16,6 +16,7 @@ import {
   EntitlementError,
   type EntitlementCode,
 } from "@/lib/entitlements"
+import { getSchoolNames } from "@/lib/account"
 import { clearFailures, countRecentFailures, recordFailures } from "@/lib/rate-limit"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -332,7 +333,13 @@ async function callerIp() {
  */
 export type ClassAccess = "school" | "teacher" | "individual" | "none"
 
-export type JoinClassResult = typeof classes.$inferSelect & { access: ClassAccess }
+export type JoinClassResult = typeof classes.$inferSelect & {
+  access: ClassAccess
+  /** Who teaches it, so the class list can name them without a refetch. */
+  teacherName: string | null
+  /** The teacher's school, or null when they teach independently. */
+  schoolName: string | null
+}
 
 export async function joinClass(formData: FormData): Promise<JoinClassResult> {
   const student = await requireUser()
@@ -382,6 +389,17 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
   // round trip must never happen while we are holding row locks.
   const owner = await getEntitlement(preview.teacherId)
   const maxPerClass = owner.teacherLimits.maxStudentsPerClass
+
+  // Read here, outside the transaction, for the same reason: the class list
+  // names its teacher the moment the pupil joins, with no second round trip.
+  const [[ownerRecord], ownerSchools] = await Promise.all([
+    db
+      .select({ name: user.name })
+      .from(user)
+      .where(eq(user.id, preview.teacherId))
+      .limit(1),
+    getSchoolNames([preview.teacherId]),
+  ])
 
   const client = await pool.connect()
   try {
@@ -502,7 +520,12 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
             ? "individual"
             : "none"
 
-    return { ...(target as typeof classes.$inferSelect), access }
+    return {
+      ...(target as typeof classes.$inferSelect),
+      access,
+      teacherName: ownerRecord?.name ?? null,
+      schoolName: ownerSchools.get(preview.teacherId) ?? null,
+    }
   } catch (error) {
     await client.query("ROLLBACK")
     throw error
@@ -554,13 +577,26 @@ export async function getStudentClasses() {
       joinCode: classes.joinCode,
       teacherId: classes.teacherId,
       isPersonal: classes.isPersonal,
+      teacherName: user.name,
     })
     .from(enrollments)
     .innerJoin(classes, eq(enrollments.classId, classes.id))
+    .innerJoin(user, eq(user.id, classes.teacherId))
     .where(eq(enrollments.studentId, student.id))
     .orderBy(desc(enrollments.createdAt))
 
-  return rows
+  // The school comes from the teacher's live membership rather than the class
+  // row, so a class created before its teacher joined a school still shows the
+  // right school, and an independent teacher shows none.
+  const schoolNames = await getSchoolNames(rows.map((r) => r.teacherId))
+
+  return rows.map((row) => ({
+    ...row,
+    // A personal workspace is the pupil's own storage, not a taught class, so
+    // it is never labelled with a teacher.
+    teacherName: row.isPersonal ? null : row.teacherName,
+    schoolName: row.isPersonal ? null : (schoolNames.get(row.teacherId) ?? null),
+  }))
 }
 
 /** Surfaces the teacher's free-tier headroom so the UI can prompt an upgrade. */

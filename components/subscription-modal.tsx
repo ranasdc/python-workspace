@@ -42,13 +42,18 @@ export function SubscriptionModal({
 }: SubscriptionModalProps) {
   const router = useRouter()
 
+  // A teacher and a pupil unlock different things, so the default wording
+  // follows the role rather than describing a pupil's file allowance to a
+  // teacher who came here about classes.
   const body =
     description ??
     (limitType === "file"
       ? "You've reached your file limit. There are two ways to unlock unlimited files and folders."
       : limitType === "folder"
         ? "You've reached your folder limit. There are two ways to unlock unlimited files and folders."
-        : "Two ways to unlock unlimited files and folders in every IDE.")
+        : role === "teacher"
+          ? "Two ways to unlock unlimited classes, students and the AI teaching tools."
+          : "Two ways to unlock unlimited files and folders in every IDE.")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
