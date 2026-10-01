@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type ComponentType, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   Check,
@@ -22,7 +23,8 @@ import {
 import { joinClass } from "@/app/actions/classes"
 import { joinSchoolWithCode } from "@/app/actions/schools"
 import { startCheckout } from "@/app/actions/billing"
-import { PLANS, formatPrice, type PlanId } from "@/lib/plans"
+import { showClassJoinedToast } from "@/lib/class-join-toast"
+import { FREE_ALLOWANCE, PLANS, formatPrice, type PlanId } from "@/lib/plans"
 
 export type PlanChoiceRole = "student" | "teacher"
 
@@ -83,7 +85,7 @@ export const PLAN_CHOICE_COPY: Record<PlanChoiceRole, Copy> = {
       summary: "For learning on your own, without a school.",
       action: "Upgrade to Student Pro",
     },
-    freeNote: "1 folder and 2 files in each IDE. Upgrade whenever you like.",
+    freeNote: `${FREE_ALLOWANCE.student}. Upgrade whenever you like.`,
   },
   teacher: {
     code: {
@@ -110,7 +112,7 @@ export const PLAN_CHOICE_COPY: Record<PlanChoiceRole, Copy> = {
       summary: "For running your own classes, without a school plan.",
       action: "Upgrade to Teacher Pro",
     },
-    freeNote: "1 class with up to 5 students. Upgrade whenever you like.",
+    freeNote: `${FREE_ALLOWANCE.teacher}. Upgrade whenever you like.`,
   },
 }
 
@@ -141,6 +143,7 @@ export function PlanChoice({
   /** Runs after Stripe accepts the session, before leaving the page. */
   onCheckout?: () => Promise<void> | void
 }) {
+  const router = useRouter()
   const copy = PLAN_CHOICE_COPY[role]
   const plan = PLANS[copy.pro.planId]
   const [step, setStep] = useState<"choose" | "code">("choose")
@@ -154,9 +157,9 @@ export function PlanChoice({
       if (role === "student") {
         const joined = await joinClass(formData)
         await onJoined?.()
-        // No promise of Pro here: that depends on the teacher's school having
-        // a plan, which this screen cannot know.
-        toast.success(`You've joined ${joined.name}.`)
+        // The class alone decides whether this unlocked anything, so the
+        // result is what speaks rather than a blanket success message.
+        showClassJoinedToast(joined, { onSeePlans: () => router.push("/pricing") })
       } else {
         const result = await joinSchoolWithCode(formData)
         await onJoined?.()

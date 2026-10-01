@@ -17,9 +17,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { joinClass } from "@/app/actions/classes"
+import { joinClass, type JoinClassResult } from "@/app/actions/classes"
+import { showClassJoinedToast } from "@/lib/class-join-toast"
 
-export type JoinedClass = Awaited<ReturnType<typeof joinClass>>
+export type JoinedClass = JoinClassResult
 
 /**
  * Lets a signed-in student redeem the class code their teacher gave them. If
@@ -45,7 +46,7 @@ export function JoinClassDialog({
     setPending(true)
     try {
       const joined = await joinClass(formData)
-      toast.success(`You've joined ${joined.name}.`)
+      showClassJoinedToast(joined, { onSeePlans: () => router.push("/pricing") })
       setOpen(false)
       if (onJoined) {
         onJoined(joined)
