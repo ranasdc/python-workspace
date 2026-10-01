@@ -8,12 +8,8 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CheckoutButton } from "@/components/checkout-button"
-import {
-  createInviteCode,
-  removeSchoolMember,
-  setInviteCodeActive,
-  type getSchoolOverview,
-} from "@/app/actions/schools"
+import { InviteCodes } from "@/components/school/invite-codes"
+import { removeSchoolMember, type getSchoolOverview } from "@/app/actions/schools"
 import { openBillingPortal } from "@/app/actions/billing"
 import { PLANS, SCHOOL_PLAN_IDS, formatPrice } from "@/lib/plans"
 
@@ -146,71 +142,7 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
         </section>
       )}
 
-      {isAdmin && (
-        <section className="rounded-lg border border-border bg-card p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Invite codes</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Share a teacher code with your staff. Students join through their
-                teacher&apos;s class code and are covered by the school plan automatically.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy === "code-teacher"}
-                onClick={() =>
-                  run(
-                    "code-teacher",
-                    () => createInviteCode(school.id, "teacher"),
-                    "Teacher code created",
-                  )
-                }
-              >
-                {busy === "code-teacher" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                New teacher code
-              </Button>
-            </div>
-          </div>
-
-          {codes.length === 0 ? (
-            <p className="mt-5 text-sm text-muted-foreground">No invite codes yet.</p>
-          ) : (
-            <ul className="mt-5 divide-y divide-border">
-              {codes.map((code) => (
-                <li key={code.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <code className="rounded bg-muted px-2 py-1 font-mono text-sm">
-                    {code.code}
-                  </code>
-                  <Badge variant="secondary">{code.role}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    used {code.usedCount}
-                    {code.maxUses ? ` / ${code.maxUses}` : ""}
-                  </span>
-                  {!code.active && <Badge variant="outline">disabled</Badge>}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto"
-                    disabled={busy === `toggle-${code.id}`}
-                    onClick={() =>
-                      run(
-                        `toggle-${code.id}`,
-                        () => setInviteCodeActive(code.id, !code.active),
-                        code.active ? "Code disabled" : "Code enabled",
-                      )
-                    }
-                  >
-                    {code.active ? "Disable" : "Enable"}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+      {isAdmin && <InviteCodes schoolId={school.id} codes={codes} />}
 
       {isAdmin && (
         <section className="rounded-lg border border-border bg-card p-6">

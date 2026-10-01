@@ -349,6 +349,11 @@ export const schoolMembers = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("student"), // student | teacher | school_admin
     status: text("status").notNull().default("active"), // active | removed
+    // Which invite code this member redeemed, when they joined through one.
+    // Null for the founding admin and for members who joined before
+    // attribution was recorded. Cleared rather than cascaded if the code is
+    // ever deleted: losing a code must never unenrol a teacher.
+    invitedByCodeId: integer("invitedByCodeId"),
     joinedAt: timestamp("joinedAt").notNull().defaultNow(),
   },
   (t) => ({

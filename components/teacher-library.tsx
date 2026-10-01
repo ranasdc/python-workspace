@@ -46,6 +46,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { AiUpgradePrompt, useAiUpgradePrompt } from "@/components/ai-upgrade-prompt"
 import { toast } from "sonner"
 import {
   Plus,
@@ -531,10 +532,12 @@ function TaskComposer({
   const [origin, setOrigin] = useState<"manual" | "ai">("manual")
   const [fullscreen, setFullscreen] = useState(false)
 
-  // AI generation UI state. `aiError` distinguishes an upgrade wall (feature
-  // off) or a monthly cap from an ordinary transient failure.
+  // AI generation UI state. `aiError` carries the transient failures and the
+  // monthly cap; a "not entitled" refusal is handled by the upgrade prompt
+  // instead, so it never appears here as an error.
   const [generating, setGenerating] = useState(false)
   const [aiError, setAiError] = useState<{ message: string; code?: string } | null>(null)
+  const aiPrompt = useAiUpgradePrompt()
 
   // Load the current task each time the dialog opens, so it always reflects the
   // saved state even after edits elsewhere.
@@ -578,6 +581,13 @@ function TaskComposer({
       })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
+        // A free teacher gets the upgrade experience rather than an error.
+        // The task dialog steps aside so the prompt is the only thing on
+        // screen, exactly as it is at onboarding.
+        if (aiPrompt.handleRefusal(payload)) {
+          setOpen(false)
+          return
+        }
         setAiError({ message: payload.error ?? "Could not generate a task.", code: payload.code })
         return
       }
@@ -748,7 +758,7 @@ function TaskComposer({
               {aiError && (
                 <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {aiError.message}
-                  {(aiError.code === "ai_not_available" || aiError.code === "ai_limit") && (
+                  {aiError.code === "ai_limit" && (
                     <>
                       {" "}
                       <Link href="/pricing" className="font-medium underline">
@@ -840,6 +850,10 @@ function TaskComposer({
         </DialogFooter>
       </DialogContent>
       </Dialog>
+
+      {/* Kept outside the task dialog so the upgrade prompt is never a modal
+          stacked on top of another modal. */}
+      <AiUpgradePrompt open={aiPrompt.open} onOpenChange={aiPrompt.setOpen} />
     </div>
   )
 }

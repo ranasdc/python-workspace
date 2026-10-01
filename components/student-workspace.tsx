@@ -71,6 +71,10 @@ type ClassItem = {
   description: string | null
   joinCode: string
   teacherId: string
+  /** Null for a personal workspace, which has no teacher. */
+  teacherName?: string | null
+  /** The teacher's school, or null when they teach independently. */
+  schoolName?: string | null
 }
 
 type FileItem = {
@@ -465,7 +469,19 @@ export function StudentWorkspace({
                 )}
               >
                 <Users className="h-4 w-4 shrink-0" />
-                <span className="truncate">{c.name}</span>
+                <span className="min-w-0 leading-tight">
+                  <span className="block truncate">{c.name}</span>
+                  {/* Who set this work. A pupil in classes at two schools — or
+                      with a tutor as well as a teacher — can otherwise only
+                      tell them apart by the class name they were given. */}
+                  {c.teacherName && (
+                    <span className="block truncate text-xs font-normal text-muted-foreground">
+                      {c.schoolName
+                        ? `${c.teacherName} · ${c.schoolName}`
+                        : c.teacherName}
+                    </span>
+                  )}
+                </span>
               </button>
             ))}
           </div>

@@ -20,6 +20,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { DeleteClassDialog } from "@/components/delete-class-dialog"
 import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import { getClassTree, setFileStatus } from "@/app/actions/files"
 import { FileComments } from "@/components/file-comments"
@@ -57,6 +64,8 @@ import {
   Sparkles,
   Zap,
   School,
+  MoreHorizontal,
+  Trash2,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -222,7 +231,17 @@ export function TeacherDashboard({
           <TeacherLibrary classes={list} />
         ) : activeClass ? (
           <div className="min-h-0 flex-1 overflow-auto">
-            <ClassDetail key={activeClass.id} cls={activeClass} pyodide={pyodide} />
+            <ClassDetail
+              key={activeClass.id}
+              cls={activeClass}
+              pyodide={pyodide}
+              onDeleted={async () => {
+                // Refetch first, then select whatever class is left, so the
+                // dashboard never points at the class that has just gone.
+                const remaining = await mutate<ClassWithStudents[]>("teacher-classes")
+                setActiveClassId(remaining?.[0]?.id ?? null)
+              }}
+            />
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
@@ -285,11 +304,15 @@ function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
 function ClassDetail({
   cls,
   pyodide,
+  onDeleted,
 }: {
   cls: ClassWithStudents
   pyodide: ReturnType<typeof usePyodide>
+  /** Runs once the class has been deleted, so the dashboard can reselect. */
+  onDeleted: () => void | Promise<void>
 }) {
   const [tab, setTab] = useState<"work" | "starters">("work")
+  const [deleteOpen, setDeleteOpen] = useState(false)
   // Teachers review one IDE at a time, mirroring how pupils work in it.
   const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
   const treeKey = ["class-tree", cls.id, language]
@@ -389,8 +412,33 @@ function ClassDetail({
           <div className="flex flex-wrap items-center gap-2">
             <ClassAiHelpControl classId={cls.id} />
             <JoinCodeBadge code={cls.joinCode} />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="ghost" size="icon-sm" />}
+                aria-label={`More actions for ${cls.name}`}
+              >
+                <MoreHorizontal />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 />
+                  Delete class
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+
+        <DeleteClassDialog
+          classId={cls.id}
+          className={cls.name}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={onDeleted}
+        />
         <div role="tablist" aria-label="Class sections" className="-mb-4 mt-3 flex gap-5">
           {(
             [

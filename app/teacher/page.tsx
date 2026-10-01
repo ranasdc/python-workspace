@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { user as userTable } from "@/lib/db/schema"
 import { getTeacherClasses, getTeacherPlanStatus } from "@/app/actions/classes"
 import { getEntitlement } from "@/lib/entitlements"
+import { getHeaderIdentity } from "@/lib/account"
 import { AppHeader } from "@/components/app-header"
 import { TeacherDashboard } from "@/components/teacher-dashboard"
 import { WelcomeOnboarding } from "@/components/welcome-onboarding"
@@ -18,9 +19,10 @@ export default async function TeacherPage() {
   const entitlement = await getEntitlement(user.id)
   if (!entitlement.isTeacher) redirect("/student")
 
-  const [classes, planStatus] = await Promise.all([
+  const [classes, planStatus, identity] = await Promise.all([
     getTeacherClasses(),
     getTeacherPlanStatus(),
+    getHeaderIdentity(user.id),
   ])
 
   // On a read failure, assume onboarded: a missed welcome screen is better than
@@ -46,8 +48,12 @@ export default async function TeacherPage() {
     <div className="flex h-svh flex-col">
       <AppHeader
         name={user.name}
+        email={user.email}
+        image={identity.image}
         role="teacher"
-        isSchoolAdmin={entitlement.schoolRole === "school_admin" && !entitlement.schoolUnpaid}
+        roleLabel={identity.roleLabel}
+        schoolName={identity.schoolName}
+        isSchoolAdmin={identity.isSchoolAdmin}
       />
       <TeacherDashboard initialClasses={classes} planStatus={planStatus} />
       {showOnboarding && <WelcomeOnboarding role="teacher" />}

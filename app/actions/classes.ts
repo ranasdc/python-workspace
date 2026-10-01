@@ -16,6 +16,7 @@ import {
   EntitlementError,
   type EntitlementCode,
 } from "@/lib/entitlements"
+import { getSchoolNames } from "@/lib/account"
 import { clearFailures, countRecentFailures, recordFailures } from "@/lib/rate-limit"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -153,6 +154,141 @@ export async function getTeacherClasses() {
   }))
 }
 
+/**
+ * What deleting a class would destroy, so the confirmation can be specific
+ * about it instead of asking the teacher to agree to something vague.
+ */
+export async function getClassDeletionSummary(classId: number) {
+  const teacher = await requireUser()
+  const cls = await findOwnedClass(teacher.id, classId)
+
+  const { rows } = await pool.query(
+    `SELECT
+       (SELECT COUNT(*)::int FROM "enrollment" WHERE "classId" = $1) AS students,
+       (SELECT COUNT(*)::int FROM "code_file" WHERE "classId" = $1) AS files,
+       (SELECT COUNT(*)::int FROM "daily_starter" WHERE "classId" = $1) AS starters`,
+    [classId],
+  )
+
+  return {
+    name: cls.name,
+    students: rows[0].students as number,
+    files: rows[0].files as number,
+    starters: rows[0].starters as number,
+  }
+}
+
+/**
+ * The class must belong to the caller, and must be a real class.
+ *
+ * A personal workspace is a pupil's own storage that merely happens to be
+ * modelled as a class, so it is never deletable through the teacher UI — doing
+ * so would wipe an individual learner's files from under them.
+ */
+async function findOwnedClass(teacherId: string, classId: number) {
+  if (!Number.isInteger(classId) || classId <= 0) {
+    throw new EntitlementError("forbidden", "Class not found")
+  }
+
+  // Teaching capability is required, but ownership is what actually authorises
+  // this: being a teacher somewhere must not grant reach into another
+  // teacher's class, not even a colleague's inside the same school.
+  await requireTeacherCapability(teacherId)
+
+  const [cls] = await db
+    .select({ id: classes.id, name: classes.name, isPersonal: classes.isPersonal })
+    .from(classes)
+    .where(and(eq(classes.id, classId), eq(classes.teacherId, teacherId)))
+    .limit(1)
+
+  if (!cls) throw new EntitlementError("forbidden", "Class not found")
+  if (cls.isPersonal) {
+    throw new EntitlementError("forbidden", "Personal workspaces cannot be deleted")
+  }
+  return cls
+}
+
+/**
+ * Permanently delete a class and the data that belongs to it.
+ *
+ * None of the classId columns carry a database-level cascade, so every
+ * dependent row is removed explicitly, children before parents, inside one
+ * transaction: a failure part-way through leaves the class exactly as it was
+ * rather than half-deleted.
+ *
+ * Scope is deliberately limited to data that only exists because of this
+ * class. Student and teacher accounts, the school, every subscription, the
+ * teacher's reusable library (library_file / library_folder) and the tasks
+ * attached to it (file_task) all survive, as do the teacher's other classes
+ * and their AI usage history. The student work inside this class does go —
+ * that is what the confirmation warns about.
+ */
+export async function deleteClass(classId: number) {
+  const teacher = await requireUser()
+  const cls = await findOwnedClass(teacher.id, classId)
+
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+
+    // Re-check ownership under a row lock so a concurrent transfer or a second
+    // delete cannot slip between the check above and the delete below.
+    const { rows: owned } = await client.query(
+      `SELECT "id" FROM "class"
+       WHERE "id" = $1 AND "teacherId" = $2 AND "isPersonal" = false
+       FOR UPDATE`,
+      [classId, teacher.id],
+    )
+    if (owned.length === 0) {
+      await client.query("ROLLBACK")
+      throw new EntitlementError("forbidden", "Class not found")
+    }
+
+    // Grandchildren of the class, reached through its files...
+    await client.query(
+      `DELETE FROM "file_comment"
+       WHERE "fileId" IN (SELECT "id" FROM "code_file" WHERE "classId" = $1)`,
+      [classId],
+    )
+    await client.query(
+      `DELETE FROM "ai_help_unlock"
+       WHERE "fileId" IN (SELECT "id" FROM "code_file" WHERE "classId" = $1)`,
+      [classId],
+    )
+    // ...and through its starters.
+    await client.query(
+      `DELETE FROM "daily_starter_response"
+       WHERE "starterId" IN (SELECT "id" FROM "daily_starter" WHERE "classId" = $1)`,
+      [classId],
+    )
+    await client.query(
+      `DELETE FROM "daily_starter_open"
+       WHERE "starterId" IN (SELECT "id" FROM "daily_starter" WHERE "classId" = $1)`,
+      [classId],
+    )
+
+    // Direct children.
+    await client.query(`DELETE FROM "code_file" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "student_folder" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "enrollment" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "daily_starter" WHERE "classId" = $1`, [classId])
+    await client.query(`DELETE FROM "auto_starter_claim" WHERE "classId" = $1`, [classId])
+
+    await client.query(`DELETE FROM "class" WHERE "id" = $1`, [classId])
+
+    await client.query("COMMIT")
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
+  }
+
+  revalidatePath("/teacher")
+  revalidatePath("/student")
+  return { ok: true as const, name: cls.name }
+}
+
 // ---------- Student ----------
 
 // Deliberately identical for "no such code", "disabled", "expired" and
@@ -197,7 +333,13 @@ async function callerIp() {
  */
 export type ClassAccess = "school" | "teacher" | "individual" | "none"
 
-export type JoinClassResult = typeof classes.$inferSelect & { access: ClassAccess }
+export type JoinClassResult = typeof classes.$inferSelect & {
+  access: ClassAccess
+  /** Who teaches it, so the class list can name them without a refetch. */
+  teacherName: string | null
+  /** The teacher's school, or null when they teach independently. */
+  schoolName: string | null
+}
 
 export async function joinClass(formData: FormData): Promise<JoinClassResult> {
   const student = await requireUser()
@@ -247,6 +389,17 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
   // round trip must never happen while we are holding row locks.
   const owner = await getEntitlement(preview.teacherId)
   const maxPerClass = owner.teacherLimits.maxStudentsPerClass
+
+  // Read here, outside the transaction, for the same reason: the class list
+  // names its teacher the moment the pupil joins, with no second round trip.
+  const [[ownerRecord], ownerSchools] = await Promise.all([
+    db
+      .select({ name: user.name })
+      .from(user)
+      .where(eq(user.id, preview.teacherId))
+      .limit(1),
+    getSchoolNames([preview.teacherId]),
+  ])
 
   const client = await pool.connect()
   try {
@@ -367,7 +520,12 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
             ? "individual"
             : "none"
 
-    return { ...(target as typeof classes.$inferSelect), access }
+    return {
+      ...(target as typeof classes.$inferSelect),
+      access,
+      teacherName: ownerRecord?.name ?? null,
+      schoolName: ownerSchools.get(preview.teacherId) ?? null,
+    }
   } catch (error) {
     await client.query("ROLLBACK")
     throw error
@@ -419,13 +577,26 @@ export async function getStudentClasses() {
       joinCode: classes.joinCode,
       teacherId: classes.teacherId,
       isPersonal: classes.isPersonal,
+      teacherName: user.name,
     })
     .from(enrollments)
     .innerJoin(classes, eq(enrollments.classId, classes.id))
+    .innerJoin(user, eq(user.id, classes.teacherId))
     .where(eq(enrollments.studentId, student.id))
     .orderBy(desc(enrollments.createdAt))
 
-  return rows
+  // The school comes from the teacher's live membership rather than the class
+  // row, so a class created before its teacher joined a school still shows the
+  // right school, and an independent teacher shows none.
+  const schoolNames = await getSchoolNames(rows.map((r) => r.teacherId))
+
+  return rows.map((row) => ({
+    ...row,
+    // A personal workspace is the pupil's own storage, not a taught class, so
+    // it is never labelled with a teacher.
+    teacherName: row.isPersonal ? null : row.teacherName,
+    schoolName: row.isPersonal ? null : (schoolNames.get(row.teacherId) ?? null),
+  }))
 }
 
 /** Surfaces the teacher's free-tier headroom so the UI can prompt an upgrade. */
