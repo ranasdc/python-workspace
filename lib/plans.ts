@@ -15,8 +15,10 @@ export type Plan = {
   id: PlanId
   name: string
   audience: "student" | "teacher" | "school"
-  /** Price in pence. */
+  /** What the customer is actually charged, in pence. During a sale this is the sale price. */
   priceInPence: number
+  /** The undiscounted list price in pence, shown struck through while a sale runs. */
+  originalPriceInPence: number
   interval: BillingInterval
   blurb: string
   features: string[]
@@ -34,15 +36,23 @@ export const CURRENCY = "gbp"
  */
 export const FREE_ALLOWANCE: Record<"student" | "teacher", string> = {
   student: "1 folder and 2 files in each IDE",
-  teacher: "1 class with up to 5 students",
+  teacher: "1 class with up to 25 students",
 }
+
+/** Copy for the sitewide sale banner. Set `active: false` to end the sale everywhere. */
+export const SALE = {
+  active: true,
+  name: "Launch sale",
+  tagline: "Save up to 28% on every plan",
+} as const
 
 export const PLANS: Record<PlanId, Plan> = {
   student_pro: {
     id: "student_pro",
     name: "Student Pro",
     audience: "student",
-    priceInPence: 799,
+    priceInPence: 399,
+    originalPriceInPence: 499,
     interval: "month",
     blurb: "For individual learners who want the full workspace.",
     features: [
@@ -57,7 +67,8 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "teacher_pro",
     name: "Teacher Pro",
     audience: "teacher",
-    priceInPence: 1999,
+    priceInPence: 1499,
+    originalPriceInPence: 1899,
     interval: "month",
     blurb: "For individual teachers running their own classes.",
     features: [
@@ -73,14 +84,15 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "school_small",
     name: "Small School",
     audience: "school",
-    priceInPence: 49900,
+    priceInPence: 24900,
+    originalPriceInPence: 34900,
     interval: "year",
     blurb: "For a single department getting started.",
-    teacherSeatLimit: 10,
-    studentSeatLimit: 150,
+    teacherSeatLimit: 5,
+    studentSeatLimit: 500,
     features: [
-      "Up to 10 teacher seats",
-      "Up to 150 student seats",
+      "Up to 5 teacher seats",
+      "Up to 500 student seats",
       "Every student and teacher gets Pro",
       "School invite codes",
       "Central admin dashboard",
@@ -90,14 +102,15 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "school_medium",
     name: "School",
     audience: "school",
-    priceInPence: 99900,
+    priceInPence: 34900,
+    originalPriceInPence: 44900,
     interval: "year",
     blurb: "For a whole school computing department.",
-    teacherSeatLimit: 25,
-    studentSeatLimit: 500,
+    teacherSeatLimit: 9,
+    studentSeatLimit: 900,
     features: [
-      "Up to 25 teacher seats",
-      "Up to 500 student seats",
+      "Up to 9 teacher seats",
+      "Up to 900 student seats",
       "Every student and teacher gets Pro",
       "School invite codes",
       "Central admin dashboard",
@@ -107,7 +120,8 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "school_large",
     name: "MAT",
     audience: "school",
-    priceInPence: 250000,
+    priceInPence: 139900,
+    originalPriceInPence: 149900,
     interval: "year",
     blurb: "For multi-academy trusts running computing at scale.",
     teacherSeatLimit: 100,
@@ -130,6 +144,16 @@ export const SCHOOL_PLAN_IDS: PlanId[] = [
 
 export function isSchoolPlan(planId: PlanId) {
   return PLANS[planId].audience === "school"
+}
+
+export function isOnSale(plan: Plan) {
+  return SALE.active && plan.originalPriceInPence > plan.priceInPence
+}
+
+/** Whole-number percentage saved, e.g. 20 for "20% off". Rounded down so we never overstate it. */
+export function discountPercent(plan: Plan) {
+  if (!isOnSale(plan)) return 0
+  return Math.floor(((plan.originalPriceInPence - plan.priceInPence) / plan.originalPriceInPence) * 100)
 }
 
 export function formatPrice(priceInPence: number) {

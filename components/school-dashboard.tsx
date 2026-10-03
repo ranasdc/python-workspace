@@ -11,7 +11,9 @@ import { CheckoutButton } from "@/components/checkout-button"
 import { InviteCodes } from "@/components/school/invite-codes"
 import { removeSchoolMember, type getSchoolOverview } from "@/app/actions/schools"
 import { openBillingPortal } from "@/app/actions/billing"
-import { PLANS, SCHOOL_PLAN_IDS, formatPrice } from "@/lib/plans"
+import { PLANS, SCHOOL_PLAN_IDS } from "@/lib/plans"
+import { PriceTag } from "@/components/price-tag"
+import { SaleBanner } from "@/components/sale-banner"
 
 type Overview = NonNullable<Awaited<ReturnType<typeof getSchoolOverview>>>
 
@@ -71,6 +73,8 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
               : "Your school administrator needs to activate a plan before members get Pro access."}
           </p>
 
+          {isAdmin && <SaleBanner className="mt-5" />}
+
           {isAdmin && (
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
               {SCHOOL_PLAN_IDS.map((id) => {
@@ -78,14 +82,10 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
                 return (
                   <div key={id} className="rounded-lg border border-border p-4">
                     <h3 className="font-medium">{p.name}</h3>
-                    <div className="mt-1 text-2xl font-bold">
-                      {formatPrice(p.priceInPence)}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /{p.interval}
-                      </span>
-                    </div>
+                    <PriceTag plan={p} size="md" className="mt-2" />
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {p.teacherSeatLimit} teachers · {p.studentSeatLimit} students
+                      {p.teacherSeatLimit} teachers ·{" "}
+                      {p.studentSeatLimit?.toLocaleString("en-GB")} students
                     </p>
                     <CheckoutButton
                       planId={id}

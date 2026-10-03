@@ -7,7 +7,9 @@ import { JoinClassDialog } from "@/components/join-class-dialog"
 
 import { getSessionUser } from "@/lib/session"
 import { getEntitlement } from "@/lib/entitlements"
-import { PLANS, SCHOOL_PLAN_IDS, formatPrice, type Plan } from "@/lib/plans"
+import { PLANS, SCHOOL_PLAN_IDS, type Plan } from "@/lib/plans"
+import { PriceTag } from "@/components/price-tag"
+import { SaleBanner } from "@/components/sale-banner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { CheckoutButton } from "@/components/checkout-button"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
@@ -68,6 +70,8 @@ export default async function PricingPage() {
           — or get everything through a teacher on Teacher Pro, or your school.
         </p>
       </header>
+
+      {!covered && <SaleBanner className="mt-10" />}
 
       {covered && (
         <div
@@ -202,10 +206,7 @@ function PlanCard({
     <div className={`flex flex-col rounded-lg border border-border bg-card p-6 ${cardHover}`}>
       <h3 className="text-lg font-semibold">{plan.name}</h3>
       <p className="mt-1 text-sm text-muted-foreground text-pretty">{plan.blurb}</p>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-4xl font-bold">{formatPrice(plan.priceInPence)}</span>
-        <span className="text-sm text-muted-foreground">/{plan.interval}</span>
-      </div>
+      <PriceTag plan={plan} className="mt-4" />
 
       <div className="mt-6">
         {hideCheckout ? (
@@ -259,11 +260,7 @@ function SchoolsTeaserCard() {
       <p className="mt-1 text-sm opacity-75 text-pretty">
         One subscription. Every teacher and student gets Pro.
       </p>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-sm opacity-75">from</span>
-        <span className="text-4xl font-bold">{formatPrice(cheapest.priceInPence)}</span>
-        <span className="text-sm opacity-75">/{cheapest.interval}</span>
-      </div>
+      <PriceTag plan={cheapest} prefix="from" inverted className="mt-4" />
 
       <div className="mt-6">
         <a
@@ -302,10 +299,7 @@ function SchoolPlanCard({ plan, signedIn }: { plan: Plan; signedIn: boolean }) {
     <div className={`flex flex-col rounded-lg border border-border bg-card p-6 ${cardHover}`}>
       <h3 className="text-lg font-semibold">{plan.name}</h3>
       <p className="mt-1 text-sm text-muted-foreground text-pretty">{plan.blurb}</p>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-3xl font-bold">{formatPrice(plan.priceInPence)}</span>
-        <span className="text-sm text-muted-foreground">/{plan.interval}</span>
-      </div>
+      <PriceTag plan={plan} size="md" className="mt-4" />
 
       <Link
         href={signedIn ? "/school" : "/sign-up?next=/school"}

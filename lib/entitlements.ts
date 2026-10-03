@@ -80,7 +80,7 @@ export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null, maxFilesPer
  */
 export const TEACHER_FREE_LIMITS: TeacherLimits = {
   maxClasses: 1,
-  maxStudentsPerClass: 5,
+  maxStudentsPerClass: 25,
   maxLibraryFiles: 2,
   maxLibraryFolders: 2,
 }

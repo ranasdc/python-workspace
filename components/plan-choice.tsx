@@ -24,7 +24,14 @@ import { joinClass } from "@/app/actions/classes"
 import { joinSchoolWithCode } from "@/app/actions/schools"
 import { startCheckout } from "@/app/actions/billing"
 import { showClassJoinedToast } from "@/lib/class-join-toast"
-import { FREE_ALLOWANCE, PLANS, formatPrice, type PlanId } from "@/lib/plans"
+import {
+  FREE_ALLOWANCE,
+  PLANS,
+  discountPercent,
+  formatPrice,
+  isOnSale,
+  type PlanId,
+} from "@/lib/plans"
 
 export type PlanChoiceRole = "student" | "teacher"
 
@@ -264,7 +271,11 @@ export function PlanChoice({
         />
         <OptionCard
           icon={ProIcon}
-          badge={`${formatPrice(plan.priceInPence)} a ${plan.interval}`}
+          badge={
+            isOnSale(plan)
+              ? `${formatPrice(plan.priceInPence)} a ${plan.interval} · ${discountPercent(plan)}% off`
+              : `${formatPrice(plan.priceInPence)} a ${plan.interval}`
+          }
           heading={plan.name}
           summary={copy.pro.summary}
           features={plan.features}
