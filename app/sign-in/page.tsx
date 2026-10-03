@@ -3,6 +3,12 @@ import { redirect } from "next/navigation"
 import { AuthForm } from "@/components/auth-form"
 import { AuthShell } from "@/components/auth-shell"
 
+export const metadata = {
+  title: "Sign in",
+  description: "Sign in to mycodepad to open your Python and HTML workspaces and classes.",
+  alternates: { canonical: "/sign-in" },
+}
+
 export default async function SignInPage({
   searchParams,
 }: {
