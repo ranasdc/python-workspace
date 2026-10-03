@@ -14,10 +14,18 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { CheckoutButton } from "@/components/checkout-button"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 
+const pricingDescription =
+  "Free, Student Pro, Teacher Pro and school plans for mycodepad, the classroom workspace for Python and HTML. School plans give every student and teacher Pro at no personal cost."
+
 export const metadata = {
   title: "Pricing",
-  description:
-    "Student Pro, Teacher Pro and school plans for MyCodePad, the classroom workspace for Python and HTML. School plans give every student and teacher Pro at no personal cost.",
+  description: pricingDescription,
+  alternates: { canonical: "/pricing" },
+  openGraph: {
+    url: "/pricing",
+    title: "Pricing · mycodepad",
+    description: pricingDescription,
+  },
 }
 
 export default async function PricingPage() {
