@@ -7,7 +7,9 @@ import { JoinClassDialog } from "@/components/join-class-dialog"
 
 import { getSessionUser } from "@/lib/session"
 import { getEntitlement } from "@/lib/entitlements"
-import { PLANS, SCHOOL_PLAN_IDS, formatPrice, type Plan } from "@/lib/plans"
+import { PLANS, SCHOOL_PLAN_IDS, type Plan } from "@/lib/plans"
+import { PriceTag } from "@/components/price-tag"
+import { SaleBanner } from "@/components/sale-banner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { CheckoutButton } from "@/components/checkout-button"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
@@ -69,6 +71,8 @@ export default async function PricingPage() {
         </p>
       </header>
 
+      {!covered && <SaleBanner className="mt-10" />}
+
       {covered && (
         <div
           className="mx-auto mt-10 max-w-2xl rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 text-center text-sm"
@@ -86,7 +90,6 @@ export default async function PricingPage() {
           signedIn={Boolean(sessionUser)}
           hideCheckout={covered}
           coveredLabel={coveredLabel}
-          highlighted
           footer={
             covered || isTeacher ? null : (
               <div className="mt-3 rounded-md border border-dashed border-border px-3 py-3 text-center">
@@ -182,34 +185,28 @@ export default async function PricingPage() {
   )
 }
 
+const cardHover =
+  "transition-[border-color,box-shadow] duration-150 hover:border-primary hover:ring-1 hover:ring-primary"
+
 function PlanCard({
   plan,
   signedIn,
-  highlighted,
   hideCheckout,
   coveredLabel = "Covered by your school",
   footer,
 }: {
   plan: Plan
   signedIn: boolean
-  highlighted?: boolean
   hideCheckout?: boolean
   /** Who is paying instead, shown on the disabled button. */
   coveredLabel?: string
   footer?: ReactNode
 }) {
   return (
-    <div
-      className={`flex flex-col rounded-lg border bg-card p-6 ${
-        highlighted ? "border-2 border-primary" : "border-border"
-      }`}
-    >
+    <div className={`flex flex-col rounded-lg border border-border bg-card p-6 ${cardHover}`}>
       <h3 className="text-lg font-semibold">{plan.name}</h3>
       <p className="mt-1 text-sm text-muted-foreground text-pretty">{plan.blurb}</p>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-4xl font-bold">{formatPrice(plan.priceInPence)}</span>
-        <span className="text-sm text-muted-foreground">/{plan.interval}</span>
-      </div>
+      <PriceTag plan={plan} className="mt-4" />
 
       <div className="mt-6">
         {hideCheckout ? (
@@ -252,7 +249,7 @@ function SchoolsTeaserCard() {
   const breakEvenTeachers = Math.ceil(cheapest.priceInPence / teacherProYearly)
 
   return (
-    <div className="flex flex-col rounded-lg bg-foreground p-6 text-background md:col-span-2 lg:col-span-1">
+    <div className="flex flex-col rounded-lg bg-foreground p-6 text-background ring-primary ring-offset-2 ring-offset-background transition-shadow duration-150 hover:ring-2 md:col-span-2 lg:col-span-1">
       <span className="mb-2 self-start rounded-full bg-background/15 px-2 py-0.5 text-xs font-medium">
         Best value for teams
       </span>
@@ -263,11 +260,7 @@ function SchoolsTeaserCard() {
       <p className="mt-1 text-sm opacity-75 text-pretty">
         One subscription. Every teacher and student gets Pro.
       </p>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-sm opacity-75">from</span>
-        <span className="text-4xl font-bold">{formatPrice(cheapest.priceInPence)}</span>
-        <span className="text-sm opacity-75">/{cheapest.interval}</span>
-      </div>
+      <PriceTag plan={cheapest} prefix="from" inverted className="mt-4" />
 
       <div className="mt-6">
         <a
@@ -303,13 +296,10 @@ function SchoolsTeaserCard() {
 
 function SchoolPlanCard({ plan, signedIn }: { plan: Plan; signedIn: boolean }) {
   return (
-    <div className="flex flex-col rounded-lg border border-border bg-card p-6">
+    <div className={`flex flex-col rounded-lg border border-border bg-card p-6 ${cardHover}`}>
       <h3 className="text-lg font-semibold">{plan.name}</h3>
       <p className="mt-1 text-sm text-muted-foreground text-pretty">{plan.blurb}</p>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-3xl font-bold">{formatPrice(plan.priceInPence)}</span>
-        <span className="text-sm text-muted-foreground">/{plan.interval}</span>
-      </div>
+      <PriceTag plan={plan} size="md" className="mt-4" />
 
       <Link
         href={signedIn ? "/school" : "/sign-up?next=/school"}
