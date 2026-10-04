@@ -432,8 +432,9 @@ export function AiPoweredSection() {
             Smarter tools for teaching and learning.
           </h2>
           <p className="mt-4 text-pretty text-lg text-muted-foreground">
-            MyCodePad uses AI to give students meaningful coding practice and give teachers the tools to create,
-            support and understand learning — without getting in the way.
+            MyCodePad uses AI to give students meaningful coding practice and give teachers and
+            tutors the tools to create, support and understand learning — without getting in the
+            way.
           </p>
         </Reveal>
 
