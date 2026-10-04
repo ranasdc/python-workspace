@@ -374,6 +374,118 @@ textarea.pycharm-code::placeholder {
   animation: rainbow-shimmer 4s linear infinite;
 }
 
+/*
+ * "AI Powered" nav link: a gradient ring that orbits the pill, a breathing aura
+ * and a twinkling spark. --ai-ring-angle is registered so the conic gradient can
+ * be animated (plain custom properties are not interpolatable).
+ */
+@property --ai-ring-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ai-ring-spin {
+  to {
+    --ai-ring-angle: 360deg;
+  }
+}
+
+@keyframes ai-aura-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 10px -3px color-mix(in oklch, var(--chart-4) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 18px 1px color-mix(in oklch, var(--chart-4) 70%, transparent);
+  }
+}
+
+@keyframes ai-spark-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  40% {
+    opacity: 0.55;
+    transform: scale(0.8) rotate(-15deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.15) rotate(12deg);
+  }
+}
+
+.ai-nav-pill {
+  position: relative;
+  border-radius: 9999px;
+  padding: 0.3rem 0.75rem;
+  background: color-mix(in oklch, var(--card) 65%, transparent);
+  animation: ai-aura-breathe 3.2s ease-in-out infinite;
+  transition: background-color 200ms ease;
+}
+
+.ai-nav-pill:hover {
+  background: color-mix(in oklch, var(--card) 95%, transparent);
+}
+
+/* Conic gradient masked down to a 1px ring so only the border rotates. */
+.ai-nav-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ai-ring-angle),
+    var(--chart-1),
+    var(--chart-4),
+    var(--chart-2),
+    var(--chart-3),
+    var(--chart-1)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: ai-ring-spin 4s linear infinite;
+}
+
+.ai-nav-pill-spark {
+  color: var(--chart-4);
+  animation: ai-spark-twinkle 2.6s ease-in-out infinite;
+}
+
+.ai-nav-pill-label {
+  background: linear-gradient(
+    90deg,
+    var(--chart-1),
+    var(--chart-4),
+    var(--chart-2),
+    var(--chart-3),
+    var(--chart-1)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbow-shimmer 5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-nav-pill,
+  .ai-nav-pill::before,
+  .ai-nav-pill-spark,
+  .ai-nav-pill-label {
+    animation: none;
+  }
+}
+
 /* Emerald shimmer moving right to left. */
 @keyframes emerald-text-shimmer {
   0% {

@@ -100,7 +100,7 @@ function FooterColumn({
 const sections = [
   {
     id: "students",
-    eyebrow: "For students",
+    eyebrow: "For Students",
     icon: BookOpen,
     title: "Write and run real code without leaving the browser",
     desc: "Join a class with a single code, pick an IDE, and hit run. Python prints straight to an interactive console you can type into, HTML renders in a live preview — and every keystroke saves automatically.",
@@ -115,10 +115,10 @@ const sections = [
   },
   {
     id: "teachers",
-    eyebrow: "For teachers",
+    eyebrow: "For Educators",
     icon: GraduationCap,
     title: "Every student's work, on one live dashboard",
-    desc: "Spin up a class, share the join code, and watch submissions flow in. Open any file, run it yourself, and give feedback — all from a dashboard built for the classroom.",
+    desc: "Spin up a class, share the join code, and watch submissions flow in. Open any file, run it yourself, and give feedback — all from a dashboard built for the classroom. Perfect for school classrooms and tutoring.",
     image: "/images/teachers.png",
     imageAlt: "Illustration of a teacher reviewing student code on a dashboard",
     points: ["One-click class creation", "Run any student file", "Shareable join codes"],
@@ -131,7 +131,7 @@ const sections = [
   },
   {
     id: "organized",
-    eyebrow: "Always organized",
+    eyebrow: "Always Organized",
     icon: FolderTree,
     title: "Class, then student, then file — never lost",
     desc: "Work is filed into a clean tree the moment it's written. You always know who wrote what, in which class, and when it was last updated.",
@@ -216,10 +216,11 @@ export function LandingPage() {
               </a>
             ))}
             <a href="#organized" className="transition-colors hover:text-foreground">
-              Always organized
+              Always Organized
             </a>
-            <a href="#ai" className="transition-colors hover:text-foreground">
-              AI powered
+            <a href="#ai" className="ai-nav-pill inline-flex items-center gap-1.5 font-semibold">
+              <Sparkles aria-hidden className="ai-nav-pill-spark h-3.5 w-3.5" />
+              <span className="ai-nav-pill-label">AI Powered</span>
             </a>
             <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
               Pricing
@@ -262,13 +263,15 @@ export function LandingPage() {
         </Reveal>
         <Reveal delay={80}>
           <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-            <span className="rainbow-text">More than</span> just an IDE built for teachers and students
+            {/* Keep "More than" in its own span so the rainbow shimmer survives copy edits. */}
+            <span className="rainbow-text">More than</span>
+            {" just an IDE built for educators and students"}
           </h1>
         </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
-            Students write and run code in a clean editor. Their code flows straight to the
-            teacher&apos;s dashboard, neatly organized by class, student, and file.
+            Whether you&apos;re learning on your own, teaching a class, or tutoring students,
+            MyCodePad gives you one simple place to write, run, share and manage code.
           </p>
         </Reveal>
 
@@ -278,7 +281,7 @@ export function LandingPage() {
             id="languages-label"
             className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground"
           >
-            What your class can build today
+            What you can build today
           </p>
           <ul
             aria-labelledby="languages-label"
@@ -476,10 +479,10 @@ export function LandingPage() {
             <FooterColumn
               heading="Product"
               links={[
-                { label: "For students", href: "#students" },
-                { label: "For teachers", href: "#teachers" },
-              { label: "Always organized", href: "#organized" },
-              { label: "AI powered", href: "#ai" },
+                { label: "For Students", href: "#students" },
+                { label: "For Teachers", href: "#teachers" },
+                { label: "Always Organized", href: "#organized" },
+                { label: "AI Powered", href: "#ai" },
                 { label: "Pricing", href: "/pricing" },
               ]}
             />
@@ -487,8 +490,7 @@ export function LandingPage() {
               heading="Company"
               links={[
                 { label: "About us", href: "#" },
-                { label: "Contact", href: "#" },
-                { label: "Blog", href: "#" },
+                { label: "Contact Us", href: "#" },
               ]}
             />
             <FooterColumn
@@ -496,7 +498,7 @@ export function LandingPage() {
               links={[
                 { label: "Create account", href: "/sign-up" },
                 { label: "Sign in", href: "/sign-in" },
-                { label: "For schools", href: "/pricing#school-plans" },
+                { label: "For Schools", href: "/pricing#school-plans" },
               ]}
             />
           </div>
