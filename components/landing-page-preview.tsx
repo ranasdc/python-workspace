@@ -560,6 +560,24 @@ export function LandingPage() {
                 { label: "For Teachers", href: "#teachers" },
                 { label: "Always Organized", href: "#organized" },
                 { label: "AI Powered", href: "#ai" },
+                { label: "Pricing", href: "#pricing" },
+              ]}
+            />
+
+            <FooterColumn
+              heading="Company"
+              links={[
+                { label: "About us", href: "#about" },
+                { label: "Contact Us", href: "#contact" },
+              ]}
+            />
+
+            <FooterColumn
+              heading="Get started"
+              links={[
+                { label: "Create account", href: "/sign-up" },
+                { label: "Sign in", href: "/sign-in" },
+                { label: "For Schools", href: "#schools" },
               ]}
             />
           </div>
