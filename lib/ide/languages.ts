@@ -21,6 +21,23 @@ export type LanguageLimits = {
   maxFilesPerFolder: number | null
 }
 
+/**
+ * What the AI task tools need to know about an IDE.
+ *
+ * Task generation, refinement and model solutions are language-independent
+ * capabilities: they ask the registry what this IDE is like and put the answer
+ * in the prompt. A new IDE inherits the whole Create Task workspace by filling
+ * this in, with no change to the endpoint, the authoring UI or storage.
+ */
+export type LanguageAiContext = {
+  /** How the student's work actually runs, so the task can be set in it. */
+  environment: string
+  /** The shape a worked solution must take for this IDE. */
+  solutionFormat: string
+  /** Markdown fence tag the model should use for solution code. */
+  codeFence: string
+}
+
 export type LanguageDef = {
   id: LanguageId
   label: string
@@ -40,6 +57,8 @@ export type LanguageDef = {
   extensions: string[]
   /** Free-tier allowance, counted per IDE rather than across the account. */
   freeLimits: LanguageLimits
+  /** Prompt context for the AI task tools. */
+  ai: LanguageAiContext
   /** Reserved for future paid-only IDEs. Nothing sets it today. */
   proOnly?: boolean
 }
@@ -53,6 +72,13 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     accent: "var(--chart-1)",
     extensions: [".py"],
     freeLimits: { maxFiles: 2, maxFolders: 1, maxFilesPerFolder: 1 },
+    ai: {
+      environment:
+        "a single Python file run in the browser, with anything printed appearing in a console underneath. There is no file system, no network access and no third-party packages; input() is available and prompts the student in the console.",
+      solutionFormat:
+        "one complete, runnable Python file that satisfies the whole task on its own",
+      codeFence: "python",
+    },
   },
   html: {
     id: "html",
@@ -63,6 +89,13 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     accent: "var(--chart-4)",
     extensions: [".html", ".htm", ".css", ".js"],
     freeLimits: { maxFiles: 2, maxFolders: 1, maxFilesPerFolder: 1 },
+    ai: {
+      environment:
+        "an HTML file rendered live in a preview pane, with its linked stylesheet and script loaded from sibling files in the same folder. There is no build step and no network access, so no CDN links or frameworks.",
+      solutionFormat:
+        "the finished HTML, plus any CSS and JavaScript as separate clearly labelled blocks naming the file each belongs in",
+      codeFence: "html",
+    },
   },
 }
 

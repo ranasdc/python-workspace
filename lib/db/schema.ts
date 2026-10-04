@@ -306,6 +306,21 @@ export const libraryFiles = pgTable("library_file", {
   learningObjective: text("learningObjective"),
   // "manual" | "ai" — how the current instructions were produced.
   origin: text("origin").notNull().default("manual"),
+  // True once AI has rewritten the instructions. Independent of `origin`: a
+  // teacher-written task that was refined stays "manual".
+  aiRefined: boolean("aiRefined").notNull().default(false),
+  // ----- Teacher-only. Never selected by a student-facing read. -----
+  // The worked solution, as markdown. Students must never receive this, which
+  // is why both student reads list their columns explicitly instead of
+  // returning the row.
+  solution: text("solution"),
+  // "ai" | "teacher" | "teacher_edited"
+  solutionSource: text("solutionSource"),
+  solutionUpdatedAt: timestamp("solutionUpdatedAt"),
+  // Normalised snapshot of the task the solution was written against, so an
+  // edit that leaves the solution behind can be detected. See
+  // lib/tasks/solution-freshness.ts.
+  solutionFingerprint: text("solutionFingerprint"),
   // Bumped on every save so a student client can tell the task changed.
   version: integer("version").notNull().default(1),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
