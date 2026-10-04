@@ -116,10 +116,10 @@ const sections = [
   },
   {
     id: "teachers",
-    eyebrow: "For teachers & tutors",
+    eyebrow: "For Educators",
     icon: GraduationCap,
     title: "Every learner's work, on one live dashboard",
-    desc: "Set up a school class, a small tutoring group or a single 1-to-1 student. Share the join code and watch their work arrive. Open any file, run it yourself and give feedback, whether you teach a class of 30 or one student online.",
+    desc: "Spin up a class, share the join code, and watch submissions flow in. Open any file, run it yourself, and give feedback — all from a dashboard built for the classroom. Perfect for school classrooms and tutoring.",
     image: "/images/teachers.png",
     imageAlt: "Illustration of a teacher or tutor reviewing student code on a dashboard",
     points: [
@@ -245,7 +245,7 @@ function AudienceRow() {
   )
 }
 
-export function LandingPagePreview() {
+export function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [progress, setProgress] = useState(0)
 
@@ -337,14 +337,14 @@ export function LandingPagePreview() {
         </Reveal>
         <Reveal delay={80}>
           <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-            <span className="rainbow-text">More than</span> just an IDE. Built for learning,
-            teaching and coding.
+            <span className="rainbow-text">More than</span> just an IDE built for educators and
+            students
           </h1>
         </Reveal>
         <Reveal delay={160}>
-          <p className="mx-auto mt-5 max-w-2xl text-pretty text-lg text-muted-foreground">
-            Whether you&apos;re learning on your own, teaching a class, or tutoring students
-            1-to-1, myCodePad gives you one simple place to write, run, share and manage code.
+          <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
+            Whether you&apos;re learning on your own, teaching a class, or tutoring students,
+            MyCodePad gives you one simple place to write, run, share and manage code.
           </p>
         </Reveal>
         <Reveal delay={180} className="w-full">
@@ -556,26 +556,10 @@ export function LandingPagePreview() {
             <FooterColumn
               heading="Product"
               links={[
-                { label: "For students", href: "#students" },
-                { label: "For teachers & tutors", href: "#teachers" },
-              { label: "Always organized", href: "#organized" },
-              { label: "AI powered", href: "#ai" },
-                { label: "Pricing", href: "/pricing" },
-              ]}
-            />
-            <FooterColumn
-              heading="Company"
-              links={[
-                { label: "About us", href: "#" },
-                { label: "Contact", href: "#" },
-                { label: "Blog", href: "#" },
-              ]}
-            />
-            <FooterColumn
-              heading="Get started"
-              links={[
-                { label: "Create account", href: "/sign-up" },
-                { label: "Sign in", href: "/sign-in" },
+                { label: "For Students", href: "#students" },
+                { label: "For Educators", href: "#teachers" },
+                { label: "Always Organized", href: "#organized" },
+                { label: "AI Powered", href: "#ai" },
                 { label: "For tutors", href: "/pricing" },
                 { label: "For schools", href: "/pricing#school-plans" },
               ]}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { LandingPagePreview } from "@/components/landing-page-preview"
+import { LandingPage } from "@/components/landing-page-preview"
 
 export const metadata: Metadata = {
   title: "Homepage preview",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function HomepagePreviewPage() {
-  return <LandingPagePreview />
+  return <LandingPage />
 }
