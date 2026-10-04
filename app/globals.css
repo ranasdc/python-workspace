@@ -375,8 +375,8 @@ textarea.pycharm-code::placeholder {
 }
 
 /*
- * "AI Powered" nav link: a clean surface pill carrying a twinkling spark and a
- * shimmering gradient label.
+ * "AI Powered" nav link: no background of its own, so it sits on the nav like
+ * the other links, with a twinkling spark and a shimmering gradient label.
  */
 @keyframes ai-spark-twinkle {
   0%,
@@ -397,12 +397,6 @@ textarea.pycharm-code::placeholder {
 .ai-nav-pill {
   border-radius: 9999px;
   padding: 0.3rem 0.75rem;
-  background: var(--card);
-  transition: background-color 200ms ease;
-}
-
-.ai-nav-pill:hover {
-  background: var(--muted);
 }
 
 .ai-nav-pill-spark {
