@@ -375,22 +375,9 @@ textarea.pycharm-code::placeholder {
 }
 
 /*
- * "AI Powered" nav link: a gradient ring that orbits the pill, a breathing aura
- * and a twinkling spark. --ai-ring-angle is registered so the conic gradient can
- * be animated (plain custom properties are not interpolatable).
+ * "AI Powered" nav link: a borderless tinted pill with a breathing aura,
+ * a twinkling spark and a shimmering gradient label.
  */
-@property --ai-ring-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes ai-ring-spin {
-  to {
-    --ai-ring-angle: 360deg;
-  }
-}
-
 @keyframes ai-aura-breathe {
   0%,
   100% {
@@ -421,39 +408,13 @@ textarea.pycharm-code::placeholder {
   position: relative;
   border-radius: 9999px;
   padding: 0.3rem 0.75rem;
-  background: color-mix(in oklch, var(--card) 65%, transparent);
+  background: color-mix(in oklch, var(--chart-4) 12%, transparent);
   animation: ai-aura-breathe 3.2s ease-in-out infinite;
   transition: background-color 200ms ease;
 }
 
 .ai-nav-pill:hover {
-  background: color-mix(in oklch, var(--card) 95%, transparent);
-}
-
-/* Conic gradient masked down to a 1px ring so only the border rotates. */
-.ai-nav-pill::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--ai-ring-angle),
-    var(--chart-1),
-    var(--chart-4),
-    var(--chart-2),
-    var(--chart-3),
-    var(--chart-1)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  animation: ai-ring-spin 4s linear infinite;
+  background: color-mix(in oklch, var(--chart-4) 22%, transparent);
 }
 
 .ai-nav-pill-spark {
@@ -479,7 +440,6 @@ textarea.pycharm-code::placeholder {
 
 @media (prefers-reduced-motion: reduce) {
   .ai-nav-pill,
-  .ai-nav-pill::before,
   .ai-nav-pill-spark,
   .ai-nav-pill-label {
     animation: none;

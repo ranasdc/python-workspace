@@ -166,7 +166,7 @@ const languages = [
 
 const stats = [
   { icon: Zap, value: "0", label: "installs needed" },
-  { icon: Code2, value: "2", label: "IDEs, one account" },
+    { icon: Code2, value: "Multiple", label: "IDEs, one account" },
   { icon: Users, value: "1", label: "code to join a class" },
 ]
 
