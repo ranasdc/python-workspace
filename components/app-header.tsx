@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { BookOpen, Building2, Zap } from "lucide-react"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { ProfileMenu } from "@/components/profile-menu"
+import { InstallSuggestion } from "@/components/pwa/install-suggestion"
 import { cn } from "@/lib/utils"
 import { usePendingStarters } from "@/hooks/use-pending-starters"
 
@@ -87,8 +88,10 @@ export function AppHeader({
           roleLabel={label}
           schoolName={schoolName}
           isSchoolAdmin={isSchoolAdmin}
+          isTeacher={role === "teacher"}
         />
       </div>
+      <InstallSuggestion isTeacher={role === "teacher"} />
     </header>
   )
 }

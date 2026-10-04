@@ -1,10 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, CreditCard, LogOut, Shield, User, Users } from "lucide-react"
+import { Building2, Check, CreditCard, Download, LogOut, Shield, User, Users } from "lucide-react"
 
 import { authClient } from "@/lib/auth-client"
+import { installMode, promptInstall, usePwa } from "@/lib/pwa"
+import { InstallDialog } from "@/components/pwa/install-dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -40,6 +43,7 @@ export function ProfileMenu({
   roleLabel,
   schoolName,
   isSchoolAdmin,
+  isTeacher = false,
 }: {
   name: string
   email: string
@@ -49,8 +53,13 @@ export function ProfileMenu({
   /** The school from the user's membership, or null when they have none. */
   schoolName?: string | null
   isSchoolAdmin?: boolean
+  /** Tailors the install copy to classes rather than a personal workspace. */
+  isTeacher?: boolean
 }) {
   const router = useRouter()
+  const pwa = usePwa()
+  const mode = installMode(pwa)
+  const [installOpen, setInstallOpen] = useState(false)
 
   async function handleSignOut() {
     await authClient.signOut()
@@ -58,7 +67,16 @@ export function ProfileMenu({
     router.refresh()
   }
 
+  async function handleInstall() {
+    if (mode === "prompt") {
+      const outcome = await promptInstall()
+      if (outcome !== "unavailable") return
+    }
+    setInstallOpen(true)
+  }
+
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         className="flex items-center gap-2.5 rounded-md p-1 pr-1.5 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -121,6 +139,23 @@ export function ProfileMenu({
           ) : null}
         </DropdownMenuGroup>
 
+        {pwa.ready ? (
+          <>
+            <DropdownMenuSeparator />
+            {mode === "installed" ? (
+              <DropdownMenuItem onClick={() => setInstallOpen(true)}>
+                <Check className="text-emerald-500" />
+                MyCodePad installed
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={handleInstall}>
+                <Download />
+                Install MyCodePad
+              </DropdownMenuItem>
+            )}
+          </>
+        ) : null}
+
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
           <LogOut />
@@ -128,5 +163,7 @@ export function ProfileMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <InstallDialog open={installOpen} onOpenChange={setInstallOpen} isTeacher={isTeacher} />
+    </>
   )
 }
