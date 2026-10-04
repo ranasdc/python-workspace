@@ -670,18 +670,39 @@ export async function assertCanCreateLibraryFolder(userId: string) {
 }
 
 /**
- * Gate for AI task generation. Returns the resolved entitlement so the caller
- * can record usage against the same account this checked. Manual task creation
- * never calls this — only AI generation is gated and metered.
+ * The AI teaching tools, for message purposes only.
+ *
+ * They deliberately share one gate and one allowance rather than each getting
+ * their own entitlement flag: they are the same product promise, so a plan
+ * that grants one grants all of them, and a new AI tool is covered the day it
+ * is added. This list only decides what the refusal says.
  */
-export async function assertCanGenerateAiTask(userId: string) {
+export type AiTeachingFeature = "task" | "refinement" | "solution" | "starter"
+
+const AI_FEATURE_REFUSAL: Record<AiTeachingFeature, string> = {
+  task: "AI task generation is a Teacher Pro feature. Upgrade to generate tasks with AI, or write the task yourself.",
+  refinement:
+    "Refining a task with AI is a Teacher Pro feature. Upgrade to use it — your task is safe and you can keep editing it by hand.",
+  solution:
+    "AI model solutions are a Teacher Pro feature. Upgrade to generate them, or write the solution yourself.",
+  starter:
+    "AI Daily Starters are a Teacher Pro feature. Upgrade to generate them, or write the questions yourself.",
+}
+
+/**
+ * Gate for the AI teaching tools. Returns the resolved entitlement so the
+ * caller can record usage against the same account this checked. Writing a
+ * task or a solution by hand never calls this — only AI work is gated and
+ * metered.
+ */
+export async function assertCanGenerateAiTask(
+  userId: string,
+  feature: AiTeachingFeature = "task",
+) {
   const entitlement = await requireTeacherCapability(userId)
 
   if (!entitlement.canGenerateAiTasks) {
-    throw new EntitlementError(
-      "ai_not_available",
-      "AI task generation is a Teacher Pro feature. Upgrade to generate tasks with AI, or write the task yourself.",
-    )
+    throw new EntitlementError("ai_not_available", AI_FEATURE_REFUSAL[feature])
   }
 
   const limit = entitlement.aiTaskMonthlyLimit
