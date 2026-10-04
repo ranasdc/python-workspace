@@ -3,7 +3,10 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import { SITE } from '@/lib/site'
+import { PwaProvider } from '@/components/pwa/pwa-provider'
 import './globals.css'
+
+const INSTALL_CAPTURE_SCRIPT = `window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__mcpInstallEvent=e});window.addEventListener('appinstalled',function(){window.__mcpInstalled=true;window.__mcpInstallEvent=null});`
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
@@ -37,6 +40,7 @@ export const metadata: Metadata = {
     googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 },
   },
   formatDetection: { telephone: false, email: false, address: false },
+  appleWebApp: { capable: true, title: 'MyCodePad', statusBarStyle: 'default' },
   generator: 'v0.app',
 }
 
@@ -54,9 +58,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} bg-background`}>
+      <head>
+        {/* The install prompt can fire before React hydrates, so catch it early. */}
+        <script dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE_SCRIPT }} />
+      </head>
       <body className="font-sans antialiased">
         {children}
         <Toaster position="top-center" />
+        <PwaProvider />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
