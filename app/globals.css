@@ -375,19 +375,9 @@ textarea.pycharm-code::placeholder {
 }
 
 /*
- * "AI Powered" nav link: a borderless tinted pill with a breathing aura,
- * a twinkling spark and a shimmering gradient label.
+ * "AI Powered" nav link: a clean surface pill carrying a twinkling spark and a
+ * shimmering gradient label.
  */
-@keyframes ai-aura-breathe {
-  0%,
-  100% {
-    box-shadow: 0 0 10px -3px color-mix(in oklch, var(--chart-4) 45%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 18px 1px color-mix(in oklch, var(--chart-4) 70%, transparent);
-  }
-}
-
 @keyframes ai-spark-twinkle {
   0%,
   100% {
@@ -405,16 +395,14 @@ textarea.pycharm-code::placeholder {
 }
 
 .ai-nav-pill {
-  position: relative;
   border-radius: 9999px;
   padding: 0.3rem 0.75rem;
-  background: color-mix(in oklch, var(--chart-4) 12%, transparent);
-  animation: ai-aura-breathe 3.2s ease-in-out infinite;
+  background: var(--card);
   transition: background-color 200ms ease;
 }
 
 .ai-nav-pill:hover {
-  background: color-mix(in oklch, var(--chart-4) 22%, transparent);
+  background: var(--muted);
 }
 
 .ai-nav-pill-spark {
@@ -439,7 +427,6 @@ textarea.pycharm-code::placeholder {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ai-nav-pill,
   .ai-nav-pill-spark,
   .ai-nav-pill-label {
     animation: none;
