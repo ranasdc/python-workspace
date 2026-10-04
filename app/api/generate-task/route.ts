@@ -117,9 +117,9 @@ export async function POST(req: Request) {
     instructions: (body.instructions ?? "").slice(0, MAX_INSTRUCTIONS).trim(),
   }
 
-  if (mode === "create" && !seed.topic && !seed.learningObjective) {
+  if (mode === "create" && !seed.topic && !seed.learningObjective && !seed.requirements) {
     return Response.json(
-      { error: "Give a topic or a learning objective to generate from." },
+      { error: "Add a topic, learning objective or a draft of the task to generate from." },
       { status: 400 },
     )
   }

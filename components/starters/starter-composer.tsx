@@ -82,10 +82,8 @@ export function StarterComposer({
       }
       // A teacher without the entitlement is shown the upgrade experience
       // rather than a toast telling them generation failed.
-      if (!res.ok && aiPrompt.handleRefusal(data)) {
-        onOpenChange(false)
-        return
-      }
+      // The starter window stays open underneath, so nothing typed is lost.
+      if (!res.ok && aiPrompt.handleRefusal(data)) return
       if (!res.ok || !data.questions) throw new Error(data.error || "Generation failed")
       setQuestions(data.questions)
       setAiGenerated(true)
@@ -286,12 +284,11 @@ export function StarterComposer({
             </div>
           </div>
         </div>
+        {/* Nested inside the composer so it stacks above it and the starter
+            being written stays mounted underneath. */}
+        <AiUpgradePrompt open={aiPrompt.open} onOpenChange={aiPrompt.setOpen} />
       </DialogContent>
     </Dialog>
-
-    {/* Outside the composer so the upgrade prompt replaces it rather than
-        stacking on top of it. */}
-    <AiUpgradePrompt open={aiPrompt.open} onOpenChange={aiPrompt.setOpen} />
     </>
   )
 }
