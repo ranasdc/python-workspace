@@ -337,8 +337,9 @@ export function LandingPage() {
         </Reveal>
         <Reveal delay={80}>
           <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-            <span className="rainbow-text">More than</span> just an IDE built for educators and
-            students
+            {/* Keep "More than" in its own span so the rainbow shimmer survives copy edits. */}
+            <span className="rainbow-text">More than</span>
+            {" just an IDE built for educators and students"}
           </h1>
         </Reveal>
         <Reveal delay={160}>
