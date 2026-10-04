@@ -101,7 +101,7 @@ function FooterColumn({
 const sections = [
   {
     id: "students",
-    eyebrow: "For students",
+    eyebrow: "For Students",
     icon: BookOpen,
     title: "Write and run real code without leaving the browser",
     desc: "Practise on your own, or join a class or tutoring group with a single code. Pick an IDE and hit run. Python prints straight to an interactive console you can type into, HTML renders in a live preview — and every keystroke saves automatically.",
@@ -136,7 +136,7 @@ const sections = [
   },
   {
     id: "organized",
-    eyebrow: "Always organized",
+    eyebrow: "Always Organized",
     icon: FolderTree,
     title: "Group, then learner, then file — never lost",
     desc: "Work is filed into a clean tree the moment it's written. You always know who wrote what, in which class or lesson group, and when it was last updated.",
@@ -177,13 +177,13 @@ const stats = [
 
 const audiences = [
   {
-    eyebrow: "For students",
+    eyebrow: "For Students",
     line: "Learn, practise and build",
     icon: BookOpen,
     accent: "primary",
   },
   {
-    eyebrow: "For teachers",
+    eyebrow: "For Educators",
     line: "Teach, manage and review",
     icon: GraduationCap,
     accent: "chart-2",
@@ -291,10 +291,10 @@ export function LandingPage() {
               </a>
             ))}
             <a href="#organized" className="transition-colors hover:text-foreground">
-              Always organized
+              Always Organized
             </a>
             <a href="#ai" className="transition-colors hover:text-foreground">
-              AI powered
+              AI Powered
             </a>
             <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
               Pricing
@@ -557,11 +557,9 @@ export function LandingPage() {
               heading="Product"
               links={[
                 { label: "For Students", href: "#students" },
-                { label: "For Educators", href: "#teachers" },
+                { label: "For Teachers", href: "#teachers" },
                 { label: "Always Organized", href: "#organized" },
                 { label: "AI Powered", href: "#ai" },
-                { label: "For tutors", href: "/pricing" },
-                { label: "For schools", href: "/pricing#school-plans" },
               ]}
             />
           </div>
