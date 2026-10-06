@@ -32,6 +32,7 @@ export type InviteCodeMember = {
   userId: string
   name: string
   email: string
+  avatarId: string | null
   role: string
   status: string
   joinedAt: Date

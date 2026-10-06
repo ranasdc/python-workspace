@@ -13,3 +13,7 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+
+# Full-size avatar artwork. scripts/optimise-avatars.mjs turns these into the
+# committed WebP files in public/avatars/, which are the only ones shipped.
+.avatar-src/

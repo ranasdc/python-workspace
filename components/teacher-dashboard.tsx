@@ -30,6 +30,7 @@ import { DeleteClassDialog } from "@/components/delete-class-dialog"
 import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import { getClassTree, setFileStatus } from "@/app/actions/files"
 import { FileComments } from "@/components/file-comments"
+import { UserAvatar } from "@/components/user-avatar"
 import { TeacherLibrary } from "@/components/teacher-library"
 import { JoinSchoolDialog } from "@/components/join-school-dialog"
 import { ClassAiHelpControl } from "@/components/class-ai-help-control"
@@ -48,7 +49,6 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   Plus,
-  Users,
   FileCode,
   ChevronRight,
   ChevronDown,
@@ -99,6 +99,7 @@ type TreeStudent = {
   id: string
   name: string
   email: string
+  avatarId: string | null
   folders: TreeFolder[]
   rootFiles: TreeFile[]
   files: TreeFile[]
@@ -618,7 +619,12 @@ function StudentNode({
         ) : (
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
-        <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <UserAvatar
+          userId={student.id}
+          name={student.name}
+          avatarId={student.avatarId}
+          size="sm"
+        />
         <span className="truncate font-medium">{student.name}</span>
         <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
           {student.files.length}

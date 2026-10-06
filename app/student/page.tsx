@@ -58,9 +58,10 @@ export default async function StudentPage() {
   return (
     <div className="flex h-svh flex-col">
       <AppHeader
+        userId={sessionUser.id}
         name={sessionUser.name}
         email={sessionUser.email}
-        image={identity.image}
+        avatarId={identity.avatarId}
         role="student"
         roleLabel={identity.roleLabel}
         schoolName={identity.schoolName}

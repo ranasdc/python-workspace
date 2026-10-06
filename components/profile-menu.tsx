@@ -3,12 +3,23 @@
 import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Check, CreditCard, Download, LogOut, Shield, User, Users } from "lucide-react"
+import {
+  Building2,
+  Check,
+  CreditCard,
+  Download,
+  LogOut,
+  Shield,
+  Smile,
+  User,
+  Users,
+} from "lucide-react"
 
 import { authClient } from "@/lib/auth-client"
 import { installMode, promptInstall, usePwa } from "@/lib/pwa"
 import { InstallDialog } from "@/components/pwa/install-dialog"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { AvatarPicker } from "@/components/account/avatar-picker"
+import { UserAvatar } from "@/components/user-avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,15 +28,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
-/** First letters of the first and last word, e.g. "Sarah Jones" -> "SJ". */
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return "?"
-  const first = parts[0][0] ?? ""
-  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : ""
-  return (first + last).toUpperCase()
-}
 
 /**
  * The account menu behind the user's avatar.
@@ -37,17 +39,20 @@ function initials(name: string) {
  * by this menu.
  */
 export function ProfileMenu({
+  userId,
   name,
   email,
-  image,
+  avatarId,
   roleLabel,
   schoolName,
   isSchoolAdmin,
   isTeacher = false,
 }: {
+  userId: string
   name: string
   email: string
-  image?: string | null
+  /** Key into the avatar catalogue, or null when never chosen. */
+  avatarId?: string | null
   /** e.g. "Teacher", "School admin", "Student". */
   roleLabel: string
   /** The school from the user's membership, or null when they have none. */
@@ -60,6 +65,7 @@ export function ProfileMenu({
   const pwa = usePwa()
   const mode = installMode(pwa)
   const [installOpen, setInstallOpen] = useState(false)
+  const [avatarOpen, setAvatarOpen] = useState(false)
 
   async function handleSignOut() {
     await authClient.signOut()
@@ -82,12 +88,7 @@ export function ProfileMenu({
         className="flex items-center gap-2.5 rounded-md p-1 pr-1.5 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         aria-label="Your account"
       >
-        <Avatar className="size-8">
-          {image ? <AvatarImage src={image} alt="" /> : null}
-          <AvatarFallback className="text-xs font-medium">
-            {initials(name)}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar userId={userId} name={name} avatarId={avatarId} />
         <span className="hidden text-left leading-tight sm:block">
           <span className="block text-sm font-medium">{name}</span>
           <span className="block text-xs text-muted-foreground">
@@ -110,6 +111,10 @@ export function ProfileMenu({
           <DropdownMenuItem render={<Link href="/account" />} nativeButton={false}>
             <User />
             Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAvatarOpen(true)}>
+            <Smile />
+            Change avatar
           </DropdownMenuItem>
           <DropdownMenuItem
             render={<Link href="/account?tab=security" />}
@@ -164,6 +169,13 @@ export function ProfileMenu({
       </DropdownMenuContent>
     </DropdownMenu>
     <InstallDialog open={installOpen} onOpenChange={setInstallOpen} isTeacher={isTeacher} />
+    <AvatarPicker
+      open={avatarOpen}
+      onOpenChange={setAvatarOpen}
+      userId={userId}
+      name={name}
+      currentAvatarId={avatarId}
+    />
     </>
   )
 }

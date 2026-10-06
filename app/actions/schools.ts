@@ -202,6 +202,7 @@ export async function getInviteCodeUsage(codeId: number) {
       userId: schoolMembers.userId,
       name: user.name,
       email: user.email,
+      avatarId: user.avatarId,
       role: schoolMembers.role,
       status: schoolMembers.status,
       joinedAt: schoolMembers.joinedAt,

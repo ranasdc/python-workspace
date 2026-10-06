@@ -269,7 +269,12 @@ export async function getClassTree(classId: number, languageInput: LanguageId = 
   const studentIds = enrolled.map((e) => e.studentId)
   const students = studentIds.length
     ? await db
-        .select({ id: user.id, name: user.name, email: user.email })
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatarId: user.avatarId,
+        })
         .from(user)
         .where(inArray(user.id, studentIds))
     : []
@@ -347,12 +352,23 @@ export async function getFileComments(fileId: number) {
     if (!cls) throw new Error("Unauthorized")
   }
 
+  // The author's avatar is joined live rather than copied onto the comment, so
+  // changing your picture updates the feedback you have already left.
   return db
-    .select()
-    .from(fileComments)
-    .where(eq(fileComments.fileId, fileId))
-    .orderBy(asc(fileComments.createdAt))
-}
+  .select({
+  id: fileComments.id,
+  fileId: fileComments.fileId,
+  teacherId: fileComments.teacherId,
+  teacherName: fileComments.teacherName,
+  teacherAvatarId: user.avatarId,
+  body: fileComments.body,
+  createdAt: fileComments.createdAt,
+  })
+  .from(fileComments)
+  .leftJoin(user, eq(user.id, fileComments.teacherId))
+  .where(eq(fileComments.fileId, fileId))
+  .orderBy(asc(fileComments.createdAt))
+  }
 
 export async function addComment(fileId: number, body: string) {
   const teacher = await requireUser()
