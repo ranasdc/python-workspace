@@ -16,6 +16,11 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),
+  // Key into the MyCodePad avatar catalogue (lib/avatars.ts), e.g. "robo-coder".
+  // Never a URL or image data: the catalogue owns the artwork, so a picture can
+  // be re-cut without touching user rows. Null means "never chosen" and
+  // resolves to a stable avatar derived from the user id.
+  avatarId: text("avatarId"),
   role: text("role").notNull().default("student"),
   // Freemium model for individual students
   accountType: text("accountType"), // "class" | "individual"
