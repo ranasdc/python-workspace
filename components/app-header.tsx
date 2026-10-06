@@ -10,17 +10,20 @@ import { cn } from "@/lib/utils"
 import { usePendingStarters } from "@/hooks/use-pending-starters"
 
 export function AppHeader({
+  userId,
   name,
   email,
-  image,
+  avatarId,
   role,
   roleLabel,
   schoolName = null,
   isSchoolAdmin = false,
 }: {
+  userId: string
   name: string
   email: string
-  image?: string | null
+  /** Key into the avatar catalogue, or null when never chosen. */
+  avatarId?: string | null
   role: string
   /** Defaults to the capitalised workspace role when not supplied. */
   roleLabel?: string
@@ -82,9 +85,10 @@ export function AppHeader({
           </Link>
         )}
         <ProfileMenu
+          userId={userId}
           name={name}
           email={email}
-          image={image}
+          avatarId={avatarId}
           roleLabel={label}
           schoolName={schoolName}
           isSchoolAdmin={isSchoolAdmin}

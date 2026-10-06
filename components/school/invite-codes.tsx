@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { UserAvatar } from "@/components/user-avatar"
 import {
   Select,
   SelectContent,
@@ -266,7 +267,7 @@ function CodeRow({
             ? ` · ${code.usedCount}/${code.maxUses} uses`
             : " joined"}
           {code.expiresAt && state.kind === "active"
-            ? ` · expires ${formatDate(code.expiresAt)}`
+            ? ` �� expires ${formatDate(code.expiresAt)}`
             : ""}
         </span>
 
@@ -324,6 +325,12 @@ function CodeRow({
                   key={member.userId}
                   className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
                 >
+                  <UserAvatar
+                    userId={member.userId}
+                    name={member.name}
+                    avatarId={member.avatarId}
+                    size="sm"
+                  />
                   <span className="font-medium">{member.name}</span>
                   <span className="text-muted-foreground">{member.email}</span>
                   <span className="ml-auto text-xs text-muted-foreground">

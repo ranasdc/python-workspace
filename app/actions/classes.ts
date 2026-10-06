@@ -138,7 +138,12 @@ export async function getTeacherClasses() {
   const studentIds = [...new Set(allEnrollments.map((e) => e.studentId))]
   const students = studentIds.length
     ? await db
-        .select({ id: user.id, name: user.name, email: user.email })
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatarId: user.avatarId,
+        })
         .from(user)
         .where(inArray(user.id, studentIds))
     : []
@@ -150,7 +155,12 @@ export async function getTeacherClasses() {
     students: allEnrollments
       .filter((e) => e.classId === c.id)
       .map((e) => studentMap.get(e.studentId))
-      .filter(Boolean) as { id: string; name: string; email: string }[],
+      .filter(Boolean) as {
+      id: string
+      name: string
+      email: string
+      avatarId: string | null
+    }[],
   }))
 }
 

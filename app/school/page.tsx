@@ -24,9 +24,10 @@ export default async function SchoolPage() {
   return (
     <div className="flex min-h-svh flex-col">
       <AppHeader
+        userId={sessionUser.id}
         name={sessionUser.name}
         email={sessionUser.email}
-        image={identity.image}
+        avatarId={identity.avatarId}
         role={sessionUser.role === "teacher" || overview ? "teacher" : "student"}
         roleLabel={identity.roleLabel}
         schoolName={identity.schoolName}

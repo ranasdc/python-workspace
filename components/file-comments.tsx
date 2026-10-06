@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from "swr"
 import { getFileComments, addComment, deleteComment } from "@/app/actions/files"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { UserAvatar } from "@/components/user-avatar"
 import { toast } from "sonner"
 import { MessageSquare, Loader2, Send, Trash2 } from "lucide-react"
 
@@ -13,18 +14,9 @@ type Comment = {
   fileId: number
   teacherId: string
   teacherName: string
+  teacherAvatarId: string | null
   body: string
   createdAt: Date
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
 }
 
 /**
@@ -100,9 +92,13 @@ export function FileComments({
           <ul className="flex flex-col gap-3">
             {list.map((c) => (
               <li key={c.id} className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
-                  {initials(c.teacherName)}
-                </span>
+                <UserAvatar
+                  userId={c.teacherId}
+                  name={c.teacherName}
+                  avatarId={c.teacherAvatarId}
+                  size="sm"
+                  className="mt-0.5 size-7"
+                />
                 <div className="min-w-0 flex-1 rounded-lg rounded-tl-sm bg-muted/60 px-3 py-2">
                   <div className="mb-0.5 flex items-center gap-2">
                     <span className="text-xs font-semibold">{c.teacherName}</span>

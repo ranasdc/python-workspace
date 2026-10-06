@@ -26,9 +26,10 @@ export default async function StudentStartersPage({
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <AppHeader
+        userId={sessionUser.id}
         name={sessionUser.name}
         email={sessionUser.email}
-        image={identity.image}
+        avatarId={identity.avatarId}
         role="student"
         roleLabel={identity.roleLabel}
         schoolName={identity.schoolName}

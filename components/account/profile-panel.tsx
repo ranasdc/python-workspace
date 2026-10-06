@@ -18,6 +18,9 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { updateDisplayName } from "@/app/actions/account"
+import { AvatarPicker } from "@/components/account/avatar-picker"
+import { UserAvatar } from "@/components/user-avatar"
+import { resolveAvatar } from "@/lib/avatars"
 import type { AccountProfile } from "@/lib/account"
 
 function formatDate(value: Date) {
@@ -40,6 +43,9 @@ export function ProfilePanel({ profile }: { profile: AccountProfile }) {
   const router = useRouter()
   const [name, setName] = useState(profile.user.name)
   const [saving, setSaving] = useState(false)
+  const [avatarOpen, setAvatarOpen] = useState(false)
+
+  const avatar = resolveAvatar(profile.user.id, profile.user.avatarId)
 
   const dirty = name.trim() !== profile.user.name.trim()
 
@@ -65,6 +71,47 @@ export function ProfilePanel({ profile }: { profile: AccountProfile }) {
 
   return (
     <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile avatar</CardTitle>
+          <CardDescription>
+            Choose an avatar from the MyCodePad collection.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-4">
+            <UserAvatar
+              userId={profile.user.id}
+              name={profile.user.name}
+              avatarId={profile.user.avatarId}
+              className="size-16"
+            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">{avatar.name}</span>
+              <span className="text-xs text-muted-foreground">
+                Shown beside your name across MyCodePad.
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="ml-auto"
+              onClick={() => setAvatarOpen(true)}
+            >
+              Change avatar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AvatarPicker
+        open={avatarOpen}
+        onOpenChange={setAvatarOpen}
+        userId={profile.user.id}
+        name={profile.user.name}
+        currentAvatarId={profile.user.avatarId}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Your details</CardTitle>

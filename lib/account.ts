@@ -164,7 +164,7 @@ export const getHeaderIdentity = cache(async (userId: string) => {
     getEntitlement(userId),
     getSchoolMembership(userId),
     db
-      .select({ image: user.image })
+      .select({ image: user.image, avatarId: user.avatarId })
       .from(user)
       .where(eq(user.id, userId))
       .limit(1),
@@ -172,6 +172,7 @@ export const getHeaderIdentity = cache(async (userId: string) => {
 
   return {
     image: record[0]?.image ?? null,
+    avatarId: record[0]?.avatarId ?? null,
     roleLabel: roleLabel(entitlement),
     schoolName: membership?.schoolName ?? null,
     // An administrator of a school whose plan has lapsed keeps the role but
@@ -203,6 +204,8 @@ export type AccountProfile = {
     name: string
     email: string
     image: string | null
+    /** Key into the avatar catalogue, or null when never chosen. */
+    avatarId: string | null
     createdAt: Date
   }
   entitlement: Entitlement
@@ -231,6 +234,7 @@ export async function getAccountProfile(userId: string): Promise<AccountProfile 
       name: user.name,
       email: user.email,
       image: user.image,
+      avatarId: user.avatarId,
       createdAt: user.createdAt,
     })
     .from(user)

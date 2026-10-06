@@ -47,9 +47,10 @@ export default async function TeacherPage() {
   return (
     <div className="flex h-svh flex-col">
       <AppHeader
+        userId={user.id}
         name={user.name}
         email={user.email}
-        image={identity.image}
+        avatarId={identity.avatarId}
         role="teacher"
         roleLabel={identity.roleLabel}
         schoolName={identity.schoolName}
