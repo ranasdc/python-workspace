@@ -179,8 +179,9 @@ export function AvatarPicker({
           </ul>
         </div>
 
-        <DialogFooter className="flex-row items-center gap-3 border-t border-border px-6 py-4">
-          <div className="mr-auto flex items-center gap-3">
+        {/* Stacks on phones: the four items do not fit one row at 390px. */}
+        <DialogFooter className="flex-col items-stretch gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-3 sm:mr-auto">
             <img
               src={chosen.src}
               alt=""
@@ -188,27 +189,41 @@ export function AvatarPicker({
               height={40}
               className="size-10 shrink-0 rounded-full bg-muted object-cover"
             />
-            <span className="leading-tight">
+            <span className="min-w-0 leading-tight">
               <span className="block text-xs text-muted-foreground">Selected</span>
-              <span className="block text-sm font-medium">{chosen.name}</span>
+              <span className="block truncate text-sm font-medium">{chosen.name}</span>
             </span>
           </div>
-          <Button type="button" variant="ghost" onClick={surpriseMe} disabled={saving}>
-            <Dices data-icon="inline-start" />
-            Surprise me
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving || !dirty}>
-            {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
-            Save avatar
-          </Button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={surpriseMe}
+              disabled={saving}
+              className="flex-1 sm:flex-none"
+            >
+              <Dices data-icon="inline-start" />
+              Surprise me
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+              className="flex-1 sm:flex-none"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !dirty}
+              className="flex-1 sm:flex-none"
+            >
+              {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+              Save avatar
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
