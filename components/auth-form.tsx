@@ -10,7 +10,8 @@ import { checkExistingAccount } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GraduationCap, BookOpen, Loader2 } from "lucide-react"
+import { GraduationCap, BookOpen, Loader2, Mail, CheckCircle2, ArrowRight } from "lucide-react"
+import { PasswordInput } from "@/components/auth/password-input"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
@@ -24,7 +25,15 @@ function safeNext(next?: string) {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : null
 }
 
-export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
+export function AuthForm({
+  mode,
+  next,
+  resetSuccess = false,
+}: {
+  mode: Mode
+  next?: string
+  resetSuccess?: boolean
+}) {
   const router = useRouter()
   const destination = safeNext(next)
   const [loading, setLoading] = useState(false)
@@ -82,9 +91,18 @@ export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
   }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full">
       <div className="mb-8 flex flex-col items-center text-center">
-        <LogoIcon className="mb-4 h-14 w-14" />
+        <LogoIcon className="mb-5 h-14 w-14 rounded-2xl shadow-lg shadow-primary/20" />
+        {resetSuccess && mode === "sign-in" && (
+          <p
+            role="status"
+            className="mb-5 flex w-full items-center gap-2 rounded-lg border border-[#34d399]/40 bg-[#34d399]/10 px-3 py-2.5 text-left text-sm text-foreground"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-[#10b981]" aria-hidden="true" />
+            Password updated. Sign in with your new password.
+          </p>
+        )}
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
           {mode === "sign-up" ? (
             <>
@@ -141,24 +159,39 @@ export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@school.edu"
-            required
-          />
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@school.edu"
+              className="h-11 pl-9"
+              required
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            {mode === "sign-in" && (
+              <Link
+                href={email ? `/forgot-password?email=${encodeURIComponent(email)}` : "/forgot-password"}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
+            )}
+          </div>
+          <PasswordInput
             id="password"
-            type="password"
+            autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder={mode === "sign-up" ? "At least 8 characters" : "Your password"}
             minLength={8}
             required
           />
@@ -170,9 +203,16 @@ export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
           </p>
         )}
 
-        <Button type="submit" disabled={loading} className="mt-2">
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button
+          type="submit"
+          disabled={loading}
+          className="group mt-2 h-11 bg-gradient-to-r from-primary to-[#6d5ce8] text-base shadow-lg shadow-primary/25 transition-shadow hover:shadow-primary/40"
+        >
+          {loading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
           {mode === "sign-up" ? "Create account" : "Sign in"}
+          {!loading && <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
         </Button>
       </form>
 

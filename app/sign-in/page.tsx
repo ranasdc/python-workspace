@@ -12,14 +12,14 @@ export const metadata = {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>
+  searchParams: Promise<{ next?: string; reset?: string }>
 }) {
   const user = await getSessionUser()
-  const { next } = await searchParams
+  const { next, reset } = await searchParams
   if (user) redirect(next?.startsWith("/") && !next.startsWith("//") ? next : "/dashboard")
   return (
     <AuthShell>
-      <AuthForm mode="sign-in" next={next} />
+      <AuthForm mode="sign-in" next={next} resetSuccess={reset === "success"} />
     </AuthShell>
   )
 }
