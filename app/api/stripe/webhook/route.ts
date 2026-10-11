@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { stripeEvents } from "@/lib/db/schema"
 import { stripe } from "@/lib/stripe"
 import { markSubscriptionCanceled, syncSubscriptionFromStripe } from "@/lib/billing-sync"
+import { sendBillingEmailForEvent } from "@/lib/transactional-emails"
 
 // Stripe needs the raw body for signature verification, so this route must not
 // be given a parsed body by anything upstream.
@@ -57,6 +58,9 @@ export async function POST(req: Request) {
     return Response.json({ received: true, duplicate: true })
   }
 
+  // The subscription each event resolved to, handed to the email step below.
+  let subscription: Stripe.Subscription | null = null
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -68,18 +72,21 @@ export async function POST(req: Request) {
               : session.subscription.id
           const sub = await stripe.subscriptions.retrieve(subId)
           await syncSubscriptionFromStripe(sub)
+          subscription = sub
         }
         break
       }
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        await syncSubscriptionFromStripe(event.data.object as Stripe.Subscription)
+        subscription = event.data.object as Stripe.Subscription
+        await syncSubscriptionFromStripe(subscription)
         break
       }
 
       case "customer.subscription.deleted": {
-        await markSubscriptionCanceled(event.data.object as Stripe.Subscription)
+        subscription = event.data.object as Stripe.Subscription
+        await markSubscriptionCanceled(subscription)
         break
       }
 
@@ -92,6 +99,7 @@ export async function POST(req: Request) {
         if (subId) {
           const sub = await stripe.subscriptions.retrieve(subId)
           await syncSubscriptionFromStripe(sub)
+          subscription = sub
         }
         break
       }
@@ -105,6 +113,11 @@ export async function POST(req: Request) {
     )
     return new Response("Handler error", { status: 500 })
   }
+
+  // Runs only once the event is applied and its marker kept, so duplicate
+  // deliveries returned above never email. It never throws, so an email
+  // problem can't make Stripe retry an already-applied event.
+  await sendBillingEmailForEvent(event, subscription)
 
   return Response.json({ received: true })
 }
