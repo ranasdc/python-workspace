@@ -10,7 +10,8 @@ import { checkExistingAccount } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GraduationCap, BookOpen, Loader2 } from "lucide-react"
+import { GraduationCap, BookOpen, Loader2, CheckCircle2 } from "lucide-react"
+import { PasswordInput } from "@/components/auth/password-input"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
@@ -24,7 +25,15 @@ function safeNext(next?: string) {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : null
 }
 
-export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
+export function AuthForm({
+  mode,
+  next,
+  resetSuccess = false,
+}: {
+  mode: Mode
+  next?: string
+  resetSuccess?: boolean
+}) {
   const router = useRouter()
   const destination = safeNext(next)
   const [loading, setLoading] = useState(false)
@@ -85,6 +94,15 @@ export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
     <div className="w-full max-w-md">
       <div className="mb-8 flex flex-col items-center text-center">
         <LogoIcon className="mb-4 h-14 w-14" />
+        {resetSuccess && mode === "sign-in" && (
+          <p
+            role="status"
+            className="mb-5 flex w-full items-center gap-2 rounded-lg border border-[#34d399]/40 bg-[#34d399]/10 px-3 py-2.5 text-left text-sm text-foreground"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-[#10b981]" aria-hidden="true" />
+            Password updated. Sign in with your new password.
+          </p>
+        )}
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
           {mode === "sign-up" ? (
             <>
@@ -144,6 +162,7 @@ export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
           <Input
             id="email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@school.edu"
@@ -152,10 +171,20 @@ export function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            {mode === "sign-in" && (
+              <Link
+                href={email ? `/forgot-password?email=${encodeURIComponent(email)}` : "/forgot-password"}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
+            )}
+          </div>
+          <PasswordInput
             id="password"
-            type="password"
+            autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"

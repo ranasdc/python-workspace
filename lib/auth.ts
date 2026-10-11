@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth"
 import { Pool } from "pg"
+import { passwordResetEmail, sendEmail } from "@/lib/email"
 
 const isDev = process.env.NODE_ENV === "development"
 
@@ -38,6 +39,14 @@ export const auth = betterAuth({
   database: new Pool({ connectionString: process.env.DATABASE_URL }),
   emailAndPassword: {
     enabled: true,
+    resetPasswordTokenExpiresIn: 60 * 60,
+    // A reset usually means the old password may be compromised, so every
+    // existing session is signed out.
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => {
+      const message = passwordResetEmail({ name: user.name, url })
+      await sendEmail({ to: user.email, ...message })
+    },
   },
   user: {
     additionalFields: {
