@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers"
 import { and, eq } from "drizzle-orm"
+import type Stripe from "stripe"
 
 import { db } from "@/lib/db"
 import { schoolSubscriptions, subscriptions } from "@/lib/db/schema"
@@ -17,6 +18,12 @@ async function getOrigin() {
   const host = h.get("x-forwarded-host") ?? h.get("host")
   const proto = h.get("x-forwarded-proto") ?? "https"
   return `${proto}://${host}`
+}
+
+// `managed_payments` is missing from the installed SDK's types (22.6.2), so it
+// is declared here rather than cast away at the call site.
+type CheckoutSessionParams = Stripe.Checkout.SessionCreateParams & {
+  managed_payments?: { enabled: boolean }
 }
 
 /**
@@ -46,28 +53,36 @@ export async function startCheckout(planId: PlanId, schoolId?: number) {
   const metadata: Record<string, string> = { userId: me.id, planId }
   if (resolvedSchoolId) metadata.schoolId = String(resolvedSchoolId)
 
-  const session = await stripe.checkout.sessions.create(
-    {
-      mode: "subscription",
-      customer_email: me.email,
-      client_reference_id: me.id,
-      line_items: [
-        {
-          price_data: {
-            currency: CURRENCY,
-            product_data: { name: plan.name, description: plan.blurb },
-            unit_amount: plan.priceInPence,
-            recurring: { interval: plan.interval },
-          },
-          quantity: 1,
+  const params: CheckoutSessionParams = {
+    mode: "subscription",
+    customer_email: me.email,
+    client_reference_id: me.id,
+    line_items: [
+      {
+        price_data: {
+          currency: CURRENCY,
+          product_data: { name: plan.name, description: plan.blurb },
+          unit_amount: plan.priceInPence,
+          recurring: { interval: plan.interval },
         },
-      ],
-      metadata,
-      // Mirrored onto the subscription so webhooks are self-describing.
-      subscription_data: { metadata },
-      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/pricing`,
-    },
+        quantity: 1,
+      },
+    ],
+    metadata,
+    // Mirrored onto the subscription so webhooks are self-describing.
+    subscription_data: { metadata },
+    success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/pricing`,
+    // Stripe switched Managed Payments on by default for this account, which
+    // makes Stripe the merchant of record and rejects ad-hoc prices that carry
+    // no product tax code — every checkout was failing outright. Opting out per
+    // session keeps MyCodePad as merchant of record and leaves both the
+    // account-level setting and the VAT treatment untouched.
+    managed_payments: { enabled: false },
+  }
+
+  const session = await stripe.checkout.sessions.create(
+    params,
     {
       // Collapses accidental double-clicks into one session.
       idempotencyKey: `checkout:${me.id}:${planId}:${resolvedSchoolId ?? "none"}:${Math.floor(
