@@ -1,16 +1,10 @@
 import { betterAuth } from "better-auth"
 import { Pool } from "pg"
+import { getBaseURL } from "@/lib/app-url"
 import { passwordResetEmail, sendEmail } from "@/lib/email"
+import { sendWelcomeEmail } from "@/lib/transactional-emails"
 
 const isDev = process.env.NODE_ENV === "development"
-
-function getBaseURL() {
-  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL)
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return process.env.V0_RUNTIME_URL || "http://localhost:3000"
-}
 
 // Custom domains added in Vercel aren't known to Better Auth automatically, so
 // logins from them are rejected as an invalid origin. Set TRUSTED_ORIGINS to a
@@ -68,6 +62,12 @@ export const auth = betterAuth({
           const requested = (newUser as { role?: unknown }).role
           const role = requested === "teacher" ? "teacher" : "student"
           return { data: { ...newUser, role } }
+        },
+        // Email verification is not required, so the account is usable as
+        // soon as it exists. sendWelcomeEmail never throws, so a delivery
+        // problem can't fail the sign-up.
+        after: async (createdUser) => {
+          await sendWelcomeEmail(createdUser as typeof createdUser & { role?: string | null })
         },
       },
       update: {

@@ -8,7 +8,11 @@ type Email = {
   idempotencyKey?: string
 }
 
-const isDev = process.env.NODE_ENV === "development"
+export type SendEmailResult =
+  | { ok: true; id: string | null }
+  | { ok: false; reason: "not_configured" | "rejected" | "network_error"; status?: number }
+
+const isDev = () => process.env.NODE_ENV === "development"
 
 function fromAddress() {
   if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM
@@ -17,34 +21,56 @@ function fromAddress() {
 }
 
 /**
- * Sends through Resend's REST API. In development the message is also logged
- * whenever it can't be delivered, so the reset link can still be followed
- * before the sending domain is verified. Production never logs the link.
+ * Sends through Resend's REST API and never throws: callers get a result they
+ * can log or ignore. In development the message is also logged whenever it
+ * can't be delivered, so links can still be followed before the sending domain
+ * is verified. Production logs never contain the recipient or message body.
  */
-export async function sendEmail({ to, subject, html, text, idempotencyKey }: Email) {
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  text,
+  idempotencyKey,
+}: Email): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY
   const logForDev = () => console.log(`[email:dev] To: ${to}\nSubject: ${subject}\n\n${text}`)
 
   if (!apiKey) {
-    if (isDev) logForDev()
+    if (isDev()) logForDev()
     else console.warn("[email] RESEND_API_KEY is not set; email was not sent.")
-    return
+    return { ok: false, reason: "not_configured" }
   }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
-    },
-    body: JSON.stringify({ from: fromAddress(), to, subject, html, text }),
-  })
+  let res: Response
+  try {
+    res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
+      body: JSON.stringify({ from: fromAddress(), to, subject, html, text }),
+    })
+  } catch (error) {
+    console.error(
+      "[email] Could not reach Resend:",
+      error instanceof Error ? error.message : "unknown error",
+    )
+    if (isDev()) logForDev()
+    return { ok: false, reason: "network_error" }
+  }
 
   if (!res.ok) {
-    console.error("[email] Resend rejected the message:", res.status, await res.text())
-    if (isDev) logForDev()
+    const detail = (await res.text().catch(() => "")).slice(0, 300)
+    console.error("[email] Resend rejected the message:", res.status, detail)
+    if (isDev()) logForDev()
+    return { ok: false, reason: "rejected", status: res.status }
   }
+
+  const body = (await res.json().catch(() => null)) as { id?: string } | null
+  return { ok: true, id: body?.id ?? null }
 }
 
 function escapeHtml(value: string) {
