@@ -43,9 +43,9 @@ export const auth = betterAuth({
     // A reset usually means the old password may be compromised, so every
     // existing session is signed out.
     revokeSessionsOnPasswordReset: true,
-    sendResetPassword: async ({ user, url }) => {
+    sendResetPassword: async ({ user, url, token }) => {
       const message = passwordResetEmail({ name: user.name, url })
-      await sendEmail({ to: user.email, ...message })
+      await sendEmail({ to: user.email, ...message, idempotencyKey: `password-reset/${token}` })
     },
   },
   user: {

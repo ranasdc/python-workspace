@@ -1,34 +1,49 @@
 import "server-only"
 
-type Email = { to: string; subject: string; html: string; text: string }
+type Email = {
+  to: string
+  subject: string
+  html: string
+  text: string
+  idempotencyKey?: string
+}
 
-const FROM = process.env.EMAIL_FROM || "mycodepad <onboarding@resend.dev>"
+const isDev = process.env.NODE_ENV === "development"
+
+function fromAddress() {
+  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM
+  const domain = process.env.RESEND_EMAIL_DOMAIN
+  return domain ? `mycodepad <no-reply@${domain}>` : "mycodepad <onboarding@resend.dev>"
+}
 
 /**
- * Sends through Resend's REST API when RESEND_API_KEY is configured. Without a
- * key, development logs the message so the reset link can still be followed;
- * production logs a warning instead of leaking the link.
+ * Sends through Resend's REST API. In development the message is also logged
+ * whenever it can't be delivered, so the reset link can still be followed
+ * before the sending domain is verified. Production never logs the link.
  */
-export async function sendEmail({ to, subject, html, text }: Email) {
+export async function sendEmail({ to, subject, html, text, idempotencyKey }: Email) {
   const apiKey = process.env.RESEND_API_KEY
+  const logForDev = () => console.log(`[email:dev] To: ${to}\nSubject: ${subject}\n\n${text}`)
 
   if (!apiKey) {
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[email:dev] To: ${to}\nSubject: ${subject}\n\n${text}`)
-    } else {
-      console.warn("[email] RESEND_API_KEY is not set; email to", to, "was not sent.")
-    }
+    if (isDev) logForDev()
+    else console.warn("[email] RESEND_API_KEY is not set; email was not sent.")
     return
   }
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM, to, subject, html, text }),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body: JSON.stringify({ from: fromAddress(), to, subject, html, text }),
   })
 
   if (!res.ok) {
     console.error("[email] Resend rejected the message:", res.status, await res.text())
+    if (isDev) logForDev()
   }
 }
 
