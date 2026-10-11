@@ -10,7 +10,7 @@ import { checkExistingAccount } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GraduationCap, BookOpen, Loader2, Mail, CheckCircle2, ArrowRight } from "lucide-react"
+import { GraduationCap, BookOpen, Loader2, CheckCircle2 } from "lucide-react"
 import { PasswordInput } from "@/components/auth/password-input"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
@@ -91,9 +91,9 @@ export function AuthForm({
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full max-w-md">
       <div className="mb-8 flex flex-col items-center text-center">
-        <LogoIcon className="mb-5 h-14 w-14 rounded-2xl shadow-lg shadow-primary/20" />
+        <LogoIcon className="mb-4 h-14 w-14" />
         {resetSuccess && mode === "sign-in" && (
           <p
             role="status"
@@ -159,19 +159,15 @@ export function AuthForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="email">Email</Label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@school.edu"
-              className="h-11 pl-9"
-              required
-            />
-          </div>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@school.edu"
+            required
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -191,7 +187,7 @@ export function AuthForm({
             autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={mode === "sign-up" ? "At least 8 characters" : "Your password"}
+            placeholder="••••••••"
             minLength={8}
             required
           />
@@ -203,16 +199,9 @@ export function AuthForm({
           </p>
         )}
 
-        <Button
-          type="submit"
-          disabled={loading}
-          className="group mt-2 h-11 bg-gradient-to-r from-primary to-[#6d5ce8] text-base shadow-lg shadow-primary/25 transition-shadow hover:shadow-primary/40"
-        >
-          {loading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
+        <Button type="submit" disabled={loading} className="mt-2">
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {mode === "sign-up" ? "Create account" : "Sign in"}
-          {!loading && <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
         </Button>
       </form>
 
