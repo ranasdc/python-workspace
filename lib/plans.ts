@@ -46,6 +46,23 @@ export const SALE = {
   tagline: "Save up to 28% on every plan",
 } as const
 
+/**
+ * Temporary live-payment test window: while it is open the School tier costs £1
+ * instead of £349, so a real card can exercise the live Stripe and email path.
+ *
+ * The price is read through a getter rather than hardcoded, so the window shuts
+ * itself. Once this timestamp passes every read returns £349 again with no code
+ * change and no redeploy — the test price cannot be left live by accident.
+ */
+export const SCHOOL_TEST_PRICE = {
+  priceInPence: 100,
+  endsAt: Date.parse("2026-10-12T21:50:00Z"),
+} as const
+
+function schoolTestWindowOpen() {
+  return Date.now() < SCHOOL_TEST_PRICE.endsAt
+}
+
 export const PLANS: Record<PlanId, Plan> = {
   student_pro: {
     id: "student_pro",
@@ -102,7 +119,9 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "school_medium",
     name: "School",
     audience: "school",
-    priceInPence: 34900,
+    get priceInPence() {
+      return schoolTestWindowOpen() ? SCHOOL_TEST_PRICE.priceInPence : 34900
+    },
     originalPriceInPence: 44900,
     interval: "year",
     blurb: "For a whole school computing department.",
