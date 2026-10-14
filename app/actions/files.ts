@@ -25,6 +25,7 @@ import {
   toLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
+import { changedLineNumbers } from "@/lib/ide/line-diff"
 
 async function assertEnrolled(studentId: string, classId: number) {
   const [row] = await db
@@ -221,7 +222,14 @@ export async function saveFile(fileId: number, content: string) {
 
   await db
     .update(codeFiles)
-    .set({ content, updatedAt: new Date() })
+    .set({
+      content,
+      updatedAt: new Date(),
+      // The pupil's own edit shifts line numbers, so a stored highlight would
+      // start pointing at the wrong code. Drop the line marks but keep the
+      // attribution below them, so "corrected by" survives the pupil carrying on.
+      teacherEditedLines: null,
+    })
     .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
 
   return { ok: true }
@@ -394,6 +402,74 @@ export async function deleteComment(commentId: number) {
   await db
     .delete(fileComments)
     .where(and(eq(fileComments.id, commentId), eq(fileComments.teacherId, teacher.id)))
+  revalidatePath("/student")
+  revalidatePath("/teacher")
+  return { ok: true }
+}
+
+/**
+ * Save a teacher's correction to a pupil's file.
+ *
+ * The edit is always attributed: a correction that looked like the pupil's own
+ * work would be worse than no correction at all, both for the pupil reviewing
+ * their feedback and for anyone later assessing whose work this is.
+ *
+ * The pupil's version from immediately before the first correction is kept, so
+ * a teacher can never permanently overwrite a pupil's work.
+ */
+export async function saveTeacherCorrection(fileId: number, content: string) {
+  const teacher = await requireUser()
+  await requireTeacherCapability(teacher.id)
+  const file = await requireTeacherForFile(teacher.id, fileId)
+
+  const previous = file.content ?? ""
+  if (previous === content) return { ok: true, unchanged: true as const }
+
+  const changed = changedLineNumbers(previous, content)
+
+  await db
+    .update(codeFiles)
+    .set({
+      content,
+      updatedAt: new Date(),
+      teacherEditedAt: new Date(),
+      teacherEditedBy: teacher.id,
+      teacherEditedByName: teacher.name ?? "Your teacher",
+      teacherEditedLines: JSON.stringify(changed),
+      // Only captured on the first correction, so repeated corrections keep the
+      // pupil's original rather than overwriting it with a corrected version.
+      studentContentBeforeEdit: file.studentContentBeforeEdit ?? previous,
+    })
+    .where(eq(codeFiles.id, fileId))
+
+  revalidatePath("/student")
+  revalidatePath("/teacher")
+  return { ok: true, changedLines: changed }
+}
+
+/** Put the pupil's pre-correction version back and drop the attribution. */
+export async function revertTeacherCorrection(fileId: number) {
+  const teacher = await requireUser()
+  await requireTeacherCapability(teacher.id)
+  const file = await requireTeacherForFile(teacher.id, fileId)
+
+  if (file.studentContentBeforeEdit === null) {
+    throw new Error("There is no correction to undo on this file")
+  }
+
+  await db
+    .update(codeFiles)
+    .set({
+      content: file.studentContentBeforeEdit,
+      updatedAt: new Date(),
+      teacherEditedAt: null,
+      teacherEditedBy: null,
+      teacherEditedByName: null,
+      teacherEditedLines: null,
+      studentContentBeforeEdit: null,
+    })
+    .where(eq(codeFiles.id, fileId))
+
   revalidatePath("/student")
   revalidatePath("/teacher")
   return { ok: true }

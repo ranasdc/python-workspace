@@ -8,6 +8,7 @@ import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
+import { parseMarkedLines } from "@/lib/ide/line-diff"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
@@ -64,6 +65,7 @@ import {
   Maximize2,
   Minimize2,
   X,
+  PencilLine,
 } from "lucide-react"
 
 type ClassItem = {
@@ -94,6 +96,10 @@ type FileItem = {
   taskInstructions?: string | null
   createdAt: Date
   updatedAt: Date
+  /** Set when a teacher has corrected this file, so the pupil can see whose change it was. */
+  teacherEditedAt: Date | null
+  teacherEditedByName: string | null
+  teacherEditedLines: string | null
 }
 
 type FolderItem = {
@@ -214,6 +220,17 @@ export function StudentWorkspace({
   const hasAnyFiles = allFiles.length > 0
 
   const activeFile = allFiles.find((f) => f.id === activeFileId) ?? null
+
+  // Only highlight while the pupil's editor still matches the saved file. As
+  // soon as they start typing the line numbers move, and a mark left behind
+  // would point at the wrong line until the next save clears it server-side.
+  const teacherMarkedLines = useMemo(
+    () =>
+      activeFile && draft === activeFile.content
+        ? parseMarkedLines(activeFile.teacherEditedLines)
+        : [],
+    [activeFile, draft],
+  )
 
   // Select the first available file when data loads / class changes
   useEffect(() => {
@@ -625,6 +642,17 @@ export function StudentWorkspace({
                     <CheckCircle2 className="h-3 w-3" /> Marked done
                   </span>
                 )}
+                {activeFile.teacherEditedAt && (
+                  <span
+                    className="flex shrink-0 items-center gap-1 rounded-full bg-chart-2/15 px-2 py-0.5 text-xs font-semibold text-chart-2"
+                    title={`${activeFile.teacherEditedByName ?? "Your teacher"} corrected this on ${new Date(
+                      activeFile.teacherEditedAt,
+                    ).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`}
+                  >
+                    <PencilLine className="h-3 w-3" />
+                    Corrected by {activeFile.teacherEditedByName ?? "your teacher"}
+                  </span>
+                )}
                 <SaveIndicator state={saveState} />
               </>
             ) : (
@@ -671,6 +699,7 @@ export function StudentWorkspace({
                 onChange={handleEditorChange}
                 // Follows the file, not the IDE, so .css highlights as CSS.
                 mode={editorModeFor(activeFile.name)}
+                markedLines={teacherMarkedLines}
               />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
