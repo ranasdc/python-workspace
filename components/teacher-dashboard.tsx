@@ -373,6 +373,12 @@ function ClassDetail({
 
   const markedLines = parseMarkedLines(currentFile?.teacherEditedLines)
 
+  // Safe to undo only while the correction is still the newest version. The
+  // pupil's save clears teacherEditedLines, so a null there means they have
+  // worked on it since and restoring would delete that work.
+  const canUndoCorrection =
+    !!currentFile?.studentContentBeforeEdit && currentFile?.teacherEditedLines !== null
+
   // Clear the previous output whenever the teacher opens a different file.
   // The draft goes too: an unsaved correction belongs to the file it was typed
   // against, and carrying it across would write it onto the wrong pupil.
@@ -642,13 +648,20 @@ function ClassDetail({
                           })}
                           .
                         </div>
-                        <DropdownMenuItem
-                          onClick={undoCorrection}
-                          disabled={savingCorrection || !currentFile.studentContentBeforeEdit}
-                        >
-                          <Undo2 className="mr-2 h-4 w-4" />
-                          Restore the pupil&apos;s version
-                        </DropdownMenuItem>
+                        {canUndoCorrection ? (
+                          <DropdownMenuItem onClick={undoCorrection} disabled={savingCorrection}>
+                            <Undo2 className="mr-2 h-4 w-4" />
+                            Restore the pupil&apos;s version
+                          </DropdownMenuItem>
+                        ) : (
+                          /* Explains the absence rather than offering a disabled
+                             control with no reason, which would just look broken. */
+                          <div className="border-t border-border px-2 py-1.5 text-xs text-muted-foreground">
+                            {currentFile.studentContentBeforeEdit
+                              ? "They have edited it since, so this can no longer be undone automatically."
+                              : "There is no earlier version stored for this file."}
+                          </div>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

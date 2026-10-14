@@ -414,8 +414,8 @@ export async function deleteComment(commentId: number) {
  * work would be worse than no correction at all, both for the pupil reviewing
  * their feedback and for anyone later assessing whose work this is.
  *
- * The pupil's version from immediately before the first correction is kept, so
- * a teacher can never permanently overwrite a pupil's work.
+ * The pupil's own version from immediately before this correction is kept, so a
+ * teacher can never permanently overwrite a pupil's work.
  */
 export async function saveTeacherCorrection(fileId: number, content: string) {
   const teacher = await requireUser()
@@ -427,6 +427,12 @@ export async function saveTeacherCorrection(fileId: number, content: string) {
 
   const changed = changedLineNumbers(previous, content)
 
+  // The pupil's save clears teacherEditedLines, so a null here means the
+  // current content is their own work and becomes the snapshot to restore. When
+  // it is still set the last write was the teacher's own correction, so the
+  // existing snapshot is kept rather than overwritten with corrected text.
+  const pupilOwnsCurrentContent = file.teacherEditedLines === null
+
   await db
     .update(codeFiles)
     .set({
@@ -436,9 +442,7 @@ export async function saveTeacherCorrection(fileId: number, content: string) {
       teacherEditedBy: teacher.id,
       teacherEditedByName: teacher.name ?? "Your teacher",
       teacherEditedLines: JSON.stringify(changed),
-      // Only captured on the first correction, so repeated corrections keep the
-      // pupil's original rather than overwriting it with a corrected version.
-      studentContentBeforeEdit: file.studentContentBeforeEdit ?? previous,
+      studentContentBeforeEdit: pupilOwnsCurrentContent ? previous : file.studentContentBeforeEdit,
     })
     .where(eq(codeFiles.id, fileId))
 
@@ -455,6 +459,15 @@ export async function revertTeacherCorrection(fileId: number) {
 
   if (file.studentContentBeforeEdit === null) {
     throw new Error("There is no correction to undo on this file")
+  }
+
+  // teacherEditedLines is cleared the moment the pupil saves, so a null here
+  // means they have carried on working since the correction. Restoring the
+  // pre-correction snapshot would throw that newer work away, so refuse.
+  if (file.teacherEditedLines === null) {
+    throw new Error(
+      "This pupil has edited the file since your correction, so it can no longer be undone automatically.",
+    )
   }
 
   await db
