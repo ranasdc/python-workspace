@@ -727,7 +727,10 @@ function ClassDetail({
                 <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
                   <div
                     className={cn(
-                      "min-h-0 border-b border-border",
+                      // Stacked panes would otherwise be squeezed to nothing on a
+                      // phone, so each keeps a usable height there and only gives
+                      // it up at lg, where the panes split the viewport instead.
+                      "min-h-[18rem] border-b border-border lg:min-h-0",
                       // A ring is the only cue that changes while correcting, so
                       // the editor gains no chrome and loses no height.
                       editing && "ring-1 ring-inset ring-chart-2/50",
@@ -743,7 +746,7 @@ function ClassDetail({
                       markedLines={editing ? undefined : markedLines}
                     />
                   </div>
-                  <div className="min-h-0">
+                  <div className="min-h-[14rem] lg:min-h-0">
                     {isWeb ? (
                       <HtmlPreview build={previewDoc} runId={runId} />
                     ) : (
