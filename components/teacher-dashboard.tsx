@@ -28,7 +28,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DeleteClassDialog } from "@/components/delete-class-dialog"
 import { createClass, getTeacherClasses } from "@/app/actions/classes"
-import { getClassTree, setFileStatus } from "@/app/actions/files"
+import {
+  getClassTree,
+  revertTeacherCorrection,
+  saveTeacherCorrection,
+  setFileStatus,
+} from "@/app/actions/files"
+import { parseMarkedLines } from "@/lib/ide/line-diff"
 import { FileComments } from "@/components/file-comments"
 import { UserAvatar } from "@/components/user-avatar"
 import { TeacherLibrary } from "@/components/teacher-library"
@@ -67,6 +73,9 @@ import {
   School,
   MoreHorizontal,
   Trash2,
+  PencilLine,
+  Undo2,
+  X,
 } from "lucide-react"
 
 type ClassWithStudents = {
@@ -87,6 +96,10 @@ type TreeFile = {
   markedAt: Date | null
   assignedByTeacher: boolean
   updatedAt: Date
+  teacherEditedAt: Date | null
+  teacherEditedByName: string | null
+  teacherEditedLines: string | null
+  studentContentBeforeEdit: string | null
 }
 
 type TreeFolder = {
@@ -235,7 +248,10 @@ export function TeacherDashboard({
         {view === "library" ? (
           <TeacherLibrary userId={userId} classes={list} />
         ) : activeClass ? (
-          <div className="min-h-0 flex-1 overflow-auto">
+          /* Scrolls as one page on narrow screens, where the panes stack; on
+             desktop it stays fixed so the editor and output can fill the
+             viewport and scroll inside themselves instead. */
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
             <ClassDetail
               key={activeClass.id}
               userId={userId}
@@ -336,8 +352,13 @@ function ClassDetail({
   const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
   const [runId, setRunId] = useState(0)
   const [marking, setMarking] = useState(false)
+  // null means "reviewing". Corrections are opt-in per file so that scrolling
+  // through a class's work can never nudge a pupil's code by accident.
+  const [draft, setDraft] = useState<string | null>(null)
+  const [savingCorrection, setSavingCorrection] = useState(false)
 
   const isWeb = language === "html"
+  const editing = draft !== null
 
   const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = pyodide
 
@@ -350,10 +371,21 @@ function ClassDetail({
           ?.files.find((f) => f.id === selected.file.id) ?? selected.file
       : selected?.file ?? null
 
+  const markedLines = parseMarkedLines(currentFile?.teacherEditedLines)
+
+  // Safe to undo only while the correction is still the newest version. The
+  // pupil's save clears teacherEditedLines, so a null there means they have
+  // worked on it since and restoring would delete that work.
+  const canUndoCorrection =
+    !!currentFile?.studentContentBeforeEdit && currentFile?.teacherEditedLines !== null
+
   // Clear the previous output whenever the teacher opens a different file.
+  // The draft goes too: an unsaved correction belongs to the file it was typed
+  // against, and carrying it across would write it onto the wrong pupil.
   useEffect(() => {
     setConsoleLines([])
     setPreviewDoc(null)
+    setDraft(null)
   }, [selected?.file.id])
 
   // A selection from the other IDE is meaningless once the filter changes.
@@ -361,10 +393,15 @@ function ClassDetail({
     setSelected(null)
     setConsoleLines([])
     setPreviewDoc(null)
+    setDraft(null)
   }, [language])
 
   async function handleRun() {
     if (!currentFile) return
+
+    // An unsaved correction runs as written, so a teacher can check a fix works
+    // before committing it to the pupil's file.
+    const contentToRun = draft ?? currentFile.content
 
     if (isWeb) {
       // Preview the pupil's whole project, so their linked CSS and JS apply
@@ -373,7 +410,12 @@ function ClassDetail({
         data?.students.find((s) => s.id === selected?.student.id)?.files ?? []
       setPreviewDoc(
         buildPreviewDocument(
-          studentFiles.map((f) => ({ name: f.name, content: f.content })),
+          studentFiles.map((f) => ({
+            name: f.name,
+            // Swap in the unsaved correction for the file being edited, so the
+            // preview reflects the fix rather than the pupil's saved version.
+            content: f.id === currentFile.id ? contentToRun : f.content,
+          })),
           currentFile.name,
         ),
       )
@@ -382,9 +424,43 @@ function ClassDetail({
     }
 
     setConsoleLines([])
-    await run(currentFile.content, (text, kind) => {
+    await run(contentToRun, (text, kind) => {
       setConsoleLines((prev) => [...prev, { text, kind }])
     })
+  }
+
+  async function saveCorrection() {
+    if (!currentFile || draft === null) return
+    setSavingCorrection(true)
+    try {
+      const res = await saveTeacherCorrection(currentFile.id, draft)
+      await mutate(treeKey)
+      setDraft(null)
+      toast.success(
+        "unchanged" in res && res.unchanged
+          ? "No changes to save"
+          : "Correction saved and shown to the pupil",
+      )
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the correction")
+    } finally {
+      setSavingCorrection(false)
+    }
+  }
+
+  async function undoCorrection() {
+    if (!currentFile) return
+    setSavingCorrection(true)
+    try {
+      await revertTeacherCorrection(currentFile.id)
+      await mutate(treeKey)
+      setDraft(null)
+      toast.success("Restored the pupil's own version")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not restore the pupil's version")
+    } finally {
+      setSavingCorrection(false)
+    }
   }
 
   async function toggleMark() {
@@ -408,9 +484,12 @@ function ClassDetail({
   }
 
   return (
-    <div className="flex min-h-0 flex-col">
+    /* flex-1 is what makes the editor and output reach the bottom of the page:
+       without it this column sized to its content, so the panes below stopped
+       short and left dead space under them. */
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
-      <div className="border-b border-border bg-card px-5 py-4">
+      <div className="shrink-0 border-b border-border bg-card px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold">{cls.name}</h1>
@@ -539,13 +618,90 @@ function ClassDetail({
                       <Circle className="h-3 w-3" /> Unmarked
                     </Badge>
                   )}
+                  {/* Attribution lives in a badge rather than a banner so it
+                      states who changed the code without taking space from it.
+                      It doubles as the menu for undoing, which keeps review
+                      mode free of buttons that are irrelevant most of the time. */}
+                  {currentFile.teacherEditedAt && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md bg-chart-2/15 px-2 py-0.5 text-xs font-medium text-chart-2 transition-colors hover:bg-chart-2/25"
+                          />
+                        }
+                      >
+                        <PencilLine className="h-3 w-3" />
+                        Corrected
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="max-w-[260px]">
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                          Corrected by{" "}
+                          <span className="font-medium text-foreground">
+                            {currentFile.teacherEditedByName ?? "a teacher"}
+                          </span>
+                          {" on "}
+                          {new Date(currentFile.teacherEditedAt).toLocaleString("en-GB", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                          .
+                        </div>
+                        {canUndoCorrection ? (
+                          <DropdownMenuItem onClick={undoCorrection} disabled={savingCorrection}>
+                            <Undo2 className="mr-2 h-4 w-4" />
+                            Restore the pupil&apos;s version
+                          </DropdownMenuItem>
+                        ) : (
+                          /* Explains the absence rather than offering a disabled
+                             control with no reason, which would just look broken. */
+                          <div className="border-t border-border px-2 py-1.5 text-xs text-muted-foreground">
+                            {currentFile.studentContentBeforeEdit
+                              ? "They have edited it since, so this can no longer be undone automatically."
+                              : "There is no earlier version stored for this file."}
+                          </div>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {editing ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDraft(null)}
+                        disabled={savingCorrection}
+                      >
+                        <X className="mr-1.5 h-4 w-4" />
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={saveCorrection} disabled={savingCorrection}>
+                        {savingCorrection ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="mr-1.5 h-4 w-4" />
+                        )}
+                        Save correction
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setDraft(currentFile.content)}
+                    >
+                      <PencilLine className="mr-1.5 h-4 w-4" />
+                      Correct
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={currentFile.status === "done" ? "outline" : "default"}
                     onClick={toggleMark}
-                    disabled={marking}
+                    disabled={marking || editing}
                   >
                     {marking ? (
                       <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -569,14 +725,28 @@ function ClassDetail({
               </div>
               <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
                 <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
-                  <div className="min-h-0 border-b border-border">
+                  <div
+                    className={cn(
+                      // Stacked panes would otherwise be squeezed to nothing on a
+                      // phone, so each keeps a usable height there and only gives
+                      // it up at lg, where the panes split the viewport instead.
+                      "min-h-[18rem] border-b border-border lg:min-h-0",
+                      // A ring is the only cue that changes while correcting, so
+                      // the editor gains no chrome and loses no height.
+                      editing && "ring-1 ring-inset ring-chart-2/50",
+                    )}
+                  >
                     <CodeEditor
-                      value={currentFile.content}
-                      readOnly
+                      value={draft ?? currentFile.content}
+                      onChange={editing ? setDraft : undefined}
+                      readOnly={!editing}
                       mode={editorModeFor(currentFile.name)}
+                      // Hidden while correcting: typing shifts line numbers, and a
+                      // highlight left on the old lines would point at the wrong code.
+                      markedLines={editing ? undefined : markedLines}
                     />
                   </div>
-                  <div className="min-h-0">
+                  <div className="min-h-[14rem] lg:min-h-0">
                     {isWeb ? (
                       <HtmlPreview build={previewDoc} runId={runId} />
                     ) : (

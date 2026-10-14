@@ -7,6 +7,7 @@ import "prismjs/components/prism-python"
 // markup, css and javascript ship in Prism's core bundle, so HTML, CSS and JS
 // need no extra grammar imports.
 
+import { cn } from "@/lib/utils"
 import type { EditorMode } from "@/lib/ide/languages"
 
 /** Characters that auto-close, and the indent trigger, per mode. */
@@ -33,18 +34,27 @@ export function CodeEditor({
    * file inside the HTML IDE is highlighted as CSS.
    */
   mode = "python",
+  markedLines,
 }: {
   value: string
   onChange?: (v: string) => void
   readOnly?: boolean
   mode?: EditorMode
+  /**
+   * 1-based lines to flag as changed by a teacher. Rendered as a tinted row
+   * behind the code plus a gutter accent, so it reads as an annotation rather
+   * than as part of the syntax highlighting.
+   */
+  markedLines?: number[]
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const preRef = useRef<HTMLPreElement>(null)
   const gutterRef = useRef<HTMLDivElement>(null)
+  const marksRef = useRef<HTMLDivElement>(null)
 
   const lineCount = useMemo(() => Math.max(value.split("\n").length, 1), [value])
   const html = useMemo(() => highlight(value, mode), [value, mode])
+  const marked = useMemo(() => new Set(markedLines ?? []), [markedLines])
 
   const syncScroll = useCallback(() => {
     const ta = textareaRef.current
@@ -55,6 +65,11 @@ export function CodeEditor({
     }
     if (gutterRef.current) {
       gutterRef.current.scrollTop = ta.scrollTop
+    }
+    // Vertical only: the row tint spans the full width, so letting it scroll
+    // sideways would drag the highlight away from the code it belongs to.
+    if (marksRef.current) {
+      marksRef.current.scrollTop = ta.scrollTop
     }
   }, [])
 
@@ -137,13 +152,38 @@ export function CodeEditor({
         className="pycharm-gutter select-none overflow-hidden py-3 pl-3 pr-2 text-right tabular-nums"
       >
         {Array.from({ length: lineCount }, (_, i) => (
-          <div key={i} className="leading-6">
+          <div
+            key={i}
+            className={cn(
+              "leading-6",
+              marked.has(i + 1) && "font-semibold text-chart-2",
+            )}
+          >
             {i + 1}
           </div>
         ))}
       </div>
 
       <div className="relative min-w-0 flex-1">
+        {marked.size > 0 && (
+          <div
+            ref={marksRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 overflow-hidden py-3"
+          >
+            {Array.from({ length: lineCount }, (_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  // h-6 matches the leading-6 of the code and gutter rows, which
+                  // is what keeps the tint on the correct line.
+                  "h-6",
+                  marked.has(i + 1) && "border-l-2 border-chart-2/60 bg-chart-2/10",
+                )}
+              />
+            ))}
+          </div>
+        )}
         <pre
           ref={preRef}
           aria-hidden="true"
