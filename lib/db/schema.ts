@@ -255,6 +255,20 @@ export const codeFiles = pgTable("code_file", {
   // the original: the task lives once, on the library file, and every copy
   // reads it live. Null for a student's own files.
   sourceLibraryFileId: integer("sourceLibraryFileId"),
+  // ----- Teacher corrections -----
+  // Set when a teacher edits this pupil's code directly. A correction is always
+  // attributed, never silent. The name is denormalised (as on file_comment) so
+  // the attribution outlives the teacher's own account.
+  teacherEditedAt: timestamp("teacherEditedAt"),
+  teacherEditedBy: text("teacherEditedBy"),
+  teacherEditedByName: text("teacherEditedByName"),
+  // 1-based line numbers from the latest correction, as a JSON array. Cleared
+  // when the pupil next edits, because their edit shifts the lines and a stale
+  // highlight would point at the wrong code. The attribution above survives.
+  teacherEditedLines: text("teacherEditedLines"),
+  // The pupil's own version from just before the correction, so a teacher can
+  // never destroy their work.
+  studentContentBeforeEdit: text("studentContentBeforeEdit"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   })
