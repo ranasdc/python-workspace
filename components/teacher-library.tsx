@@ -9,6 +9,7 @@ import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
@@ -84,10 +85,18 @@ type ClassOption = {
   students: { id: string; name: string; email: string }[]
 }
 
-export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
+export function TeacherLibrary({
+  userId,
+  classes,
+}: {
+  /** Scopes the panel preference, so a shared staff machine keeps teachers separate. */
+  userId: string
+  classes: ClassOption[]
+}) {
   // Library content is per IDE, matching how it is stored and distributed.
   const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
   const libraryKey = ["teacher-library", language]
+  const { collapsed, toggle } = useCollapsiblePanel({ userId, scope: "teacher-library" })
 
   const { data } = useSWR<LibraryData>(libraryKey, () => getLibrary(language), {
     revalidateOnFocus: false,
@@ -186,9 +195,14 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(260px,320px)_1fr]">
+    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Library tree */}
-      <div className="flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r">
+      <CollapsiblePanel
+        collapsed={collapsed}
+        onToggle={toggle}
+        label="My library"
+        widthClassName="lg:w-80"
+      >
         <div className="border-b border-border px-3 pb-3 pt-3">
           <IdeSwitcher value={language} onChange={setLanguage} />
         </div>
@@ -241,10 +255,19 @@ export function TeacherLibrary({ classes }: { classes: ClassOption[] }) {
             </ul>
           )}
         </div>
-      </div>
+      </CollapsiblePanel>
 
       {/* Editor */}
-      <div className="flex min-h-[300px] flex-col lg:min-h-0">
+      <div className="flex min-h-[300px] min-w-0 flex-1 flex-col lg:min-h-0">
+        {/* Folding the library away would take the IDE switcher with it, so it
+            moves here instead. Rendered outside the selected/empty branches
+            below because a teacher must be able to change IDE even with no file
+            open — that is exactly when they are looking for the other IDE's work. */}
+        {collapsed && (
+          <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2">
+            <IdeSwitcher value={language} onChange={setLanguage} />
+          </div>
+        )}
         {selected ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5">

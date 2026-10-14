@@ -56,7 +56,7 @@ export default async function TeacherPage() {
         schoolName={identity.schoolName}
         isSchoolAdmin={identity.isSchoolAdmin}
       />
-      <TeacherDashboard initialClasses={classes} planStatus={planStatus} />
+      <TeacherDashboard userId={user.id} initialClasses={classes} planStatus={planStatus} />
       {showOnboarding && <WelcomeOnboarding role="teacher" />}
     </div>
   )

@@ -68,6 +68,7 @@ export default async function StudentPage() {
         isSchoolAdmin={identity.isSchoolAdmin}
       />
       <StudentWorkspaceWithFreemium
+        userId={sessionUser.id}
         initialClasses={classes}
         initialLanguage={initialLanguage}
       />

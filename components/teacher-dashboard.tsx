@@ -36,6 +36,7 @@ import { JoinSchoolDialog } from "@/components/join-school-dialog"
 import { ClassAiHelpControl } from "@/components/class-ai-help-control"
 import { TeacherStarters } from "@/components/starters/teacher-starters"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import {
@@ -119,9 +120,12 @@ type TeacherPlanStatus = {
 }
 
 export function TeacherDashboard({
+  userId,
   initialClasses,
   planStatus,
 }: {
+  /** Scopes panel preferences, so a shared staff machine keeps teachers separate. */
+  userId: string
   initialClasses: ClassWithStudents[]
   planStatus: TeacherPlanStatus | null
 }) {
@@ -229,11 +233,12 @@ export function TeacherDashboard({
       {/* Main area: class detail or the teacher's library */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "library" ? (
-          <TeacherLibrary classes={list} />
+          <TeacherLibrary userId={userId} classes={list} />
         ) : activeClass ? (
           <div className="min-h-0 flex-1 overflow-auto">
             <ClassDetail
               key={activeClass.id}
+              userId={userId}
               cls={activeClass}
               pyodide={pyodide}
               onDeleted={async () => {
@@ -303,15 +308,18 @@ function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
 }
 
 function ClassDetail({
+  userId,
   cls,
   pyodide,
   onDeleted,
 }: {
+  userId: string
   cls: ClassWithStudents
   pyodide: ReturnType<typeof usePyodide>
   /** Runs once the class has been deleted, so the dashboard can reselect. */
   onDeleted: () => void | Promise<void>
 }) {
+  const { collapsed, toggle } = useCollapsiblePanel({ userId, scope: "teacher-class-tree" })
   const [tab, setTab] = useState<"work" | "starters">("work")
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Teachers review one IDE at a time, mirroring how pupils work in it.
@@ -468,9 +476,15 @@ function ClassDetail({
       {tab === "starters" ? (
         <TeacherStarters classId={cls.id} />
       ) : (
-      <div className="grid flex-1 gap-0 lg:grid-cols-[minmax(260px,340px)_1fr]">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Tree */}
-        <div className="border-b border-border p-3 lg:border-b-0 lg:border-r">
+        <CollapsiblePanel
+          collapsed={collapsed}
+          onToggle={toggle}
+          label={`${cls.name} student work`}
+          widthClassName="lg:w-80"
+        >
+          <div className="p-3">
           <div className="mb-3">
             <IdeSwitcher value={language} onChange={setLanguage} />
           </div>
@@ -496,10 +510,19 @@ function ClassDetail({
               ))}
             </ul>
           )}
-        </div>
+          </div>
+        </CollapsiblePanel>
 
         {/* Viewer */}
-        <div className="flex min-h-[300px] flex-col lg:min-h-0">
+        <div className="flex min-h-[300px] min-w-0 flex-1 flex-col lg:min-h-0">
+          {/* The switcher lives in the tree panel, so it relocates here when
+              that panel is folded away — including with no file selected, which
+              is when a teacher is most likely to be hunting for the other IDE. */}
+          {collapsed && (
+            <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2">
+              <IdeSwitcher value={language} onChange={setLanguage} />
+            </div>
+          )}
           {selected && currentFile ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2.5">
