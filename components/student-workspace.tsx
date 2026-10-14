@@ -6,6 +6,7 @@ import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
+import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import {
   DEFAULT_LANGUAGE,
@@ -136,6 +137,7 @@ function markTaskSeen(fileId: number, signature: string) {
 }
 
 export function StudentWorkspace({ 
+  userId,
   initialClasses,
   onLimitReached,
   isFreeUser,
@@ -143,6 +145,8 @@ export function StudentWorkspace({
   canCreateFolder,
   language = DEFAULT_LANGUAGE,
 }: { 
+  /** Scopes the panel preference, so a shared device keeps pupils separate. */
+  userId: string
   initialClasses: ClassItem[]
   onLimitReached?: (type: "file" | "folder") => void
   isFreeUser?: boolean
@@ -151,6 +155,7 @@ export function StudentWorkspace({
   language?: LanguageId
 }) {
   const languageDef = getLanguage(language)
+  const { collapsed, toggle } = useCollapsiblePanel({ userId, scope: "student-library" })
   const isWeb = language === "html"
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
@@ -450,8 +455,15 @@ export function StudentWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      {/* Sidebar: classes + files */}
-      <aside className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-72 lg:border-b-0 lg:border-r">
+      {/* Sidebar: classes + files. The IDE switcher sits in the bar above this
+          whole row, so folding the panel away never hides it. */}
+      <CollapsiblePanel
+        collapsed={collapsed}
+        onToggle={toggle}
+        label="Class and files"
+        widthClassName="lg:w-72"
+        className="bg-sidebar"
+      >
         <div className="border-b border-border p-3">
           <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
             Class
@@ -542,7 +554,7 @@ export function StudentWorkspace({
             </>
           )}
         </div>
-      </aside>
+      </CollapsiblePanel>
 
       {/* Pinned task panel — a resizable companion to the IDE (large screens).
           It never remounts the editor, so code and cursor position are safe. */}
@@ -597,8 +609,10 @@ export function StudentWorkspace({
         </div>
       )}
 
-      {/* Editor + console */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* Editor + console. min-w-0 lets this shrink below its content's natural
+          width, which is what stops the editor forcing a horizontal scrollbar
+          when the library panel is open. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <StarterBanner />
         <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">

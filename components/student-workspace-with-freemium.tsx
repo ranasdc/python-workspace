@@ -23,9 +23,11 @@ type ClassItem = {
 }
 
 export function StudentWorkspaceWithFreemium({
+  userId,
   initialClasses,
   initialLanguage = DEFAULT_LANGUAGE,
 }: {
+  userId: string
   initialClasses: ClassItem[]
   initialLanguage?: LanguageId
 }) {
@@ -102,6 +104,7 @@ export function StudentWorkspaceWithFreemium({
           )}
         </div>
         <StudentWorkspace
+          userId={userId}
           initialClasses={initialClasses}
           language={language}
           onLimitReached={(type) => {
