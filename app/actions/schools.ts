@@ -15,7 +15,13 @@ import {
   user,
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
-import { getEntitlement, isSubscriptionLive, requireSchoolAdmin } from "@/lib/entitlements"
+import {
+  getEntitlement,
+  isSchoolAdminRole,
+  isSubscriptionLive,
+  requireSchoolAdmin,
+} from "@/lib/entitlements"
+import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
 
 // Unambiguous alphabet: no O/0, I/1.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -370,16 +376,69 @@ export async function getSchoolOverview() {
   if (!entitlement.schoolId) return null
 
   const schoolId = entitlement.schoolId
-  const isAdmin = entitlement.schoolRole === "school_admin"
+  // Resolved through the shared admin-role list, so a new tier of administrator
+  // is recognised here the moment it is added to SCHOOL_ADMIN_ROLES rather than
+  // silently losing the member list, invite codes and billing controls.
+  const isAdmin = isSchoolAdminRole(entitlement.schoolRole)
 
   const [school] = await db.select().from(schools).where(eq(schools.id, schoolId)).limit(1)
   if (!school) return null
 
-  const [plan] = await db
-    .select()
-    .from(schoolSubscriptions)
-    .where(eq(schoolSubscriptions.schoolId, schoolId))
-    .limit(1)
+  const readPlan = async () =>
+    (
+      await db
+        .select({
+          tier: schoolSubscriptions.tier,
+          status: schoolSubscriptions.status,
+          teacherSeatLimit: schoolSubscriptions.teacherSeatLimit,
+          studentSeatLimit: schoolSubscriptions.studentSeatLimit,
+          currentPeriodEnd: schoolSubscriptions.currentPeriodEnd,
+          cancelAtPeriodEnd: schoolSubscriptions.cancelAtPeriodEnd,
+          stripeCustomerId: schoolSubscriptions.stripeCustomerId,
+          stripeSubscriptionId: schoolSubscriptions.stripeSubscriptionId,
+        })
+        .from(schoolSubscriptions)
+        .where(eq(schoolSubscriptions.schoolId, schoolId))
+        .limit(1)
+    )[0]
+
+  let stored = await readPlan()
+
+  // An administrator coming back from the Stripe portal has to see what they
+  // just did — cancelled, resumed, changed tier — rather than whatever the last
+  // webhook happened to leave behind. Re-reading Stripe here is what makes the
+  // rest of this page verified state instead of a hopeful cache. Admins only:
+  // they are the only ones who can have just changed something, and this costs
+  // a round trip.
+  if (isAdmin && stored?.stripeSubscriptionId) {
+    if (await refreshSubscriptionFromStripe(stored.stripeSubscriptionId)) {
+      stored = await readPlan()
+    }
+  }
+
+  // The Stripe identifiers never leave the server: the dashboard only needs to
+  // know whether a billing account exists, not what it is called.
+  const plan = stored
+    ? {
+        tier: stored.tier,
+        status: stored.status,
+        teacherSeatLimit: stored.teacherSeatLimit,
+        studentSeatLimit: stored.studentSeatLimit,
+        currentPeriodEnd: stored.currentPeriodEnd,
+        cancelAtPeriodEnd: stored.cancelAtPeriodEnd,
+        /**
+         * Whether this plan can be managed through Stripe at all.
+         *
+         * A plan granted by hand — a pilot, a migrated school, an invoice paid
+         * offline — is genuinely active and genuinely grants Pro, but has no
+         * Stripe customer behind it, so the portal cannot open for it. The
+         * dashboard reads this to decide between offering the control and
+         * explaining why there isn't one, instead of rendering a button whose
+         * only possible outcome is "No billing account found".
+         */
+        manageable: Boolean(stored.stripeCustomerId),
+      }
+    : null
 
   const seatRows = await db
     .select({ role: schoolMembers.role, used: count() })
@@ -438,7 +497,7 @@ export async function getSchoolOverview() {
         .orderBy(sql`${inviteCodes.createdAt} desc`)
     : []
 
-  return { school, plan: plan ?? null, seats, members, codes, isAdmin, entitlement }
+  return { school, plan, seats, members, codes, isAdmin, entitlement }
 }
 
 

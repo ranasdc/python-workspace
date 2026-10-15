@@ -35,7 +35,7 @@ export default async function BillingPage() {
   const me = await getSessionUser()
   if (!me) redirect("/sign-in")
 
-  const { entitlement, hasBillingAccount } = await getBillingOverview()
+  const { entitlement, hasBillingAccount, isSchoolAdmin } = await getBillingOverview()
   const home = me.role === "teacher" ? "/teacher" : "/student"
   const renewsOn = formatDate(entitlement.currentPeriodEnd)
 
@@ -71,14 +71,18 @@ export default async function BillingPage() {
             <div>
               <CardTitle>
                 {entitlement.source === "school"
-                  ? "Covered by your school"
+                  ? isSchoolAdmin
+                    ? "Your school's plan"
+                    : "Covered by your school"
                   : entitlement.source === "teacher"
                     ? "Covered by your teacher"
                     : (paidPlan?.name ?? "Free")}
               </CardTitle>
               <CardDescription className="mt-1">
                 {entitlement.source === "school"
-                  ? "Your school pays for this. You will never be charged."
+                  ? isSchoolAdmin
+                    ? "Your school's plan covers you and everyone else at the school. You administer it from the school area."
+                    : "Your school pays for this. You will never be charged."
                   : entitlement.source === "teacher"
                     ? `${entitlement.coveredByTeacherName ?? "Your teacher"} pays for Teacher Pro, which covers everyone they teach. You will never be charged.`
                     : (paidPlan?.blurb ??
@@ -147,10 +151,17 @@ export default async function BillingPage() {
             manage, and no school page to look at, so the footer goes away. */}
         {entitlement.source === "teacher" ? null : (
           <CardFooter className="flex flex-wrap gap-3">
-            {/* A school-covered member has nothing of their own to manage. */}
+            {/* A school-covered member has nothing of their own to manage — but
+                the administrator of that school has everything to manage, so
+                they are sent to the controls rather than to a read-only view. */}
             {entitlement.source === "school" ? (
-              <Link href="/school" className={buttonVariants({ variant: "outline" })}>
-                View your school
+              <Link
+                href="/school"
+                className={buttonVariants({
+                  variant: isSchoolAdmin ? "default" : "outline",
+                })}
+              >
+                {isSchoolAdmin ? "Manage school plan" : "View your school"}
               </Link>
             ) : (
               <>

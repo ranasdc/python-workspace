@@ -19,6 +19,7 @@ import {
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
+import { ACTIVE_STATUSES } from "@/lib/plans"
 import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 
 // This module is the ONLY place allowed to decide what a user may do.
@@ -113,8 +114,12 @@ export const AI_TASK_POLICY: Record<
   school: { enabled: true, monthlyLimit: null },
 }
 
-/** Stripe statuses that still grant access. */
-export const ACTIVE_STATUSES = ["active", "trialing"] as const
+/**
+ * Stripe statuses that still grant access. Defined in lib/plans.ts so client
+ * components can describe a plan without importing this server-only module,
+ * and re-exported here because this remains the module that judges with it.
+ */
+export { ACTIVE_STATUSES }
 
 /**
  * Only applied when Stripe itself could not be reached. A renewal webhook can
