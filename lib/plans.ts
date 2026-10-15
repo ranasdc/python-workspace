@@ -30,6 +30,16 @@ export type Plan = {
 export const CURRENCY = "gbp"
 
 /**
+ * The Stripe subscription statuses that still grant access.
+ *
+ * Kept here, beside the plans themselves, because it is billing vocabulary
+ * rather than a policy decision, and because client components have to be able
+ * to read it to describe a plan. lib/entitlements.ts re-exports it and remains
+ * the only module allowed to *decide* anything with it.
+ */
+export const ACTIVE_STATUSES = ["active", "trialing"] as const
+
+/**
  * What the free tier actually gives each kind of user, phrased for display.
  * Kept beside the paid plans so every screen that has to say "you are still on
  * the free tier" describes it in exactly the same words.

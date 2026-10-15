@@ -10,7 +10,7 @@ import { requireUser } from "@/lib/session"
 import { stripe } from "@/lib/stripe"
 import { syncSubscriptionFromStripe } from "@/lib/billing-sync"
 import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
-import { getEntitlement, requireSchoolAdmin } from "@/lib/entitlements"
+import { getEntitlement, isSchoolAdminRole, requireSchoolAdmin } from "@/lib/entitlements"
 import { CURRENCY, PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
 
 async function getOrigin() {
@@ -132,25 +132,45 @@ export async function openBillingPortal(schoolId?: number) {
   const origin = await getOrigin()
 
   let customerId: string | null = null
+  // Whether a plan exists at all, as opposed to existing without a card behind
+  // it. The two cases need different explanations, and conflating them is what
+  // made this fail silently for school administrators.
+  let planExists = false
 
   if (schoolId) {
+    // Re-checked server-side against the caller's own membership: the schoolId
+    // arrives from the client and is never trusted, so one school can never
+    // reach another school's billing.
     const admin = await requireSchoolAdmin(schoolId)
     const [row] = await db
-      .select()
+      .select({ stripeCustomerId: schoolSubscriptions.stripeCustomerId })
       .from(schoolSubscriptions)
       .where(eq(schoolSubscriptions.schoolId, admin.schoolId))
       .limit(1)
     customerId = row?.stripeCustomerId ?? null
+    planExists = Boolean(row)
   } else {
     const [row] = await db
-      .select()
+      .select({ stripeCustomerId: subscriptions.stripeCustomerId })
       .from(subscriptions)
       .where(eq(subscriptions.userId, me.id))
       .limit(1)
     customerId = row?.stripeCustomerId ?? null
+    planExists = Boolean(row)
   }
 
-  if (!customerId) throw new Error("No billing account found")
+  if (!customerId) {
+    // A plan with no Stripe customer was granted outside Stripe, so there is no
+    // portal to open and never will be. Saying so is the difference between a
+    // user understanding their plan and thinking the app is broken.
+    throw new Error(
+      planExists
+        ? schoolId
+          ? "This school's plan was not set up through Stripe, so there is no billing portal for it. Its plan and renewal date are shown on this page."
+          : "This plan was not set up through Stripe, so there is no billing portal for it."
+        : "No billing account found",
+    )
+  }
 
   const portal = await stripe.billingPortal.sessions.create({
     customer: customerId,
@@ -189,5 +209,9 @@ export async function getBillingOverview() {
   return {
     entitlement,
     hasBillingAccount: Boolean(individual?.stripeCustomerId),
+    // A school administrator viewing a school-funded plan is not a passive
+    // beneficiary of it: they are the person who cancels, resumes and changes
+    // it, so the page has to send them somewhere they can.
+    isSchoolAdmin: isSchoolAdminRole(entitlement.schoolRole),
   }
 }

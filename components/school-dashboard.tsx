@@ -12,17 +12,31 @@ import { InviteCodes } from "@/components/school/invite-codes"
 import { removeSchoolMember, type getSchoolOverview } from "@/app/actions/schools"
 import { openBillingPortal } from "@/app/actions/billing"
 import { PLANS, SCHOOL_PLAN_IDS } from "@/lib/plans"
+import { describeSchoolPlan } from "@/lib/school-billing"
 import { PriceTag } from "@/components/price-tag"
 import { SaleBanner } from "@/components/sale-banner"
 
 type Overview = NonNullable<Awaited<ReturnType<typeof getSchoolOverview>>>
+
+function formatDate(value: Date | string | null) {
+  if (!value) return null
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  })
+}
 
 export function SchoolDashboard({ overview }: { overview: Overview }) {
   const { school, plan, seats, members, codes, isAdmin, entitlement } = overview
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
-  const planActive = plan?.status === "active" || plan?.status === "trialing"
+  // One shared rule decides what this plan supports, so the button offered here
+  // and the portal the server will actually open can never disagree again.
+  const view = describeSchoolPlan(plan, isAdmin)
+  const planActive = view.active
+  const accessEndsOn = formatDate(plan?.currentPeriodEnd ?? null)
 
   async function run(key: string, fn: () => Promise<unknown>, success: string) {
     setBusy(key)
@@ -60,7 +74,9 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
           </p>
         </div>
         <Badge variant={planActive ? "default" : "secondary"}>
-          {planActive ? `${PLANS[plan.tier as keyof typeof PLANS]?.name ?? plan.tier} · active` : "No active plan"}
+          {planActive && plan
+            ? `${PLANS[plan.tier as keyof typeof PLANS]?.name ?? plan.tier} · active`
+            : "No active plan"}
         </Badge>
       </header>
 
@@ -103,29 +119,47 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
         </section>
       )}
 
-      {planActive && (
+      {planActive && plan && (
         <section className="rounded-lg border border-border bg-card p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Seats</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Renews{" "}
-                {plan.currentPeriodEnd
-                  ? new Date(plan.currentPeriodEnd).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })
-                  : "—"}
+                {view.periodKind === "ends"
+                  ? `Ends ${accessEndsOn}`
+                  : view.periodKind === "renews"
+                    ? `Renews ${accessEndsOn}`
+                    : "Renewal date unavailable"}
               </p>
             </div>
-            {isAdmin && (
+            {view.canOpenPortal && (
               <Button variant="outline" onClick={handlePortal} disabled={busy === "portal"}>
                 {busy === "portal" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Manage billing
+                {view.portalLabel}
               </Button>
             )}
           </div>
+
+          {view.notice === "ending" && (
+            <p className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive text-pretty">
+              This plan is set to end
+              {accessEndsOn ? ` on ${accessEndsOn}` : ""}. Every teacher and student
+              keeps Pro until then, after which the school drops to the free tier.
+              {view.canOpenPortal ? " You can reverse this from the billing portal." : ""}
+            </p>
+          )}
+
+          {/* An active plan with no Stripe customer behind it was granted
+              directly rather than paid by card. The portal has nothing to open
+              for it, so the honest thing is to say so rather than render a
+              button that can only ever fail. */}
+          {view.notice === "not_stripe_managed" && (
+            <p className="mt-4 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground text-pretty">
+              This plan was arranged directly rather than paid by card, so there is
+              no Stripe billing portal for it. Its tier, seats and renewal date are
+              shown here, and whoever arranged it can change or end it for you.
+            </p>
+          )}
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <SeatMeter
