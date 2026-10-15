@@ -40,7 +40,23 @@ export function useCollapsiblePanel({ userId, scope }: { userId: string; scope: 
     })
   }, [storageKey])
 
-  return { collapsed, toggle }
+  /**
+   * Open the panel without the risk of closing it.
+   *
+   * The edge gesture needs this rather than `toggle`: a pointer that brushes the
+   * screen edge while the panel is already open must do nothing at all.
+   */
+  const expand = useCallback(() => {
+    setCollapsed((previous) => {
+      if (!previous) return previous
+      try {
+        window.localStorage.setItem(storageKey, "0")
+      } catch {}
+      return false
+    })
+  }, [storageKey])
+
+  return { collapsed, toggle, expand }
 }
 
 /**
@@ -56,6 +72,7 @@ export function useCollapsiblePanel({ userId, scope }: { userId: string; scope: 
 export function CollapsiblePanel({
   collapsed,
   onToggle,
+  onExpand,
   label,
   widthClassName = "lg:w-72",
   className,
@@ -63,6 +80,8 @@ export function CollapsiblePanel({
 }: {
   collapsed: boolean
   onToggle: () => void
+  /** Opens the panel. Supplying it enables the screen-edge gesture below. */
+  onExpand?: () => void
   /** Names the region for screen readers, e.g. "Class and files". */
   label: string
   /** Width of the panel when open. Also pinned on the inner wrapper so the
@@ -73,6 +92,51 @@ export function CollapsiblePanel({
 }) {
   const panelId = useId()
   const action = collapsed ? "Show library panel" : "Hide library panel"
+  // The edge gesture is invisible by nature, so the chevron advertises it.
+  const hint = collapsed && onExpand ? `${action} (or move the pointer to the left edge)` : action
+
+  /**
+   * Bring the panel back by running the pointer into the left edge of the
+   * screen.
+   *
+   * Folded away, the chevron is a 20px-wide target — findable, but a precise
+   * thing to aim at every time you want your files. The screen edge is the one
+   * target a mouse cannot overshoot, so throwing the pointer at it is both
+   * faster and more reliable than hitting the chevron.
+   *
+   * Watching pointer position beats putting an invisible strip in the corner:
+   * no element means nothing that can sit in front of the panel's own controls
+   * or swallow a click meant for the editor.
+   */
+  useEffect(() => {
+    if (!collapsed || !onExpand) return
+
+    // Mice only, and only in the side-by-side layout. On a touch screen there
+    // is no hover to read and the gesture would fight with swiping back; on a
+    // narrow screen the panel folds upwards, so the left edge means nothing.
+    const canHover = window.matchMedia("(pointer: fine)")
+    const sideBySide = window.matchMedia("(min-width: 1024px)")
+    if (!canHover.matches || !sideBySide.matches) return
+
+    // The gesture starts disarmed, because collapsing usually *ends* with the
+    // pointer at the edge: the chevron it was just clicked on sits there. Until
+    // the pointer has moved clear once, the edge stays inert — otherwise the
+    // panel would spring open again the instant it was folded away.
+    let armed = false
+    const EDGE_PX = 6
+    const CLEAR_PX = 56
+
+    function handleMove(event: MouseEvent) {
+      if (!armed) {
+        if (event.clientX > CLEAR_PX) armed = true
+        return
+      }
+      if (event.clientX <= EDGE_PX) onExpand!()
+    }
+
+    window.addEventListener("mousemove", handleMove)
+    return () => window.removeEventListener("mousemove", handleMove)
+  }, [collapsed, onExpand])
 
   return (
     <>
@@ -104,7 +168,7 @@ export function CollapsiblePanel({
         <button
           type="button"
           onClick={onToggle}
-          title={action}
+          title={hint}
           aria-label={action}
           aria-expanded={!collapsed}
           aria-controls={panelId}

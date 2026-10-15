@@ -161,7 +161,7 @@ export function StudentWorkspace({
   language?: LanguageId
 }) {
   const languageDef = getLanguage(language)
-  const { collapsed, toggle } = useCollapsiblePanel({ userId, scope: "student-library" })
+  const { collapsed, toggle, expand } = useCollapsiblePanel({ userId, scope: "student-library" })
   const isWeb = language === "html"
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
@@ -477,6 +477,7 @@ export function StudentWorkspace({
       <CollapsiblePanel
         collapsed={collapsed}
         onToggle={toggle}
+        onExpand={expand}
         label="Class and files"
         widthClassName="lg:w-72"
         className="bg-sidebar"
@@ -746,10 +747,13 @@ export function StudentWorkspace({
           </div>
         </div>
 
-        {/* Teacher feedback on the open file, updated in real time */}
+        {/* Teacher feedback on the open file, updated in real time. The height
+            is the dock's own business: with nothing to say it costs a single
+            strip of header and the editor above keeps the rest, and when a
+            comment does arrive it opens itself to just the room that needs. */}
         {activeFile && (
-          <div className="h-56 shrink-0 border-t border-border bg-card">
-            <FileComments fileId={activeFile.id} canComment={false} />
+          <div className="shrink-0 border-t border-border bg-card">
+            <FileComments fileId={activeFile.id} canComment={false} canReact collapsible />
           </div>
         )}
       </div>
