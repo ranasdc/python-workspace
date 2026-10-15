@@ -274,14 +274,23 @@ export const codeFiles = pgTable("code_file", {
   })
 
 // Teacher comments left on a specific student file.
-export const fileComments = pgTable("file_comment", {
+  export const fileComments = pgTable("file_comment", {
   id: serial("id").primaryKey(),
   fileId: integer("fileId").notNull(),
   teacherId: text("teacherId").notNull(),
   teacherName: text("teacherName").notNull(),
   body: text("body").notNull(),
+  // ----- The pupil's reply -----
+  // One of the ids in lib/ide/comment-reactions.ts, or null for "not answered
+  // yet". Only the pupil who owns the file may write it: a teacher answering on
+  // a pupil's behalf would make the signal worthless. Kept as text rather than
+  // an enum so a fourth reply is a code change, not a migration.
+  studentReaction: text("studentReaction"),
+  // When they last answered. Cleared with the reaction, so "need help on this"
+  // carries how long the pupil has been waiting.
+  studentReactedAt: timestamp("studentReactedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+  })
 
 // A teacher's private library of reusable folders...
 export const libraryFolders = pgTable("library_folder", {

@@ -26,6 +26,7 @@ import {
   type LanguageId,
 } from "@/lib/ide/languages"
 import { changedLineNumbers } from "@/lib/ide/line-diff"
+import { isCommentReaction } from "@/lib/ide/comment-reactions"
 
 async function assertEnrolled(studentId: string, classId: number) {
   const [row] = await db
@@ -371,11 +372,57 @@ export async function getFileComments(fileId: number) {
   teacherAvatarId: user.avatarId,
   body: fileComments.body,
   createdAt: fileComments.createdAt,
+  // The pupil's reply travels with the comment, so the teacher's thread shows
+  // who has acted on feedback and who is stuck without a second request.
+  studentReaction: fileComments.studentReaction,
+  studentReactedAt: fileComments.studentReactedAt,
   })
   .from(fileComments)
   .leftJoin(user, eq(user.id, fileComments.teacherId))
   .where(eq(fileComments.fileId, fileId))
   .orderBy(asc(fileComments.createdAt))
+  }
+  
+  /**
+   * Record how a pupil has answered a piece of feedback.
+   *
+   * Passing null clears the reply, so a mis-tap on a shared classroom machine is
+   * recoverable rather than permanent.
+   */
+  export async function setCommentReaction(commentId: number, reaction: string | null) {
+  const me = await requireUser()
+  
+  // The reaction is checked against the shared vocabulary before it reaches the
+  // database: both dashboards render this value, so an arbitrary string from a
+  // crafted request must never be stored.
+  if (reaction !== null && !isCommentReaction(reaction)) {
+  throw new Error("Unknown reaction")
+  }
+  
+  // Joined to the file so ownership is settled in one query. Only the pupil
+  // whose work this is may answer feedback on it -- a teacher replying on their
+  // behalf would make the signal meaningless.
+  const [row] = await db
+  .select({ studentId: codeFiles.studentId })
+  .from(fileComments)
+  .innerJoin(codeFiles, eq(codeFiles.id, fileComments.fileId))
+  .where(eq(fileComments.id, commentId))
+  .limit(1)
+  
+  if (!row) throw new Error("Comment not found")
+  if (row.studentId !== me.id) throw new Error("Unauthorized")
+  
+  await db
+  .update(fileComments)
+  .set({
+  studentReaction: reaction,
+  studentReactedAt: reaction ? new Date() : null,
+  })
+  .where(eq(fileComments.id, commentId))
+  
+  revalidatePath("/student")
+  revalidatePath("/teacher")
+  return { ok: true }
   }
 
 export async function addComment(fileId: number, body: string) {

@@ -335,7 +335,7 @@ function ClassDetail({
   /** Runs once the class has been deleted, so the dashboard can reselect. */
   onDeleted: () => void | Promise<void>
 }) {
-  const { collapsed, toggle } = useCollapsiblePanel({ userId, scope: "teacher-class-tree" })
+  const { collapsed, toggle, expand } = useCollapsiblePanel({ userId, scope: "teacher-class-tree" })
   const [tab, setTab] = useState<"work" | "starters">("work")
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Teachers review one IDE at a time, mirroring how pupils work in it.
@@ -557,10 +557,11 @@ function ClassDetail({
       ) : (
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Tree */}
-        <CollapsiblePanel
-          collapsed={collapsed}
-          onToggle={toggle}
-          label={`${cls.name} student work`}
+  <CollapsiblePanel
+  collapsed={collapsed}
+  onToggle={toggle}
+  onExpand={expand}
+  label={`${cls.name} student work`}
           widthClassName="lg:w-80"
         >
           <div className="p-3">
