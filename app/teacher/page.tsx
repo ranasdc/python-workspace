@@ -8,6 +8,7 @@ import { getEntitlement } from "@/lib/entitlements"
 import { getHeaderIdentity } from "@/lib/account"
 import { AppHeader } from "@/components/app-header"
 import { TeacherDashboard } from "@/components/teacher-dashboard"
+import { FullscreenProvider } from "@/components/ide/fullscreen"
 import { WelcomeOnboarding } from "@/components/welcome-onboarding"
 
 export default async function TeacherPage() {
@@ -45,19 +46,24 @@ export default async function TeacherPage() {
     !onboarded && !entitlement.hasTeacherPro && entitlement.schoolId === null
 
   return (
-    <div className="flex h-svh flex-col">
-      <AppHeader
-        userId={user.id}
-        name={user.name}
-        email={user.email}
-        avatarId={identity.avatarId}
-        role="teacher"
-        roleLabel={identity.roleLabel}
-        schoolName={identity.schoolName}
-        isSchoolAdmin={identity.isSchoolAdmin}
-      />
-      <TeacherDashboard userId={user.id} initialClasses={classes} planStatus={planStatus} />
-      {showOnboarding && <WelcomeOnboarding role="teacher" />}
-    </div>
+    // Focus mode is not a pupil feature: a teacher reviewing a class set wants
+    // the same room to read code in, so both roles get the identical switch.
+    <FullscreenProvider>
+      <div className="flex h-svh flex-col">
+        <AppHeader
+          userId={user.id}
+          name={user.name}
+          email={user.email}
+          avatarId={identity.avatarId}
+          role="teacher"
+          roleLabel={identity.roleLabel}
+          schoolName={identity.schoolName}
+          isSchoolAdmin={identity.isSchoolAdmin}
+          showFullscreenToggle
+        />
+        <TeacherDashboard userId={user.id} initialClasses={classes} planStatus={planStatus} />
+        {showOnboarding && <WelcomeOnboarding role="teacher" />}
+      </div>
+    </FullscreenProvider>
   )
 }

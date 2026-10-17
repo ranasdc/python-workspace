@@ -4,6 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { StudentWorkspace } from "@/components/student-workspace"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { useFullscreen } from "@/components/ide/fullscreen"
 import { SubscriptionModal } from "@/components/subscription-modal"
 import { UpgradeButton } from "@/components/upgrade-button"
 import { cn } from "@/lib/utils"
@@ -36,6 +37,7 @@ export function StudentWorkspaceWithFreemium({
   // they hit a limit they have not actually reached.
   const [limitType, setLimitType] = useState<"file" | "folder" | null>(null)
   const [language, setLanguage] = useState<LanguageId>(initialLanguage)
+  const { fullscreen } = useFullscreen()
 
   // Keyed by IDE, because the free tier is metered per IDE. The workspace
   // revalidates this exact key after every create or delete, so the usage
@@ -78,7 +80,10 @@ export function StudentWorkspaceWithFreemium({
             putting them side by side is what makes that obvious. */}
         <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-2 sm:px-4">
           <IdeSwitcher variant="bar" value={language} onChange={handleLanguageChange} />
-          {showFreeTierBar && (
+          {/* The IDE tabs stay in focus mode; the allowance and its upgrade
+              button do not. Neither belongs in a view meant for writing code,
+              and the tabs are the only half the user needs while in there. */}
+          {showFreeTierBar && !fullscreen && (
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <span className="hidden text-xs text-muted-foreground md:inline">
                 {/* Named explicitly: each IDE has its own allowance, so an

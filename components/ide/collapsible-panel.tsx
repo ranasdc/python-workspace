@@ -1,9 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+
+/**
+ * How far past the panel's right edge the pointer may stray before a hover-peek
+ * drawer closes. Covers the divider the chevron sits on, plus enough room that
+ * a hand drifting a few pixels while reading does not shut the drawer.
+ */
+const LEAVE_SLACK_PX = 28
 
 /**
  * Remembers whether a workspace's library panel is collapsed.
@@ -45,18 +52,28 @@ export function useCollapsiblePanel({ userId, scope }: { userId: string; scope: 
    *
    * The edge gesture needs this rather than `toggle`: a pointer that brushes the
    * screen edge while the panel is already open must do nothing at all.
+   *
+   * Neither this nor `collapse` writes to storage. They serve the hover-peek
+   * drawer, which opens and shuts many times a minute as the pointer comes and
+   * goes; recording each of those would overwrite the choice the user actually
+   * made with the chevron, and leave the panel shut when they left it open.
+   * Only `toggle` — a deliberate click — is a preference worth remembering.
    */
   const expand = useCallback(() => {
-    setCollapsed((previous) => {
-      if (!previous) return previous
-      try {
-        window.localStorage.setItem(storageKey, "0")
-      } catch {}
-      return false
-    })
-  }, [storageKey])
+    setCollapsed((previous) => (previous ? false : previous))
+  }, [])
 
-  return { collapsed, toggle, expand }
+  /**
+   * Fold the panel away without the risk of opening it.
+   *
+   * The mirror of `expand`, for the hover-peek drawer and for entering focus
+   * mode — both of which must only ever close.
+   */
+  const collapse = useCallback(() => {
+    setCollapsed((previous) => (previous ? previous : true))
+  }, [])
+
+  return { collapsed, toggle, expand, collapse }
 }
 
 /**
@@ -73,15 +90,24 @@ export function CollapsiblePanel({
   collapsed,
   onToggle,
   onExpand,
+  onCollapse,
   label,
   widthClassName = "lg:w-72",
   className,
+  overlay = false,
   children,
 }: {
   collapsed: boolean
   onToggle: () => void
   /** Opens the panel. Supplying it enables the screen-edge gesture below. */
   onExpand?: () => void
+  /** Folds the panel away again once the pointer leaves it. Supplying this
+   *  alongside `onExpand` turns the panel into a hover-peek drawer. */
+  onCollapse?: () => void
+  /** Floats the open panel above the editor instead of displacing it. Used in
+   *  focus mode, where reflowing the editor on hover would move the user's
+   *  cursor and text out from under them. */
+  overlay?: boolean
   /** Names the region for screen readers, e.g. "Class and files". */
   label: string
   /** Width of the panel when open. Also pinned on the inner wrapper so the
@@ -91,6 +117,7 @@ export function CollapsiblePanel({
   children: ReactNode
 }) {
   const panelId = useId()
+  const panelRef = useRef<HTMLElement>(null)
   const action = collapsed ? "Show library panel" : "Hide library panel"
   // The edge gesture is invisible by nature, so the chevron advertises it.
   const hint = collapsed && onExpand ? `${action} (or move the pointer to the left edge)` : action
@@ -138,9 +165,42 @@ export function CollapsiblePanel({
     return () => window.removeEventListener("mousemove", handleMove)
   }, [collapsed, onExpand])
 
+  /**
+   * Fold the drawer away again once the pointer leaves it.
+   *
+   * Paired with the edge gesture above, this makes the panel behave like a
+   * drawer you pull open by reaching for it and that shuts itself when you go
+   * back to typing — no second trip to the chevron.
+   *
+   * Pointer position is read from the window rather than the panel's own
+   * mouseleave, because a menu or dialog opened from inside the panel takes the
+   * pointer outside the element while the user is very much still using it.
+   * A width-based test treats that as "still inside".
+   */
+  useEffect(() => {
+    if (collapsed || !onCollapse) return
+
+    const canHover = window.matchMedia("(pointer: fine)")
+    const sideBySide = window.matchMedia("(min-width: 1024px)")
+    if (!canHover.matches || !sideBySide.matches) return
+
+    // Measured from the live element so the threshold tracks whatever width the
+    // caller asked for, and includes the divider the chevron sits on: sliding
+    // out over the chevron must not count as leaving.
+    function handleMove(event: MouseEvent) {
+      const width = panelRef.current?.getBoundingClientRect().width ?? 0
+      if (width === 0) return
+      if (event.clientX > width + LEAVE_SLACK_PX) onCollapse!()
+    }
+
+    window.addEventListener("mousemove", handleMove)
+    return () => window.removeEventListener("mousemove", handleMove)
+  }, [collapsed, onCollapse])
+
   return (
     <>
       <aside
+        ref={panelRef}
         id={panelId}
         aria-label={label}
         // `inert` takes the collapsed tree out of the focus order and the
@@ -153,6 +213,9 @@ export function CollapsiblePanel({
           collapsed
             ? "max-h-0 w-full lg:max-h-none lg:w-0"
             : cn("max-h-[60vh] w-full lg:max-h-none", widthClassName),
+          // Floating keeps the editor still while the drawer slides over it.
+          // Shadow and border give it an edge to read against the code beneath.
+          overlay && "lg:absolute lg:inset-y-0 lg:left-0 lg:z-30 lg:border-r lg:border-border lg:bg-sidebar lg:shadow-xl",
           className,
         )}
       >
