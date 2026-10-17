@@ -199,13 +199,24 @@ export function FullscreenToggle({ className }: { className?: string }) {
         )}
       >
         {/* The exposed track. Darker at the outer edge than the middle, which
-            is what gives the red its curved, tube-like face. */}
+            is what gives it a curved, tube-like face. */}
         <span
           aria-hidden="true"
           className="absolute inset-0 rounded-full bg-[radial-gradient(130%_100%_at_30%_50%,var(--switch-track)_38%,var(--switch-track-edge)_100%)]"
         />
+        {/* Green is a second layer faded in over the red rather than a swap of
+            the same gradient, so the colour eases across with the thumb
+            instead of snapping the moment state flips. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute inset-0 rounded-full bg-[radial-gradient(130%_100%_at_30%_50%,var(--switch-track-on)_38%,var(--switch-track-on-edge)_100%)]",
+            "transition-opacity duration-300 ease-out motion-reduce:transition-none",
+            fullscreen ? "opacity-100" : "opacity-0",
+          )}
+        />
         {/* The thumb is wide rather than round — covering most of the track at
-            rest and leaving a crescent of red showing — which is the detail
+            rest and leaving a crescent of colour showing — which is the detail
             that makes this switch look the way it does. */}
         <span
           aria-hidden="true"
