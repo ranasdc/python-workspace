@@ -40,11 +40,100 @@ export function useFullscreen() {
   return useContext(FullscreenContext)
 }
 
+/**
+ * Vendor-prefixed shapes, for Safari. The standard names are missing there,
+ * and the prefixed ones aren't in the DOM lib types.
+ */
+type FullscreenCapableElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void
+}
+type FullscreenCapableDocument = Document & {
+  webkitFullscreenElement?: Element | null
+  webkitExitFullscreen?: () => Promise<void> | void
+}
+
+function fullscreenElement() {
+  if (typeof document === "undefined") return null
+  const target = document as FullscreenCapableDocument
+  return target.fullscreenElement ?? target.webkitFullscreenElement ?? null
+}
+
+/**
+ * Takes the whole page fullscreen, so the browser hides its own URL bar and
+ * tabs. The root element is the target rather than the workspace node: the
+ * panes it governs are spread across sibling subtrees, and promoting one of
+ * them would leave the others behind.
+ */
+async function requestBrowserFullscreen() {
+  const root = document.documentElement as FullscreenCapableElement
+  const request = root.requestFullscreen ?? root.webkitRequestFullscreen
+  if (!request) return false
+  try {
+    await request.call(root)
+    return true
+  } catch {
+    // Denied by permissions policy — an iframe without allow="fullscreen",
+    // typically. Focus mode still works, it just can't reach browser chrome.
+    return false
+  }
+}
+
+async function exitBrowserFullscreen() {
+  if (!fullscreenElement()) return
+  const target = document as FullscreenCapableDocument
+  const release = target.exitFullscreen ?? target.webkitExitFullscreen
+  if (!release) return
+  try {
+    await release.call(target)
+  } catch {
+    // Already left by the time we asked; the change event settles the state.
+  }
+}
+
 export function FullscreenProvider({ children }: { children: ReactNode }) {
   const [fullscreen, setFullscreen] = useState(false)
 
-  const toggle = useCallback(() => setFullscreen((previous) => !previous), [])
-  const exit = useCallback(() => setFullscreen(false), [])
+  /**
+   * Entering asks the browser first, then lights up focus mode regardless of
+   * the answer. When the request is refused we still collapse the app's own
+   * chrome, which is the part we control — a smaller win than true fullscreen,
+   * but better than a toggle that appears to do nothing.
+   */
+  const toggle = useCallback(() => {
+    setFullscreen((previous) => {
+      if (previous) void exitBrowserFullscreen()
+      else void requestBrowserFullscreen()
+      return !previous
+    })
+  }, [])
+
+  const exit = useCallback(() => {
+    void exitBrowserFullscreen()
+    setFullscreen(false)
+  }, [])
+
+  /**
+   * The browser owns fullscreen, so it gets the last word on the flag.
+   *
+   * F11, the Escape the browser swallows on its own, and the "exit full
+   * screen" affordance all leave without telling React. Following the change
+   * event keeps the collapsed chrome from outliving the fullscreen it was
+   * meant to accompany.
+   *
+   * Leaving is synced but entering is not: a page can be fullscreened by F11
+   * without anyone asking for focus mode, and hijacking that would be rude.
+   */
+  useEffect(() => {
+    function handleChange() {
+      if (!fullscreenElement()) setFullscreen(false)
+    }
+    document.addEventListener("fullscreenchange", handleChange)
+    document.addEventListener("webkitfullscreenchange", handleChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", handleChange)
+      document.removeEventListener("webkitfullscreenchange", handleChange)
+    }
+  }, [])
 
   /**
    * Escape leaves focus mode.
@@ -60,7 +149,10 @@ export function FullscreenProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!fullscreen) return
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setFullscreen(false)
+      if (event.key === "Escape") {
+        void exitBrowserFullscreen()
+        setFullscreen(false)
+      }
     }
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
