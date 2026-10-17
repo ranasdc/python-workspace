@@ -40,11 +40,100 @@ export function useFullscreen() {
   return useContext(FullscreenContext)
 }
 
+/**
+ * Vendor-prefixed shapes, for Safari. The standard names are missing there,
+ * and the prefixed ones aren't in the DOM lib types.
+ */
+type FullscreenCapableElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void
+}
+type FullscreenCapableDocument = Document & {
+  webkitFullscreenElement?: Element | null
+  webkitExitFullscreen?: () => Promise<void> | void
+}
+
+function fullscreenElement() {
+  if (typeof document === "undefined") return null
+  const target = document as FullscreenCapableDocument
+  return target.fullscreenElement ?? target.webkitFullscreenElement ?? null
+}
+
+/**
+ * Takes the whole page fullscreen, so the browser hides its own URL bar and
+ * tabs. The root element is the target rather than the workspace node: the
+ * panes it governs are spread across sibling subtrees, and promoting one of
+ * them would leave the others behind.
+ */
+async function requestBrowserFullscreen() {
+  const root = document.documentElement as FullscreenCapableElement
+  const request = root.requestFullscreen ?? root.webkitRequestFullscreen
+  if (!request) return false
+  try {
+    await request.call(root)
+    return true
+  } catch {
+    // Denied by permissions policy — an iframe without allow="fullscreen",
+    // typically. Focus mode still works, it just can't reach browser chrome.
+    return false
+  }
+}
+
+async function exitBrowserFullscreen() {
+  if (!fullscreenElement()) return
+  const target = document as FullscreenCapableDocument
+  const release = target.exitFullscreen ?? target.webkitExitFullscreen
+  if (!release) return
+  try {
+    await release.call(target)
+  } catch {
+    // Already left by the time we asked; the change event settles the state.
+  }
+}
+
 export function FullscreenProvider({ children }: { children: ReactNode }) {
   const [fullscreen, setFullscreen] = useState(false)
 
-  const toggle = useCallback(() => setFullscreen((previous) => !previous), [])
-  const exit = useCallback(() => setFullscreen(false), [])
+  /**
+   * Entering asks the browser first, then lights up focus mode regardless of
+   * the answer. When the request is refused we still collapse the app's own
+   * chrome, which is the part we control — a smaller win than true fullscreen,
+   * but better than a toggle that appears to do nothing.
+   */
+  const toggle = useCallback(() => {
+    setFullscreen((previous) => {
+      if (previous) void exitBrowserFullscreen()
+      else void requestBrowserFullscreen()
+      return !previous
+    })
+  }, [])
+
+  const exit = useCallback(() => {
+    void exitBrowserFullscreen()
+    setFullscreen(false)
+  }, [])
+
+  /**
+   * The browser owns fullscreen, so it gets the last word on the flag.
+   *
+   * F11, the Escape the browser swallows on its own, and the "exit full
+   * screen" affordance all leave without telling React. Following the change
+   * event keeps the collapsed chrome from outliving the fullscreen it was
+   * meant to accompany.
+   *
+   * Leaving is synced but entering is not: a page can be fullscreened by F11
+   * without anyone asking for focus mode, and hijacking that would be rude.
+   */
+  useEffect(() => {
+    function handleChange() {
+      if (!fullscreenElement()) setFullscreen(false)
+    }
+    document.addEventListener("fullscreenchange", handleChange)
+    document.addEventListener("webkitfullscreenchange", handleChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", handleChange)
+      document.removeEventListener("webkitfullscreenchange", handleChange)
+    }
+  }, [])
 
   /**
    * Escape leaves focus mode.
@@ -60,7 +149,10 @@ export function FullscreenProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!fullscreen) return
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setFullscreen(false)
+      if (event.key === "Escape") {
+        void exitBrowserFullscreen()
+        setFullscreen(false)
+      }
     }
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
@@ -96,23 +188,46 @@ export function FullscreenToggle({ className }: { className?: string }) {
         title={fullscreen ? "Leave full screen (Esc)" : "Expand the editor to full screen"}
         aria-label="Full screen editor"
         className={cn(
-          "group relative inline-flex h-6 w-12 shrink-0 items-center rounded-full p-0.5",
-          "transition-colors duration-200 ease-out motion-reduce:transition-none",
+          "group relative inline-flex h-[30px] w-[62px] shrink-0 items-center rounded-full",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-          // Lit, the track carries the same gradient as the wordmark; dark, it
-          // is a plain inset well so the switch reads as "off" at a glance.
-          fullscreen
-            ? "bg-gradient-to-r from-primary to-chart-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]"
-            : "bg-muted shadow-[inset_0_1px_3px_rgba(0,0,0,0.12)] hover:bg-muted/80",
+          // The raised look is one dark shadow low-left and one white glow
+          // low-right. Paired like this the control reads as sitting above the
+          // page; either on its own just looks like a smudge.
+          "shadow-[-5px_6px_10px_-2px_var(--switch-shade),6px_7px_12px_-3px_var(--switch-glow)]",
+          "transition-[box-shadow,filter] duration-200 ease-out motion-reduce:transition-none",
+          "hover:brightness-[1.02] active:shadow-[-3px_4px_7px_-2px_var(--switch-shade),4px_5px_9px_-3px_var(--switch-glow)]",
         )}
       >
+        {/* The exposed track. Darker at the outer edge than the middle, which
+            is what gives it a curved, tube-like face. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full bg-[radial-gradient(130%_100%_at_30%_50%,var(--switch-track)_38%,var(--switch-track-edge)_100%)]"
+        />
+        {/* Green is a second layer faded in over the red rather than a swap of
+            the same gradient, so the colour eases across with the thumb
+            instead of snapping the moment state flips. */}
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none h-5 w-5 rounded-full bg-card",
-            "shadow-[0_1px_3px_rgba(0,0,0,0.28)] ring-1 ring-black/5",
-            "transition-transform duration-200 ease-out motion-reduce:transition-none",
-            fullscreen ? "translate-x-6" : "translate-x-0",
+            "absolute inset-0 rounded-full bg-[radial-gradient(130%_100%_at_30%_50%,var(--switch-track-on)_38%,var(--switch-track-on-edge)_100%)]",
+            "transition-opacity duration-300 ease-out motion-reduce:transition-none",
+            fullscreen ? "opacity-100" : "opacity-0",
+          )}
+        />
+        {/* The thumb is wide rather than round — covering most of the track at
+            rest and leaving a crescent of colour showing — which is the detail
+            that makes this switch look the way it does. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none relative h-[26px] w-[40px] rounded-full",
+            "bg-[linear-gradient(to_bottom,var(--switch-thumb)_0%,var(--switch-thumb)_45%,var(--switch-thumb-edge)_100%)]",
+            "shadow-[0_1px_2px_rgba(0,0,0,0.3)]",
+            "transition-transform duration-300 ease-out motion-reduce:transition-none",
+            // Travel is the leftover track width, so the thumb lands flush
+            // against each end instead of stopping short.
+            fullscreen ? "translate-x-[20px]" : "translate-x-[2px]",
           )}
         />
       </button>

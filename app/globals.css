@@ -73,6 +73,20 @@
   --chart-4: oklch(0.7 0.15 80);
   --chart-5: oklch(0.6 0.2 20);
   --radius: 0.625rem;
+  /* Soft-3D focus-mode switch. Its own tokens because the control is a
+     physical object rather than themed UI: the red is the exposed track, and
+     the raised look needs a paired dark shadow and white highlight. */
+  --switch-track: oklch(0.63 0.11 25);
+  --switch-track-edge: oklch(0.52 0.1 25);
+  /* Lit, the track turns green so "on" reads across a classroom. Same
+     lightness as the red so the control doesn't jump in weight when it flips. */
+  --switch-track-on: oklch(0.63 0.13 152);
+  --switch-track-on-edge: oklch(0.51 0.11 152);
+  --switch-well: oklch(0.91 0.004 260);
+  --switch-thumb: oklch(1 0 0);
+  --switch-thumb-edge: oklch(0.93 0.004 260);
+  --switch-shade: oklch(0.42 0.02 260 / 0.42);
+  --switch-glow: oklch(1 0 0 / 0.95);
   --sidebar: oklch(0.99 0.003 260);
   --sidebar-foreground: oklch(0.2 0.03 260);
   --sidebar-primary: oklch(0.52 0.18 264);
@@ -108,6 +122,17 @@
   --chart-3: oklch(0.7 0.15 150);
   --chart-4: oklch(0.75 0.15 80);
   --chart-5: oklch(0.68 0.2 20);
+  /* Dark keeps the same red but drops the surfaces, so the thumb stays the
+     bright element and the shade has something to fall on. */
+  --switch-track: oklch(0.58 0.12 25);
+  --switch-track-edge: oklch(0.44 0.1 25);
+  --switch-track-on: oklch(0.58 0.13 152);
+  --switch-track-on-edge: oklch(0.44 0.11 152);
+  --switch-well: oklch(0.26 0.02 260);
+  --switch-thumb: oklch(0.94 0.005 260);
+  --switch-thumb-edge: oklch(0.82 0.008 260);
+  --switch-shade: oklch(0 0 0 / 0.55);
+  --switch-glow: oklch(1 0 0 / 0.14);
   --sidebar: oklch(0.2 0.022 260);
   --sidebar-foreground: oklch(0.95 0.01 260);
   --sidebar-primary: oklch(0.7 0.15 264);
