@@ -188,23 +188,35 @@ export function FullscreenToggle({ className }: { className?: string }) {
         title={fullscreen ? "Leave full screen (Esc)" : "Expand the editor to full screen"}
         aria-label="Full screen editor"
         className={cn(
-          "group relative inline-flex h-6 w-12 shrink-0 items-center rounded-full p-0.5",
-          "transition-colors duration-200 ease-out motion-reduce:transition-none",
+          "group relative inline-flex h-[30px] w-[62px] shrink-0 items-center rounded-full",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-          // Lit, the track carries the same gradient as the wordmark; dark, it
-          // is a plain inset well so the switch reads as "off" at a glance.
-          fullscreen
-            ? "bg-gradient-to-r from-primary to-chart-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]"
-            : "bg-muted shadow-[inset_0_1px_3px_rgba(0,0,0,0.12)] hover:bg-muted/80",
+          // The raised look is one dark shadow low-left and one white glow
+          // low-right. Paired like this the control reads as sitting above the
+          // page; either on its own just looks like a smudge.
+          "shadow-[-5px_6px_10px_-2px_var(--switch-shade),6px_7px_12px_-3px_var(--switch-glow)]",
+          "transition-[box-shadow,filter] duration-200 ease-out motion-reduce:transition-none",
+          "hover:brightness-[1.02] active:shadow-[-3px_4px_7px_-2px_var(--switch-shade),4px_5px_9px_-3px_var(--switch-glow)]",
         )}
       >
+        {/* The exposed track. Darker at the outer edge than the middle, which
+            is what gives the red its curved, tube-like face. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full bg-[radial-gradient(130%_100%_at_30%_50%,var(--switch-track)_38%,var(--switch-track-edge)_100%)]"
+        />
+        {/* The thumb is wide rather than round — covering most of the track at
+            rest and leaving a crescent of red showing — which is the detail
+            that makes this switch look the way it does. */}
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none h-5 w-5 rounded-full bg-card",
-            "shadow-[0_1px_3px_rgba(0,0,0,0.28)] ring-1 ring-black/5",
-            "transition-transform duration-200 ease-out motion-reduce:transition-none",
-            fullscreen ? "translate-x-6" : "translate-x-0",
+            "pointer-events-none relative h-[26px] w-[40px] rounded-full",
+            "bg-[linear-gradient(to_bottom,var(--switch-thumb)_0%,var(--switch-thumb)_45%,var(--switch-thumb-edge)_100%)]",
+            "shadow-[0_1px_2px_rgba(0,0,0,0.3)]",
+            "transition-transform duration-300 ease-out motion-reduce:transition-none",
+            // Travel is the leftover track width, so the thumb lands flush
+            // against each end instead of stopping short.
+            fullscreen ? "translate-x-[20px]" : "translate-x-[2px]",
           )}
         />
       </button>
