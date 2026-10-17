@@ -7,6 +7,7 @@ import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
+import { useFullscreen } from "@/components/ide/fullscreen"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import { parseMarkedLines } from "@/lib/ide/line-diff"
 import {
@@ -161,7 +162,24 @@ export function StudentWorkspace({
   language?: LanguageId
 }) {
   const languageDef = getLanguage(language)
-  const { collapsed, toggle, expand } = useCollapsiblePanel({ userId, scope: "student-library" })
+  const { collapsed, toggle, expand, collapse } = useCollapsiblePanel({
+    userId,
+    scope: "student-library",
+  })
+  // `fullscreen` is the workspace focus mode from the header switch. Not to be
+  // confused with `taskFullscreen` below, which only sizes the task dialog.
+  const { fullscreen } = useFullscreen()
+
+  /**
+   * Entering focus mode folds the library away; leaving it puts the panel back.
+   *
+   * Only the transient actions are used, so the pupil's own chevron choice is
+   * untouched: whatever they had before focus mode is what returns after it.
+   */
+  useEffect(() => {
+    if (fullscreen) collapse()
+    else expand()
+  }, [fullscreen, collapse, expand])
   const isWeb = language === "html"
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
@@ -471,13 +489,20 @@ export function StudentWorkspace({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+    /* `relative` anchors the overlay drawer in focus mode; without it the
+       floating panel would position against the page instead of this row. */
+    <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Sidebar: classes + files. The IDE switcher sits in the bar above this
           whole row, so folding the panel away never hides it. */}
       <CollapsiblePanel
         collapsed={collapsed}
         onToggle={toggle}
         onExpand={expand}
+        // In focus mode the panel becomes a hover-peek drawer: it closes itself
+        // when the pointer goes back to the code, so reaching the files never
+        // costs a second click to put them away again.
+        onCollapse={fullscreen ? collapse : undefined}
+        overlay={fullscreen}
         label="Class and files"
         widthClassName="lg:w-72"
         className="bg-sidebar"
@@ -638,12 +663,15 @@ export function StudentWorkspace({
               <>
                 <FileCode className="h-4 w-4 shrink-0 text-primary" />
                 <span className="truncate text-sm font-medium">{activeFile.name}</span>
-                {activeFile.status === "done" && (
+                {/* The marking and correction badges are status, not tools, so
+                    they stand down in focus mode. The file name stays: with the
+                    library hidden it is the only thing naming what is on screen. */}
+                {!fullscreen && activeFile.status === "done" && (
                   <span className="flex shrink-0 items-center gap-1 rounded-full bg-chart-3/15 px-2 py-0.5 text-xs font-semibold text-chart-3">
                     <CheckCircle2 className="h-3 w-3" /> Marked done
                   </span>
                 )}
-                {activeFile.teacherEditedAt && (
+                {!fullscreen && activeFile.teacherEditedAt && (
                   <span
                     className="flex shrink-0 items-center gap-1 rounded-full bg-chart-2/15 px-2 py-0.5 text-xs font-semibold text-chart-2"
                     title={`${activeFile.teacherEditedByName ?? "Your teacher"} corrected this on ${new Date(
@@ -751,7 +779,7 @@ export function StudentWorkspace({
             is the dock's own business: with nothing to say it costs a single
             strip of header and the editor above keeps the rest, and when a
             comment does arrive it opens itself to just the room that needs. */}
-        {activeFile && (
+        {activeFile && !fullscreen && (
           <div className="shrink-0 border-t border-border bg-card">
             <FileComments fileId={activeFile.id} canComment={false} canReact collapsible />
           </div>

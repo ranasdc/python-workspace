@@ -43,6 +43,7 @@ import { ClassAiHelpControl } from "@/components/class-ai-help-control"
 import { TeacherStarters } from "@/components/starters/teacher-starters"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
+import { useFullscreen } from "@/components/ide/fullscreen"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import {
@@ -150,6 +151,9 @@ export function TeacherDashboard({
     initialClasses[0]?.id ?? null,
   )
   const [view, setView] = useState<"classes" | "library">("classes")
+  // Read here as well as in ClassDetail: the class-navigation rail below is
+  // owned by this component, not by the workspace that holds the editor.
+  const { fullscreen } = useFullscreen()
 
   // Load the Python runtime once for the whole dashboard so switching between
   // student files doesn't re-download Pyodide each time.
@@ -168,8 +172,15 @@ export function TeacherDashboard({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      {/* Classes list */}
-      <aside className="flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-64 lg:border-b-0 lg:border-r">
+      {/* Classes list. Hidden in focus mode: it is navigation between classes
+          rather than anything to do with the code on screen, and the class tree
+          beside it already folds away. Exiting focus mode brings it back. */}
+      <aside
+        className={cn(
+          "flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-64 lg:border-b-0 lg:border-r",
+          fullscreen && "hidden",
+        )}
+      >
         {/* Classes / Library switcher */}
         <div className="flex gap-1 border-b border-border p-2">
           <button
@@ -335,7 +346,18 @@ function ClassDetail({
   /** Runs once the class has been deleted, so the dashboard can reselect. */
   onDeleted: () => void | Promise<void>
 }) {
-  const { collapsed, toggle, expand } = useCollapsiblePanel({ userId, scope: "teacher-class-tree" })
+  const { collapsed, toggle, expand, collapse } = useCollapsiblePanel({
+    userId,
+    scope: "teacher-class-tree",
+  })
+  const { fullscreen } = useFullscreen()
+
+  // Focus mode folds the class tree away and restores it on exit, leaving the
+  // teacher's own chevron preference untouched either way.
+  useEffect(() => {
+    if (fullscreen) collapse()
+    else expand()
+  }, [fullscreen, collapse, expand])
   const [tab, setTab] = useState<"work" | "starters">("work")
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Teachers review one IDE at a time, mirroring how pupils work in it.
@@ -488,8 +510,10 @@ function ClassDetail({
        without it this column sized to its content, so the panes below stopped
        short and left dead space under them. */
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Header */}
-      <div className="shrink-0 border-b border-border bg-card px-5 py-4">
+      {/* Header — class name, join code and section tabs. All of it is class
+          administration rather than code, so focus mode drops the lot and
+          hands the height to the editor. */}
+      <div className={cn("shrink-0 border-b border-border bg-card px-5 py-4", fullscreen && "hidden")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold">{cls.name}</h1>
@@ -555,12 +579,14 @@ function ClassDetail({
       {tab === "starters" ? (
         <TeacherStarters classId={cls.id} />
       ) : (
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Tree */}
   <CollapsiblePanel
   collapsed={collapsed}
   onToggle={toggle}
   onExpand={expand}
+  onCollapse={fullscreen ? collapse : undefined}
+  overlay={fullscreen}
   label={`${cls.name} student work`}
           widthClassName="lg:w-80"
         >
@@ -698,21 +724,25 @@ function ClassDetail({
                       Correct
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    variant={currentFile.status === "done" ? "outline" : "default"}
-                    onClick={toggleMark}
-                    disabled={marking || editing}
-                  >
-                    {marking ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    ) : currentFile.status === "done" ? (
-                      <Circle className="mr-1.5 h-4 w-4" />
-                    ) : (
-                      <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                    )}
-                    {currentFile.status === "done" ? "Mark unmarked" : "Mark as done"}
-                  </Button>
+                  {/* Marking is review work, not running code, so it stands
+                      down in focus mode alongside the feedback thread. */}
+                  {!fullscreen && (
+                    <Button
+                      size="sm"
+                      variant={currentFile.status === "done" ? "outline" : "default"}
+                      onClick={toggleMark}
+                      disabled={marking || editing}
+                    >
+                      {marking ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : currentFile.status === "done" ? (
+                        <Circle className="mr-1.5 h-4 w-4" />
+                      ) : (
+                        <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                      )}
+                      {currentFile.status === "done" ? "Mark unmarked" : "Mark as done"}
+                    </Button>
+                  )}
                   <RunStopButton
                     isWeb={isWeb}
                     status={status}
@@ -724,7 +754,14 @@ function ClassDetail({
                   />
                 </div>
               </div>
-              <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
+              {/* Focus mode gives the feedback column's width back to the code,
+                  leaving the editor and its output to split the viewport. */}
+              <div
+                className={cn(
+                  "grid min-h-0 flex-1",
+                  !fullscreen && "lg:grid-cols-[1fr_minmax(260px,320px)]",
+                )}
+              >
                 <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
                   <div
                     className={cn(
@@ -771,9 +808,11 @@ function ClassDetail({
                   </div>
                 </div>
                 {/* Feedback thread for this student's file */}
-                <div className="min-h-[240px] lg:min-h-0">
-                  <FileComments fileId={currentFile.id} canComment />
-                </div>
+                {!fullscreen && (
+                  <div className="min-h-[240px] lg:min-h-0">
+                    <FileComments fileId={currentFile.id} canComment />
+                  </div>
+                )}
               </div>
             </>
           ) : (

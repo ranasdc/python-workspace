@@ -6,6 +6,7 @@ import { BookOpen, Building2, Zap } from "lucide-react"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { ProfileMenu } from "@/components/profile-menu"
 import { InstallSuggestion } from "@/components/pwa/install-suggestion"
+import { FullscreenToggle, useFullscreen } from "@/components/ide/fullscreen"
 import { cn } from "@/lib/utils"
 import { usePendingStarters } from "@/hooks/use-pending-starters"
 
@@ -18,6 +19,7 @@ export function AppHeader({
   roleLabel,
   schoolName = null,
   isSchoolAdmin = false,
+  showFullscreenToggle = false,
 }: {
   userId: string
   name: string
@@ -30,21 +32,67 @@ export function AppHeader({
   /** The school from the user's membership. Absent for independent accounts. */
   schoolName?: string | null
   isSchoolAdmin?: boolean
+  /** Shows the focus-mode switch. Only pages with an editor to expand set this. */
+  showFullscreenToggle?: boolean
 }) {
   const onSchoolPage = usePathname().startsWith("/school")
   const newCount = usePendingStarters(role === "student").length
   const label = roleLabel ?? (role === "teacher" ? "Teacher" : "Student")
+  const { fullscreen } = useFullscreen()
 
+  /**
+   * In focus mode the header folds away to a thin strip that keeps only the
+   * switch.
+   *
+   * Removing it outright would take the way back out with it, leaving Escape as
+   * the only exit — discoverable to us, not to a Year 7 who toggled it by
+   * accident. Collapsing instead buys back almost the whole header while the
+   * control that undoes it stays exactly where it was clicked.
+   */
   return (
-    <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-6">
-      <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+    <header
+      className={cn(
+        // shrink-0 because the page root is a fixed-height flex column: without
+        // it the editor's growth squashes this strip until the switch is clipped.
+        "relative flex shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6",
+        "transition-[padding] duration-200 ease-out motion-reduce:transition-none",
+        // Just enough to clear the switch on one row. The label sits beside it
+        // in focus mode rather than beneath, so this costs ~34px of viewport.
+        fullscreen ? "py-1.5" : "py-3",
+      )}
+    >
+      <Link
+        href="/"
+        className={cn(
+          "flex items-center gap-2.5 transition-opacity hover:opacity-80",
+          fullscreen && "hidden",
+        )}
+      >
         <LogoIcon className="h-9 w-9 shrink-0" />
         <div className="leading-tight">
           <LogoWordmark className="block text-sm" />
           <span className="block text-xs capitalize text-muted-foreground">{role} workspace</span>
         </div>
       </Link>
-      <div className="flex items-center gap-3">
+      {/* Normally absolute, so the switch sits on the true midpoint of the
+          header: centring it by flex would measure it against the logo and the
+          profile menu, which differ in width per role and would leave the
+          control slightly off-centre on every screen.
+
+          In focus mode it returns to the flow, because by then it is the only
+          visible child — out of flow it would leave the header with nothing to
+          give it height, collapsing the strip until the switch was clipped. */}
+      {showFullscreenToggle && (
+        <div
+          className={cn(
+            "flex items-center justify-center",
+            fullscreen ? "flex-1" : "pointer-events-none absolute inset-0",
+          )}
+        >
+          <FullscreenToggle className={cn(!fullscreen && "pointer-events-auto")} />
+        </div>
+      )}
+      <div className={cn("flex items-center gap-3", fullscreen && "hidden")}>
         {role === "student" && (
           <Link
             href="/student/starters"

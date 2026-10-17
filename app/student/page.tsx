@@ -8,6 +8,7 @@ import { getEntitlement } from "@/lib/entitlements"
 import { getHeaderIdentity } from "@/lib/account"
 import { AppHeader } from "@/components/app-header"
 import { StudentWorkspaceWithFreemium } from "@/components/student-workspace-with-freemium"
+import { FullscreenProvider } from "@/components/ide/fullscreen"
 import { WelcomeOnboarding } from "@/components/welcome-onboarding"
 import { DEFAULT_LANGUAGE, isLanguageId, type LanguageId } from "@/lib/ide/languages"
 
@@ -56,23 +57,28 @@ export default async function StudentPage() {
   const identity = await getHeaderIdentity(sessionUser.id)
 
   return (
-    <div className="flex h-svh flex-col">
-      <AppHeader
-        userId={sessionUser.id}
-        name={sessionUser.name}
-        email={sessionUser.email}
-        avatarId={identity.avatarId}
-        role="student"
-        roleLabel={identity.roleLabel}
-        schoolName={identity.schoolName}
-        isSchoolAdmin={identity.isSchoolAdmin}
-      />
-      <StudentWorkspaceWithFreemium
-        userId={sessionUser.id}
-        initialClasses={classes}
-        initialLanguage={initialLanguage}
-      />
-      {showOnboarding && <WelcomeOnboarding role="student" />}
-    </div>
+    // The provider wraps both the header and the workspace because the switch
+    // lives in one and the panes it resizes live in the other.
+    <FullscreenProvider>
+      <div className="flex h-svh flex-col">
+        <AppHeader
+          userId={sessionUser.id}
+          name={sessionUser.name}
+          email={sessionUser.email}
+          avatarId={identity.avatarId}
+          role="student"
+          roleLabel={identity.roleLabel}
+          schoolName={identity.schoolName}
+          isSchoolAdmin={identity.isSchoolAdmin}
+          showFullscreenToggle
+        />
+        <StudentWorkspaceWithFreemium
+          userId={sessionUser.id}
+          initialClasses={classes}
+          initialLanguage={initialLanguage}
+        />
+        {showOnboarding && <WelcomeOnboarding role="student" />}
+      </div>
+    </FullscreenProvider>
   )
 }
