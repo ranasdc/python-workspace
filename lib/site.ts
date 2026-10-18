@@ -7,25 +7,38 @@ function getSiteUrl() {
 }
 
 export const SITE = {
-  name: "mycodepad",
+  /**
+   * The brand as it should appear in a search result. The on-screen wordmark
+   * stays lower-case by design — that lives in LogoWordmark, not here.
+   */
+  name: "MyCodePad",
   url: getSiteUrl().replace(/\/$/, ""),
-  title: "mycodepad — Python & HTML IDEs for Classrooms",
-  shortDescription: "Browser Python and HTML IDEs for students, teachers and schools.",
+  title: "MyCodePad – Free Online IDEs & Coding Editors",
+  shortDescription:
+    "Free online IDEs and coding editors. Write, run and practise Python, HTML and more in your browser.",
+  /**
+   * The homepage meta description. Kept to two sentences and ~150 characters so
+   * Google shows it whole rather than truncating mid-benefit.
+   */
   description:
-    "mycodepad is a classroom coding workspace with two browser IDEs. Students write and run Python and build web pages with HTML, CSS and JavaScript, while teachers set work, mark submissions and give feedback in one organised class tree.",
+    "Write, run and practise code online with MyCodePad's free coding editors. Explore Python, HTML and more, whether you're a student, teacher or developer.",
+  /** The fuller version, for places with no snippet length limit. */
+  longDescription:
+    "MyCodePad is a free online coding platform with multiple IDEs and editors. Write, run and practise code in the browser, create projects and share work in one workspace. Python and HTML ship today, with more editors on the way.",
   tagline: "Code. Learn. Teach. Together.",
   keywords: [
+    "free online IDE",
+    "free online coding editor",
+    "online coding platform",
     "online Python IDE",
+    "online HTML editor",
+    "run Python online",
     "HTML CSS JavaScript editor",
-    "coding for schools",
-    "computer science classroom",
-    "GCSE computer science",
-    "A level computer science",
-    "teach Python",
-    "learn to code",
+    "coding workspace for students",
+    "coding platform for teachers",
     "classroom coding platform",
-    "coding homework",
-    "school coding platform UK",
+    "learn to code online",
+    "GCSE computer science",
   ],
   themeColor: "#1b2233",
   brandPurple: "#8b5cf6",
