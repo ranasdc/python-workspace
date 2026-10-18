@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import Script from 'next/script'
 import { Toaster } from '@/components/ui/sonner'
 import { SITE } from '@/lib/site'
 import { PwaProvider } from '@/components/pwa/pwa-provider'
@@ -58,11 +59,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} bg-background`}>
-      <head>
-        {/* The install prompt can fire before React hydrates, so catch it early. */}
-        <script dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE_SCRIPT }} />
-      </head>
       <body className="font-sans antialiased">
+        {/* The install prompt can fire before React hydrates, so catch it early.
+            This sits at the top of <body> rather than in a manual <head>: the
+            preview injects its own inline script as the first head child, which
+            shifts React's position-based matching and reports a false
+            hydration mismatch. Body-parsed scripts still run pre-hydration. */}
+        <Script id="pwa-install-capture" strategy="beforeInteractive">
+          {INSTALL_CAPTURE_SCRIPT}
+        </Script>
         {children}
         <Toaster position="top-center" />
         <PwaProvider />
