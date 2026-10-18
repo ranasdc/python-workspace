@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
@@ -42,12 +42,13 @@ import { JoinSchoolDialog } from "@/components/join-school-dialog"
 import { ClassAiHelpControl } from "@/components/class-ai-help-control"
 import { TeacherStarters } from "@/components/starters/teacher-starters"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import {
-  CollapsiblePanel,
-  useCollapsiblePanel,
-  useEdgeReveal,
-  useLeaveToClose,
-} from "@/components/ide/collapsible-panel"
+  CLASS_NAV_ID,
+  ClassNavProvider,
+  useClassNav,
+  useLeftSideCascade,
+} from "@/components/teacher-class-nav"
 import { useFullscreen } from "@/components/ide/fullscreen"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
@@ -176,223 +177,164 @@ export function TeacherDashboard({
     list.length >= planStatus.limits.maxClasses
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-      {/* Classes list. Hidden in focus mode: it is navigation between classes
-          rather than anything to do with the code on screen, and the class tree
-          beside it already folds away. Exiting focus mode brings it back. */}
-      <ClassNavDrawer hidden={fullscreen}>
-        {/* Classes / Library switcher */}
-        <div className="flex gap-1 border-b border-border p-2">
-          <button
-            onClick={() => setView("classes")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-              view === "classes" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            <BookOpen className="h-4 w-4" /> Classes
-          </button>
-          <button
-            onClick={() => setView("library")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-              view === "library" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            <Library className="h-4 w-4" /> Library
-          </button>
-        </div>
+    /* Holds the rail's folded state, which the workspace arrow also drives. */
+    <ClassNavProvider userId={userId} hidden={fullscreen}>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Classes list. Hidden in focus mode: it is navigation between classes
+            rather than anything to do with the code on screen, and the class tree
+            beside it already folds away. Exiting focus mode brings it back. */}
+        <ClassNavDrawer hidden={fullscreen}>
+          {/* Classes / Library switcher */}
+          <div className="flex gap-1 border-b border-border p-2">
+            <button
+              onClick={() => setView("classes")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                view === "classes" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <BookOpen className="h-4 w-4" /> Classes
+            </button>
+            <button
+              onClick={() => setView("library")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                view === "library" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <Library className="h-4 w-4" /> Library
+            </button>
+          </div>
 
-        <div className="flex items-center justify-between px-3 py-3">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-            Your classes
-          </Label>
-          <CreateClassDialog
-            atLimit={atClassLimit}
-            onCreated={async (id) => {
-              await mutate("teacher-classes")
-              setActiveClassId(id)
-              setView("classes")
-            }}
-          />
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">
-          {list.length === 0 ? (
-            <p className="px-2 text-sm text-muted-foreground">No classes yet.</p>
-          ) : (
-            list.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setActiveClassId(c.id)
-                  setView("classes")
-                }}
-                className={cn(
-                  "mb-1 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors",
-                  c.id === activeClassId && view === "classes" ? "bg-primary/10" : "hover:bg-muted",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex items-center gap-2 text-sm font-medium",
-                    c.id === activeClassId && "text-primary",
-                  )}
-                >
-                  <BookOpen className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{c.name}</span>
-                </span>
-                <span className="pl-6 text-xs text-muted-foreground">
-                  {c.students.length} student{c.students.length === 1 ? "" : "s"}
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-
-        {planStatus && !planStatus.hasTeacherPro && (
-          <TeacherPlanNotice planStatus={planStatus} />
-        )}
-      </ClassNavDrawer>
-
-      {/* Main area: class detail or the teacher's library */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {view === "library" ? (
-          <TeacherLibrary userId={userId} classes={list} />
-        ) : activeClass ? (
-          /* Scrolls as one page on narrow screens, where the panes stack; on
-             desktop it stays fixed so the editor and output can fill the
-             viewport and scroll inside themselves instead. */
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
-            <ClassDetail
-              key={activeClass.id}
-              userId={userId}
-              cls={activeClass}
-              pyodide={pyodide}
-              onDeleted={async () => {
-                // Refetch first, then select whatever class is left, so the
-                // dashboard never points at the class that has just gone.
-                const remaining = await mutate<ClassWithStudents[]>("teacher-classes")
-                setActiveClassId(remaining?.[0]?.id ?? null)
+          <div className="flex items-center justify-between px-3 py-3">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Your classes
+            </Label>
+            <CreateClassDialog
+              atLimit={atClassLimit}
+              onCreated={async (id) => {
+                await mutate("teacher-classes")
+                setActiveClassId(id)
+                setView("classes")
               }}
             />
           </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-auto">
-            <EmptyTeacherState onCreated={async (id) => {
-              await mutate("teacher-classes")
-              setActiveClassId(id)
-            }} />
+          <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">
+            {list.length === 0 ? (
+              <p className="px-2 text-sm text-muted-foreground">No classes yet.</p>
+            ) : (
+              list.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setActiveClassId(c.id)
+                    setView("classes")
+                  }}
+                  className={cn(
+                    "mb-1 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors",
+                    c.id === activeClassId && view === "classes" ? "bg-primary/10" : "hover:bg-muted",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex items-center gap-2 text-sm font-medium",
+                      c.id === activeClassId && "text-primary",
+                    )}
+                  >
+                    <BookOpen className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{c.name}</span>
+                  </span>
+                  <span className="pl-6 text-xs text-muted-foreground">
+                    {c.students.length} student{c.students.length === 1 ? "" : "s"}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
-        )}
+
+          {planStatus && !planStatus.hasTeacherPro && (
+            <TeacherPlanNotice planStatus={planStatus} />
+          )}
+        </ClassNavDrawer>
+
+        {/* Main area: class detail or the teacher's library */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {view === "library" ? (
+            <TeacherLibrary userId={userId} classes={list} />
+          ) : activeClass ? (
+            /* Scrolls as one page on narrow screens, where the panes stack; on
+               desktop it stays fixed so the editor and output can fill the
+               viewport and scroll inside themselves instead. */
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
+              <ClassDetail
+                key={activeClass.id}
+                userId={userId}
+                cls={activeClass}
+                pyodide={pyodide}
+                onDeleted={async () => {
+                  // Refetch first, then select whatever class is left, so the
+                  // dashboard never points at the class that has just gone.
+                  const remaining = await mutate<ClassWithStudents[]>("teacher-classes")
+                  setActiveClassId(remaining?.[0]?.id ?? null)
+                }}
+              />
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-auto">
+              <EmptyTeacherState onCreated={async (id) => {
+                await mutate("teacher-classes")
+                setActiveClassId(id)
+              }} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ClassNavProvider>
   )
 }
 
 /**
- * The classes/library rail, as a drawer that keeps itself out of the way.
+ * The classes/library rail.
  *
  * A teacher picks a class once and then spends the lesson reading pupils'
- * code, so the rail is 256px that stops earning its place almost immediately.
- * It folds away by default and comes back when the pointer reaches the left
- * edge of the screen, which hands that width to the work without burying the
- * navigation behind a click.
+ * code, so this is 256px that stops earning its place almost immediately. It
+ * folds away to hand that width to the work — but only when asked. Navigation
+ * that moves while you are reaching for it is worse than navigation that sits
+ * there costing space.
  *
- * The rail and the file tree beside it stay one attached unit. The rail folds
- * by width inside the layout row rather than floating over the tree, so the
- * two move as a single piece, and the left edge keeps exactly one arrow: the
- * tree's. Folding the rail is automatic, folding the tree is the teacher's
- * call with that arrow, and doing both clears the whole left side.
+ * The rail and the file tree beside it stay one attached unit, answering to
+ * the tree's arrow rather than each carrying a control of its own. It folds by
+ * width inside the layout row instead of floating over the tree, so the two
+ * move as a single piece. `useLeftSideCascade` owns the order they fold in.
  *
  * Only the side-by-side layout folds. Below `lg` the rail stacks above the
- * workspace, where there is no pointer to read and no width to reclaim.
+ * workspace, where there is no width to reclaim.
  */
 function ClassNavDrawer({ hidden, children }: { hidden: boolean; children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(true)
-  // Only the folded-on-desktop case should leave the focus order; the stacked
-  // layout below `lg` still shows the rail whatever `collapsed` says.
-  const [sideBySide, setSideBySide] = useState(false)
-  // A stray pointer must not fold the rail away while a keyboard user is
-  // working inside it — that would strand focus on an inert element.
-  const [holdsFocus, setHoldsFocus] = useState(false)
-  const panelRef = useRef<HTMLElement>(null)
-  const panelId = useId()
-
-  useEffect(() => {
-    const query = window.matchMedia("(min-width: 1024px)")
-    const sync = () => setSideBySide(query.matches)
-    sync()
-    query.addEventListener("change", sync)
-    return () => query.removeEventListener("change", sync)
-  }, [])
-
-  const open = useCallback(() => setCollapsed(false), [])
-  const close = useCallback(() => setCollapsed(true), [])
-
-  // Focus mode hides the rail outright, so neither gesture should be live —
-  // the left edge belongs to the class tree there instead.
-  useEdgeReveal({ enabled: !hidden && collapsed, onReveal: open })
-  useLeaveToClose({
-    enabled: !hidden && !collapsed && !holdsFocus,
-    panelRef,
-    onClose: close,
-  })
+  const { collapsed, foldable } = useClassNav()
 
   return (
-    <>
-      <aside
-        ref={panelRef}
-        id={panelId}
-        aria-label="Classes and library"
-        // Takes the folded rail out of the focus order and the accessibility
-        // tree together; aria-hidden alone would leave its buttons tabbable.
-        inert={(collapsed && sideBySide && !hidden) || undefined}
-        onFocusCapture={() => setHoldsFocus(true)}
-        onBlurCapture={(event) => {
-          // Only once focus has actually left the rail, rather than moved
-          // between the controls inside it.
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            setHoldsFocus(false)
-          }
-        }}
-        className={cn(
-          "flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:border-b-0 lg:border-r",
-          "lg:transition-[width] lg:duration-200 lg:ease-out motion-reduce:lg:transition-none",
-          // Width-only, and still in the layout row: the tree slides along with
-          // the rail so the pair reads as one unit. Left to CSS rather than the
-          // media query above so the rail is never painted open on first load
-          // and then yanked shut.
-          collapsed ? "lg:w-0 lg:overflow-hidden lg:border-r-0" : "lg:w-64",
-          hidden && "hidden",
-        )}
-      >
-        {/* Pinned to the open width so the contents slide out of sight rather
-            than reflowing as the rail narrows. */}
-        <div className="flex min-h-0 w-full flex-1 flex-col lg:w-64">{children}</div>
-      </aside>
-
-      {/* Keyboard-only way in. The edge gesture leaves nothing to tab to, and
-          the edge itself deliberately carries just the tree's arrow, so this
-          surfaces on focus and stays invisible to everyone else. Rendered only
-          in the side-by-side layout, where folding actually happens. */}
-      {!hidden && sideBySide && (
-        <button
-          type="button"
-          onClick={() => setCollapsed((previous) => !previous)}
-          aria-expanded={!collapsed}
-          aria-controls={panelId}
-          className={cn(
-            "sr-only focus:not-sr-only",
-            "focus:absolute focus:left-2 focus:top-2 focus:z-50",
-            "focus:rounded-md focus:border focus:border-border focus:bg-card",
-            "focus:px-3 focus:py-1.5 focus:text-sm focus:font-medium focus:text-foreground",
-            "focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring",
-          )}
-        >
-          {collapsed ? "Show classes and library" : "Hide classes and library"}
-        </button>
+    <aside
+      id={CLASS_NAV_ID}
+      aria-label="Classes and library"
+      // Takes the folded rail out of the focus order and the accessibility tree
+      // together; aria-hidden alone would leave its buttons tabbable. Gated on
+      // `foldable`, since the stacked layout shows the rail whatever the
+      // remembered state says.
+      inert={(collapsed && foldable) || undefined}
+      className={cn(
+        "flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:border-b-0 lg:border-r",
+        "lg:transition-[width] lg:duration-200 lg:ease-out motion-reduce:lg:transition-none",
+        // Width-only, and still in the layout row: the tree slides along with
+        // the rail so the pair reads as one unit.
+        collapsed ? "lg:w-0 lg:overflow-hidden lg:border-r-0" : "lg:w-64",
+        hidden && "hidden",
       )}
-    </>
+    >
+      {/* Pinned to the open width so the contents slide out of sight rather
+          than reflowing as the rail narrows. */}
+      <div className="flex min-h-0 w-full flex-1 flex-col lg:w-64">{children}</div>
+    </aside>
   )
 }
 
@@ -456,6 +398,12 @@ function ClassDetail({
   const { collapsed, toggle, expand, collapse } = useCollapsiblePanel({
     userId,
     scope: "teacher-class-tree",
+  })
+  // One arrow folds the whole left side: the class rail first, then this tree.
+  const cascade = useLeftSideCascade({
+    panelCollapsed: collapsed,
+    togglePanel: toggle,
+    panelNoun: "student files",
   })
   const { fullscreen } = useFullscreen()
 
@@ -696,16 +644,15 @@ function ClassDetail({
       ) : (
       <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Tree */}
-  <CollapsiblePanel
-  collapsed={collapsed}
-  onToggle={toggle}
-  // The chevron is the only way in or out of the tree, because the class rail
-  // owns the screen edge. Focus mode hides that rail, which frees the edge for
-  // the tree to use as a hover-peek drawer instead.
-  onExpand={fullscreen ? expand : undefined}
-  onCollapse={fullscreen ? collapse : undefined}
-  overlay={fullscreen}
-  label={`${cls.name} student work`}
+        <CollapsiblePanel
+          collapsed={collapsed}
+          {...cascade}
+          // Focus mode hides the class rail, which frees the screen edge for
+          // the tree to borrow as a hover-peek drawer while it is on.
+          onExpand={fullscreen ? expand : undefined}
+          onCollapse={fullscreen ? collapse : undefined}
+          overlay={fullscreen}
+          label={`${cls.name} student work`}
           widthClassName="lg:w-80"
         >
           <div className="p-3">

@@ -10,6 +10,7 @@ import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
+import { useLeftSideCascade } from "@/components/teacher-class-nav"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
@@ -97,6 +98,12 @@ export function TeacherLibrary({
   const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
   const libraryKey = ["teacher-library", language]
   const { collapsed, toggle } = useCollapsiblePanel({ userId, scope: "teacher-library" })
+  // Same arrow, same order as the class view: the rail folds first, then this.
+  const cascade = useLeftSideCascade({
+    panelCollapsed: collapsed,
+    togglePanel: toggle,
+    panelNoun: "library files",
+  })
 
   const { data } = useSWR<LibraryData>(libraryKey, () => getLibrary(language), {
     revalidateOnFocus: false,
@@ -199,7 +206,7 @@ export function TeacherLibrary({
       {/* Library tree */}
       <CollapsiblePanel
         collapsed={collapsed}
-        onToggle={toggle}
+        {...cascade}
         label="My library"
         widthClassName="lg:w-80"
       >

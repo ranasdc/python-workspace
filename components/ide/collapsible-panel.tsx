@@ -65,6 +65,23 @@ export function useCollapsiblePanel({ userId, scope }: { userId: string; scope: 
   }, [storageKey])
 
   /**
+   * Fold or restore the panel outright, remembering the choice.
+   *
+   * `toggle` cannot serve a control that already knows which state it wants: a
+   * cascade folding the rail and then the files has to be able to say "shut"
+   * without first working out what "the opposite" currently means.
+   */
+  const set = useCallback(
+    (next: boolean) => {
+      setCollapsed(next)
+      try {
+        window.localStorage.setItem(storageKey, next ? "1" : "0")
+      } catch {}
+    },
+    [storageKey],
+  )
+
+  /**
    * Open the panel without the risk of closing it.
    *
    * The edge gesture needs this rather than `toggle`: a pointer that brushes the
@@ -90,7 +107,7 @@ export function useCollapsiblePanel({ userId, scope }: { userId: string; scope: 
     setCollapsed((previous) => (previous ? previous : true))
   }, [])
 
-  return { collapsed, toggle, expand, collapse }
+  return { collapsed, toggle, set, expand, collapse }
 }
 
 /**
@@ -214,6 +231,9 @@ export function CollapsiblePanel({
   onToggle,
   onExpand,
   onCollapse,
+  actionLabel,
+  ariaExpanded,
+  alsoControls,
   label,
   widthClassName = "lg:w-72",
   className,
@@ -222,6 +242,13 @@ export function CollapsiblePanel({
 }: {
   collapsed: boolean
   onToggle: () => void
+  /** Names what the next click does, for a button that folds more than this
+   *  panel. Without it the button describes this panel alone. */
+  actionLabel?: string
+  /** Overrides the disclosure state for the same reason as `actionLabel`. */
+  ariaExpanded?: boolean
+  /** Id of another region this button folds, announced alongside this one. */
+  alsoControls?: string
   /** Opens the panel. Supplying it enables the screen-edge gesture below. */
   onExpand?: () => void
   /** Folds the panel away again once the pointer leaves it. Supplying this
@@ -241,7 +268,7 @@ export function CollapsiblePanel({
 }) {
   const panelId = useId()
   const panelRef = useRef<HTMLElement>(null)
-  const action = collapsed ? "Show library panel" : "Hide library panel"
+  const action = actionLabel ?? (collapsed ? "Show library panel" : "Hide library panel")
   // The edge gesture is invisible by nature, so the chevron advertises it.
   const hint = collapsed && onExpand ? `${action} (or move the pointer to the left edge)` : action
 
@@ -293,8 +320,8 @@ export function CollapsiblePanel({
           onClick={onToggle}
           title={hint}
           aria-label={action}
-          aria-expanded={!collapsed}
-          aria-controls={panelId}
+          aria-expanded={ariaExpanded ?? !collapsed}
+          aria-controls={alsoControls ? `${panelId} ${alsoControls}` : panelId}
           className={cn(
             "flex items-center justify-center rounded-md border border-border bg-card text-muted-foreground",
             "transition-colors hover:bg-muted hover:text-foreground",
