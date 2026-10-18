@@ -31,15 +31,15 @@ export default function OpengraphImage() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <div style={{ fontSize: 68, fontWeight: 700, lineHeight: 1.08, letterSpacing: -2, maxWidth: 980 }}>
-            Python &amp; HTML IDEs built for the classroom
+            Free online IDEs &amp; coding editors
           </div>
           <div style={{ fontSize: 30, color: "#cbd5e1", maxWidth: 940, lineHeight: 1.35 }}>
-            Students code in the browser. Teachers set work, mark and give feedback in one place.
+            Write, run and practise code in your browser. Python and HTML today, more editors on the way.
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 16, fontSize: 24, color: "#e2e8f0" }}>
-          {["Students", "Teachers", "Schools & MATs"].map((label) => (
+          {["Python IDE", "HTML editor", "Free to start"].map((label) => (
             <div
               key={label}
               style={{

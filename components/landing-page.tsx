@@ -22,8 +22,10 @@ import {
   PanelsTopLeft,
   Sparkles,
 } from "lucide-react"
-import { Logo, LogoWordmark } from "@/components/logo"
+import { Logo } from "@/components/logo"
+import { MarketingFooter } from "@/components/marketing/marketing-chrome"
 import { LANGUAGES } from "@/lib/ide/languages"
+import { IDE_ROUTES } from "@/lib/seo/marketing"
 
 /* ------------------------------------------------------------------ */
 /* Scroll indicator — sits in the hero flow so it can never cover the   */
@@ -71,32 +73,6 @@ function ScrollIndicator() {
   )
 }
 
-function FooterColumn({
-  heading,
-  links,
-}: {
-  heading: string
-  links: { label: string; href: string }[]
-}) {
-  return (
-    <div>
-      <h3 className="text-sm font-semibold">{heading}</h3>
-      <ul className="mt-4 flex flex-col gap-3">
-        {links.map((link) => (
-          <li key={link.label}>
-            <Link
-              href={link.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
 const sections = [
   {
     id: "students",
@@ -112,6 +88,8 @@ const sections = [
       "Autosave on every change",
     ],
     accent: "primary",
+    href: "/for-students",
+    cta: "Explore the student workspace",
   },
   {
     id: "teachers",
@@ -123,6 +101,8 @@ const sections = [
     imageAlt: "Illustration of a teacher reviewing student code on a dashboard",
     points: ["One-click class creation", "Run any student file", "Shareable join codes"],
     accent: "chart-2",
+    href: "/for-teachers",
+    cta: "See how teaching works",
     highlight: {
       badge: "New",
       title: "AI task generation",
@@ -154,6 +134,7 @@ const languages = [
     blurb: "Run code, read output",
     icon: Terminal,
     color: LANGUAGES.python.accent,
+    href: IDE_ROUTES.python,
   },
   {
     label: "HTML",
@@ -161,6 +142,7 @@ const languages = [
     blurb: "Build and preview pages",
     icon: PanelsTopLeft,
     color: LANGUAGES.html.accent,
+    href: IDE_ROUTES.html,
   },
 ] as const
 
@@ -265,13 +247,13 @@ export function LandingPage() {
           <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
             {/* Keep "More than" in its own span so the rainbow shimmer survives copy edits. */}
             <span className="rainbow-text">More than</span>
-            {" just an IDE built for educators and students"}
+            {" just an IDE — free online coding editors for Python, HTML and more"}
           </h1>
         </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
-            Whether you&apos;re learning on your own, teaching a class, or tutoring students,
-            MyCodePad gives you one simple place to write, run, share and manage code.
+            MyCodePad is a free online coding platform with multiple IDEs. Write, run and practise
+            code in your browser — whether you&apos;re a student, teacher or developer.
           </p>
         </Reveal>
 
@@ -288,25 +270,29 @@ export function LandingPage() {
             className="mt-3 flex flex-wrap items-center justify-center gap-2"
           >
             {languages.map((lang) => (
-              <li
-                key={lang.label}
-                className="flex items-center gap-2.5 rounded-xl border border-border bg-card/60 py-2 pl-2.5 pr-4 text-left backdrop-blur transition-colors hover:border-primary/40"
-              >
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                  style={{ backgroundColor: `color-mix(in oklch, ${lang.color} 18%, transparent)` }}
+              <li key={lang.label}>
+                {/* Each card is the entry point to that IDE's own page, so the
+                    hero doubles as the homepage's main internal link set. */}
+                <Link
+                  href={lang.href}
+                  className="flex h-full items-center gap-2.5 rounded-xl border border-border bg-card/60 py-2 pl-2.5 pr-4 text-left backdrop-blur transition-colors hover:border-primary/40"
                 >
-                  <lang.icon className="h-4 w-4" style={{ color: lang.color }} />
-                </span>
-                <span className="flex flex-col leading-tight">
-                  <span className="text-sm font-medium">
-                    {lang.label}
-                    <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
-                      {lang.ext}
-                    </span>
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: `color-mix(in oklch, ${lang.color} 18%, transparent)` }}
+                  >
+                    <lang.icon className="h-4 w-4" style={{ color: lang.color }} />
                   </span>
-                  <span className="text-xs text-muted-foreground">{lang.blurb}</span>
-                </span>
+                  <span className="flex flex-col leading-tight">
+                    <span className="text-sm font-medium">
+                      {lang.label}
+                      <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
+                        {lang.ext}
+                      </span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">{lang.blurb}</span>
+                  </span>
+                </Link>
               </li>
             ))}
             <li
@@ -394,6 +380,16 @@ export function LandingPage() {
                   ))}
                 </ul>
 
+                {"href" in s && (
+                  <Link
+                    href={s.href}
+                    className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary transition-colors hover:text-foreground"
+                  >
+                    {s.cta}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                )}
+
                 {"highlight" in s && s.highlight && (
                   <div
                     className="group relative mt-6 overflow-hidden rounded-2xl border-2 p-5"
@@ -465,60 +461,9 @@ export function LandingPage() {
         </Reveal>
       </section>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto w-full max-w-6xl px-6 py-14">
-          <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
-            <div className="max-w-xs">
-              <Logo iconClassName="h-8 w-8" textClassName="text-base" />
-              <p className="mt-3 text-sm text-muted-foreground text-pretty">
-                The classroom IDE for Python, HTML and more — write, run and review real code
-                without leaving the browser.
-              </p>
-            </div>
-
-            <FooterColumn
-              heading="Product"
-              links={[
-                { label: "For Students", href: "#students" },
-                { label: "For Teachers", href: "#teachers" },
-                { label: "Always Organized", href: "#organized" },
-                { label: "AI Powered", href: "#ai" },
-                { label: "Pricing", href: "/pricing" },
-              ]}
-            />
-            <FooterColumn
-              heading="Company"
-              links={[
-                { label: "About us", href: "#" },
-                { label: "Contact Us", href: "#" },
-              ]}
-            />
-            <FooterColumn
-              heading="Get started"
-              links={[
-                { label: "Create account", href: "/sign-up" },
-                { label: "Sign in", href: "/sign-in" },
-                { label: "For Schools", href: "/pricing#school-plans" },
-              ]}
-            />
-          </div>
-
-          <div className="mt-12 flex flex-col items-center gap-4 border-t border-border/60 pt-6 text-sm text-muted-foreground sm:flex-row sm:justify-between">
-            <span>
-              © {new Date().getFullYear()} <LogoWordmark className="text-sm" />. All rights
-              reserved.
-            </span>
-            <div className="flex items-center gap-5">
-              <a href="#" className="transition-colors hover:text-foreground">
-                Privacy
-              </a>
-              <a href="#" className="transition-colors hover:text-foreground">
-                Terms
-              </a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      {/* Shared with every marketing page, so the internal links a crawler
+          follows from the homepage are the same ones it finds anywhere else. */}
+      <MarketingFooter />
     </main>
   )
 }

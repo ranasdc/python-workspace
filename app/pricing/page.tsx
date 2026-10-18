@@ -7,6 +7,7 @@ import { JoinClassDialog } from "@/components/join-class-dialog"
 
 import { getSessionUser } from "@/lib/session"
 import { getEntitlement } from "@/lib/entitlements"
+import { marketingMetadata } from "@/lib/seo/marketing"
 import { PLANS, SCHOOL_PLAN_IDS, type Plan } from "@/lib/plans"
 import { PriceTag } from "@/components/price-tag"
 import { SaleBanner } from "@/components/sale-banner"
@@ -14,19 +15,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { CheckoutButton } from "@/components/checkout-button"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 
-const pricingDescription =
-  "Free, Student Pro, Teacher Pro and school plans for mycodepad, the classroom workspace for Python and HTML. School plans give every student and teacher Pro at no personal cost."
-
-export const metadata = {
-  title: "Pricing",
-  description: pricingDescription,
-  alternates: { canonical: "/pricing" },
-  openGraph: {
-    url: "/pricing",
-    title: "Pricing · mycodepad",
-    description: pricingDescription,
-  },
-}
+export const metadata = marketingMetadata("/pricing")
 
 export default async function PricingPage() {
   const sessionUser = await getSessionUser()
