@@ -64,7 +64,6 @@ import {
   Plus,
   FileCode,
   ChevronRight,
-  ChevronLeft,
   ChevronDown,
   Copy,
   Loader2,
@@ -291,10 +290,6 @@ export function TeacherDashboard({
 }
 
 /**
- * Shows the free teacher tier's remaining headroom. The server is what actually
- * enforces these numbers; this only explains them before a teacher hits a wall.
- */
-/**
  * The classes/library rail, as a drawer that keeps itself out of the way.
  *
  * A teacher picks a class once and then spends the lesson reading pupils'
@@ -303,23 +298,23 @@ export function TeacherDashboard({
  * edge of the screen, which hands that width to the work without burying the
  * navigation behind a click.
  *
- * Two ways in, with deliberately different ways out:
- *  - reaching the edge *peeks*. The rail floats over the workspace and leaves
- *    again by itself, so glancing at the class list costs nothing and never
- *    shifts the code underneath.
- *  - clicking the tab *pins*. The rail takes its place in the layout and stays
- *    until it is clicked shut, which is what you want while moving between
- *    several classes in a row.
+ * The rail and the file tree beside it stay one attached unit. The rail folds
+ * by width inside the layout row rather than floating over the tree, so the
+ * two move as a single piece, and the left edge keeps exactly one arrow: the
+ * tree's. Folding the rail is automatic, folding the tree is the teacher's
+ * call with that arrow, and doing both clears the whole left side.
  *
  * Only the side-by-side layout folds. Below `lg` the rail stacks above the
  * workspace, where there is no pointer to read and no width to reclaim.
  */
 function ClassNavDrawer({ hidden, children }: { hidden: boolean; children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(true)
-  const [peeking, setPeeking] = useState(false)
   // Only the folded-on-desktop case should leave the focus order; the stacked
   // layout below `lg` still shows the rail whatever `collapsed` says.
   const [sideBySide, setSideBySide] = useState(false)
+  // A stray pointer must not fold the rail away while a keyboard user is
+  // working inside it — that would strand focus on an inert element.
+  const [holdsFocus, setHoldsFocus] = useState(false)
   const panelRef = useRef<HTMLElement>(null)
   const panelId = useId()
 
@@ -331,34 +326,17 @@ function ClassNavDrawer({ hidden, children }: { hidden: boolean; children: React
     return () => query.removeEventListener("change", sync)
   }, [])
 
-  const peek = useCallback(() => {
-    setCollapsed(false)
-    setPeeking(true)
-  }, [])
-
-  const unpeek = useCallback(() => {
-    setCollapsed(true)
-    setPeeking(false)
-  }, [])
-
-  // A click is a decision, so it drops out of peek mode either way: opening
-  // pins the rail there, and closing it means it was not wanted in the first
-  // place.
-  const toggle = useCallback(() => {
-    setPeeking(false)
-    setCollapsed((previous) => !previous)
-  }, [])
+  const open = useCallback(() => setCollapsed(false), [])
+  const close = useCallback(() => setCollapsed(true), [])
 
   // Focus mode hides the rail outright, so neither gesture should be live —
   // the left edge belongs to the class tree there instead.
-  useEdgeReveal({ enabled: !hidden && collapsed, onReveal: peek })
+  useEdgeReveal({ enabled: !hidden && collapsed, onReveal: open })
   useLeaveToClose({
-    enabled: !hidden && !collapsed && peeking,
+    enabled: !hidden && !collapsed && !holdsFocus,
     panelRef,
-    onClose: unpeek,
+    onClose: close,
   })
-
-  const action = collapsed ? "Show classes and library" : "Hide classes and library"
 
   return (
     <>
@@ -369,15 +347,22 @@ function ClassNavDrawer({ hidden, children }: { hidden: boolean; children: React
         // Takes the folded rail out of the focus order and the accessibility
         // tree together; aria-hidden alone would leave its buttons tabbable.
         inert={(collapsed && sideBySide && !hidden) || undefined}
+        onFocusCapture={() => setHoldsFocus(true)}
+        onBlurCapture={(event) => {
+          // Only once focus has actually left the rail, rather than moved
+          // between the controls inside it.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setHoldsFocus(false)
+          }
+        }}
         className={cn(
           "flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:border-b-0 lg:border-r",
           "lg:transition-[width] lg:duration-200 lg:ease-out motion-reduce:lg:transition-none",
-          // Folding is left to CSS rather than the media query above so the
-          // rail is never painted open on first load and then yanked shut.
+          // Width-only, and still in the layout row: the tree slides along with
+          // the rail so the pair reads as one unit. Left to CSS rather than the
+          // media query above so the rail is never painted open on first load
+          // and then yanked shut.
           collapsed ? "lg:w-0 lg:overflow-hidden lg:border-r-0" : "lg:w-64",
-          // A peek floats; reflowing the workspace every time a pointer brushed
-          // the edge would drag the code out from under the teacher's eye.
-          peeking && "lg:absolute lg:inset-y-0 lg:left-0 lg:z-40 lg:border-r lg:shadow-xl",
           hidden && "hidden",
         )}
       >
@@ -386,55 +371,35 @@ function ClassNavDrawer({ hidden, children }: { hidden: boolean; children: React
         <div className="flex min-h-0 w-full flex-1 flex-col lg:w-64">{children}</div>
       </aside>
 
-      {!hidden && (
+      {/* Keyboard-only way in. The edge gesture leaves nothing to tab to, and
+          the edge itself deliberately carries just the tree's arrow, so this
+          surfaces on focus and stays invisible to everyone else. Rendered only
+          in the side-by-side layout, where folding actually happens. */}
+      {!hidden && sideBySide && (
         <button
           type="button"
-          onClick={toggle}
-          title={action}
-          aria-label={action}
+          onClick={() => setCollapsed((previous) => !previous)}
           aria-expanded={!collapsed}
           aria-controls={panelId}
           className={cn(
-            // Sits a quarter down rather than centred: with everything folded
-            // the class tree's own chevron is centred on the same left edge,
-            // and two hit targets stacked there would fight over the clicks.
-            // A fraction rather than a fixed offset keeps them apart as the
-            // window shortens, since both move together.
-            "group/rail absolute top-1/4 z-40 hidden items-center justify-center lg:flex",
-            "h-16 overflow-hidden border border-border bg-card/70 text-muted-foreground backdrop-blur",
-            // A hairline at rest, so a folded rail really does give the width
-            // to the work, widening into a proper target under pointer or
-            // keyboard. Absolute throughout: it costs no layout either way.
-            "w-1.5 transition-[width,left,background-color,color] duration-200 ease-out",
-            "motion-reduce:transition-none",
-            "hover:w-5 hover:bg-card hover:text-foreground",
-            "focus-visible:w-5 focus-visible:bg-card focus-visible:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-            // Open, it hugs the rail's own trailing edge instead of straying
-            // over the file tree that sits beyond it.
-            collapsed
-              ? "left-0 -translate-y-1/2 rounded-r-md border-l-0"
-              : "left-64 -translate-x-full -translate-y-1/2 rounded-l-md border-r-0",
+            "sr-only focus:not-sr-only",
+            "focus:absolute focus:left-2 focus:top-2 focus:z-50",
+            "focus:rounded-md focus:border focus:border-border focus:bg-card",
+            "focus:px-3 focus:py-1.5 focus:text-sm focus:font-medium focus:text-foreground",
+            "focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring",
           )}
         >
-          {collapsed ? (
-            <ChevronRight
-              className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover/rail:opacity-100 group-focus-visible/rail:opacity-100"
-              aria-hidden="true"
-            />
-          ) : (
-            <ChevronLeft
-              className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover/rail:opacity-100 group-focus-visible/rail:opacity-100"
-              aria-hidden="true"
-            />
-          )}
+          {collapsed ? "Show classes and library" : "Hide classes and library"}
         </button>
       )}
     </>
   )
 }
 
+/**
+ * Shows the free teacher tier's remaining headroom. The server is what actually
+ * enforces these numbers; this only explains them before a teacher hits a wall.
+ */
 function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
   const { limits, usage, schoolUnpaid } = planStatus
   const classesLeft =
