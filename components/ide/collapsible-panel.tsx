@@ -1,6 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -11,6 +19,15 @@ import { cn } from "@/lib/utils"
  * a hand drifting a few pixels while reading does not shut the drawer.
  */
 const LEAVE_SLACK_PX = 28
+
+/** How close to the left edge of the window counts as reaching for it. */
+const EDGE_PX = 6
+
+/**
+ * How far clear of the edge the pointer must travel before the edge gesture
+ * starts listening. See `useEdgeReveal` for why it waits.
+ */
+const EDGE_ARM_PX = 56
 
 /**
  * Remembers whether a workspace's library panel is collapsed.
@@ -77,6 +94,112 @@ export function useCollapsiblePanel({ userId, scope }: { userId: string; scope: 
 }
 
 /**
+ * Pointer gestures only make sense for a mouse in the side-by-side layout. On
+ * a touch screen there is no hover to read and an edge gesture would fight
+ * with swiping back; on a narrow screen the panels fold upwards instead of
+ * sideways, so the left edge of the window means nothing.
+ */
+function pointerGesturesApply() {
+  return (
+    window.matchMedia("(pointer: fine)").matches &&
+    window.matchMedia("(min-width: 1024px)").matches
+  )
+}
+
+/**
+ * Bring a folded panel back by running the pointer into the left edge of the
+ * screen.
+ *
+ * Folded away, a chevron is a small target — findable, but a precise thing to
+ * aim at every time you want your files. The screen edge is the one target a
+ * mouse cannot overshoot, so throwing the pointer at it is both faster and
+ * more reliable.
+ *
+ * Watching pointer position beats putting an invisible strip in the corner: no
+ * element means nothing that can sit in front of the panel's own controls or
+ * swallow a click meant for the editor.
+ */
+export function useEdgeReveal({
+  enabled,
+  onReveal,
+}: {
+  enabled: boolean
+  onReveal: () => void
+}) {
+  // Read through a ref so a caller passing an inline arrow doesn't tear the
+  // listener down and rebuild it — taking the armed flag below with it — on
+  // every render.
+  const latest = useRef(onReveal)
+  useEffect(() => {
+    latest.current = onReveal
+  })
+
+  useEffect(() => {
+    if (!enabled || !pointerGesturesApply()) return
+
+    // The gesture starts disarmed, because folding a panel usually *ends* with
+    // the pointer at the edge: the control just clicked sits there. Until the
+    // pointer has moved clear once, the edge stays inert — otherwise the panel
+    // would spring open again the instant it was folded away.
+    let armed = false
+
+    function handleMove(event: MouseEvent) {
+      if (!armed) {
+        if (event.clientX > EDGE_ARM_PX) armed = true
+        return
+      }
+      if (event.clientX <= EDGE_PX) latest.current()
+    }
+
+    window.addEventListener("mousemove", handleMove)
+    return () => window.removeEventListener("mousemove", handleMove)
+  }, [enabled])
+}
+
+/**
+ * Fold a panel away again once the pointer leaves it.
+ *
+ * Paired with `useEdgeReveal`, this makes a panel behave like a drawer you
+ * pull open by reaching for it and that shuts itself when you go back to the
+ * work — no second trip to a chevron.
+ *
+ * Pointer position is read from the window rather than the panel's own
+ * mouseleave, because a menu or dialog opened from inside the panel takes the
+ * pointer outside the element while the user is very much still using it. A
+ * width-based test treats that as "still inside".
+ */
+export function useLeaveToClose({
+  enabled,
+  panelRef,
+  onClose,
+}: {
+  enabled: boolean
+  panelRef: RefObject<HTMLElement | null>
+  onClose: () => void
+}) {
+  const latest = useRef(onClose)
+  useEffect(() => {
+    latest.current = onClose
+  })
+
+  useEffect(() => {
+    if (!enabled || !pointerGesturesApply()) return
+
+    // Measured from the live element so the threshold tracks whatever width the
+    // caller asked for, and includes the divider a chevron may sit on: sliding
+    // out over that chevron must not count as leaving.
+    function handleMove(event: MouseEvent) {
+      const width = panelRef.current?.getBoundingClientRect().width ?? 0
+      if (width === 0) return
+      if (event.clientX > width + LEAVE_SLACK_PX) latest.current()
+    }
+
+    window.addEventListener("mousemove", handleMove)
+    return () => window.removeEventListener("mousemove", handleMove)
+  }, [enabled, panelRef])
+}
+
+/**
  * A workspace side panel that can be folded away, plus the divider that folds
  * it. Both halves live here because the chevron has to sit *on* the divider,
  * and the divider owns the border between panel and editor — splitting them
@@ -122,80 +245,17 @@ export function CollapsiblePanel({
   // The edge gesture is invisible by nature, so the chevron advertises it.
   const hint = collapsed && onExpand ? `${action} (or move the pointer to the left edge)` : action
 
-  /**
-   * Bring the panel back by running the pointer into the left edge of the
-   * screen.
-   *
-   * Folded away, the chevron is a 20px-wide target — findable, but a precise
-   * thing to aim at every time you want your files. The screen edge is the one
-   * target a mouse cannot overshoot, so throwing the pointer at it is both
-   * faster and more reliable than hitting the chevron.
-   *
-   * Watching pointer position beats putting an invisible strip in the corner:
-   * no element means nothing that can sit in front of the panel's own controls
-   * or swallow a click meant for the editor.
-   */
-  useEffect(() => {
-    if (!collapsed || !onExpand) return
-
-    // Mice only, and only in the side-by-side layout. On a touch screen there
-    // is no hover to read and the gesture would fight with swiping back; on a
-    // narrow screen the panel folds upwards, so the left edge means nothing.
-    const canHover = window.matchMedia("(pointer: fine)")
-    const sideBySide = window.matchMedia("(min-width: 1024px)")
-    if (!canHover.matches || !sideBySide.matches) return
-
-    // The gesture starts disarmed, because collapsing usually *ends* with the
-    // pointer at the edge: the chevron it was just clicked on sits there. Until
-    // the pointer has moved clear once, the edge stays inert — otherwise the
-    // panel would spring open again the instant it was folded away.
-    let armed = false
-    const EDGE_PX = 6
-    const CLEAR_PX = 56
-
-    function handleMove(event: MouseEvent) {
-      if (!armed) {
-        if (event.clientX > CLEAR_PX) armed = true
-        return
-      }
-      if (event.clientX <= EDGE_PX) onExpand!()
-    }
-
-    window.addEventListener("mousemove", handleMove)
-    return () => window.removeEventListener("mousemove", handleMove)
-  }, [collapsed, onExpand])
-
-  /**
-   * Fold the drawer away again once the pointer leaves it.
-   *
-   * Paired with the edge gesture above, this makes the panel behave like a
-   * drawer you pull open by reaching for it and that shuts itself when you go
-   * back to typing — no second trip to the chevron.
-   *
-   * Pointer position is read from the window rather than the panel's own
-   * mouseleave, because a menu or dialog opened from inside the panel takes the
-   * pointer outside the element while the user is very much still using it.
-   * A width-based test treats that as "still inside".
-   */
-  useEffect(() => {
-    if (collapsed || !onCollapse) return
-
-    const canHover = window.matchMedia("(pointer: fine)")
-    const sideBySide = window.matchMedia("(min-width: 1024px)")
-    if (!canHover.matches || !sideBySide.matches) return
-
-    // Measured from the live element so the threshold tracks whatever width the
-    // caller asked for, and includes the divider the chevron sits on: sliding
-    // out over the chevron must not count as leaving.
-    function handleMove(event: MouseEvent) {
-      const width = panelRef.current?.getBoundingClientRect().width ?? 0
-      if (width === 0) return
-      if (event.clientX > width + LEAVE_SLACK_PX) onCollapse!()
-    }
-
-    window.addEventListener("mousemove", handleMove)
-    return () => window.removeEventListener("mousemove", handleMove)
-  }, [collapsed, onCollapse])
+  // Supplying `onExpand` opts the panel into the screen-edge gesture, and
+  // adding `onCollapse` on top of it turns the panel into a hover-peek drawer.
+  useEdgeReveal({
+    enabled: collapsed && !!onExpand,
+    onReveal: () => onExpand?.(),
+  })
+  useLeaveToClose({
+    enabled: !collapsed && !!onCollapse,
+    panelRef,
+    onClose: () => onCollapse?.(),
+  })
 
   return (
     <>
