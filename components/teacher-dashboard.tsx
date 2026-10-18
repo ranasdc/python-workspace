@@ -789,25 +789,24 @@ function ClassDetail({
                       Correct
                     </Button>
                   )}
-                  {/* Marking is review work, not running code, so it stands
-                      down in focus mode alongside the feedback thread. */}
-                  {!fullscreen && (
-                    <Button
-                      size="sm"
-                      variant={currentFile.status === "done" ? "outline" : "default"}
-                      onClick={toggleMark}
-                      disabled={marking || editing}
-                    >
-                      {marking ? (
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                      ) : currentFile.status === "done" ? (
-                        <Circle className="mr-1.5 h-4 w-4" />
-                      ) : (
-                        <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                      )}
-                      {currentFile.status === "done" ? "Mark unmarked" : "Mark as done"}
-                    </Button>
-                  )}
+                  {/* Marking stays put in focus mode, alongside the feedback
+                      thread: both are the review itself, which is exactly what
+                      a teacher is doing when they give the code the screen. */}
+                  <Button
+                    size="sm"
+                    variant={currentFile.status === "done" ? "outline" : "default"}
+                    onClick={toggleMark}
+                    disabled={marking || editing}
+                  >
+                    {marking ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : currentFile.status === "done" ? (
+                      <Circle className="mr-1.5 h-4 w-4" />
+                    ) : (
+                      <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                    )}
+                    {currentFile.status === "done" ? "Mark unmarked" : "Mark as done"}
+                  </Button>
                   <RunStopButton
                     isWeb={isWeb}
                     status={status}
@@ -819,14 +818,11 @@ function ClassDetail({
                   />
                 </div>
               </div>
-              {/* Focus mode gives the feedback column's width back to the code,
-                  leaving the editor and its output to split the viewport. */}
-              <div
-                className={cn(
-                  "grid min-h-0 flex-1",
-                  !fullscreen && "lg:grid-cols-[1fr_minmax(260px,320px)]",
-                )}
-              >
+              {/* The feedback column keeps its place in focus mode. Reading a
+                  pupil's code and writing back about it are one task, so the
+                  room focus mode buys should go to the thread as well, rather
+                  than being taken from it. */}
+              <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
                 <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
                   <div
                     className={cn(
@@ -873,11 +869,9 @@ function ClassDetail({
                   </div>
                 </div>
                 {/* Feedback thread for this student's file */}
-                {!fullscreen && (
-                  <div className="min-h-[240px] lg:min-h-0">
-                    <FileComments fileId={currentFile.id} canComment />
-                  </div>
-                )}
+                <div className="min-h-[240px] lg:min-h-0">
+                  <FileComments fileId={currentFile.id} canComment />
+                </div>
               </div>
             </>
           ) : (
