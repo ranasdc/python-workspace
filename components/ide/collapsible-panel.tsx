@@ -15,10 +15,12 @@ import { cn } from "@/lib/utils"
 
 /**
  * How far past the panel's right edge the pointer may stray before a hover-peek
- * drawer closes. Covers the divider the chevron sits on, plus enough room that
- * a hand drifting a few pixels while reading does not shut the drawer.
+ * drawer closes. Must clear the full width of the fold rail that sits against
+ * that edge — reaching for the rail to close the drawer by hand has to not
+ * close it first — plus enough room that a hand drifting a few pixels while
+ * reading stays inside.
  */
-const LEAVE_SLACK_PX = 28
+const LEAVE_SLACK_PX = 36
 
 /** How close to the left edge of the window counts as reaching for it. */
 const EDGE_PX = 6
@@ -309,39 +311,60 @@ export function CollapsiblePanel({
         <div className={cn("flex min-h-0 w-full flex-1 flex-col", widthClassName)}>{children}</div>
       </aside>
 
-      <div
+      {/* The whole gutter is the control, not a tab floating on one. Folding a
+          panel is among the most-used actions in the workspace, and a
+          full-length column is a target that cannot really be missed — the same
+          reason throwing the pointer at the screen edge works. The shade is
+          what announces it: distinct from both the panel it folds and the
+          editor it borders, so the column reads as something to press rather
+          than a line drawn between two surfaces. */}
+      <button
+        type="button"
+        onClick={onToggle}
+        title={hint}
+        aria-label={action}
+        aria-expanded={ariaExpanded ?? !collapsed}
+        aria-controls={alsoControls ? `${panelId} ${alsoControls}` : panelId}
         className={cn(
-          "relative z-10 flex shrink-0 items-center justify-center",
-          "border-b border-border bg-sidebar lg:w-5 lg:border-b-0 lg:border-r lg:bg-transparent",
+          "group/rail relative z-10 flex shrink-0 items-center justify-center",
+          "border-b border-border bg-panel-rail text-panel-rail-grip lg:border-b-0 lg:border-r",
+          "transition-colors duration-150 ease-out motion-reduce:transition-none",
+          "hover:bg-panel-rail-hover hover:text-foreground active:bg-panel-rail-hover",
+          // Inset: a ring drawn outside a 24px column would land on the panel
+          // and the editor either side rather than on the control itself.
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          // Spans whichever axis the layout stacks on — a bar above the editor
+          // on a phone, the full-height gutter beside it from lg up. `h-auto`
+          // hands the height back to the row's own stretch at that point.
+          "h-7 w-full lg:h-auto lg:w-6 lg:self-stretch",
         )}
       >
-        <button
-          type="button"
-          onClick={onToggle}
-          title={hint}
-          aria-label={action}
-          aria-expanded={ariaExpanded ?? !collapsed}
-          aria-controls={alsoControls ? `${panelId} ${alsoControls}` : panelId}
+        {/* Marks the midpoint of a column that is otherwise a long, quiet
+            stripe, so the eye has somewhere to land. Only on hover: at rest the
+            shade is doing the work, and a permanent chip would re-create the
+            floating tab this replaced. */}
+        <span
+          aria-hidden="true"
           className={cn(
-            "flex items-center justify-center rounded-md border border-border bg-card text-muted-foreground",
-            "transition-colors hover:bg-muted hover:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-            "h-7 w-16 lg:h-20 lg:w-5",
+            "pointer-events-none flex items-center justify-center rounded-full",
+            "h-5 w-12 lg:h-14 lg:w-5",
+            "bg-transparent transition-colors duration-150 ease-out motion-reduce:transition-none",
+            "group-hover/rail:bg-background/80 group-focus-visible/rail:bg-background/80",
           )}
         >
           {collapsed ? (
             <>
-              <ChevronDown className="h-4 w-4 lg:hidden" aria-hidden="true" />
-              <ChevronRight className="hidden h-4 w-4 lg:block" aria-hidden="true" />
+              <ChevronDown className="h-4 w-4 lg:hidden" />
+              <ChevronRight className="hidden h-4 w-4 lg:block" />
             </>
           ) : (
             <>
-              <ChevronUp className="h-4 w-4 lg:hidden" aria-hidden="true" />
-              <ChevronLeft className="hidden h-4 w-4 lg:block" aria-hidden="true" />
+              <ChevronUp className="h-4 w-4 lg:hidden" />
+              <ChevronLeft className="hidden h-4 w-4 lg:block" />
             </>
           )}
-        </button>
-      </div>
+        </span>
+      </button>
     </>
   )
 }
