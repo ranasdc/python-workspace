@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
@@ -42,7 +42,12 @@ import { JoinSchoolDialog } from "@/components/join-school-dialog"
 import { ClassAiHelpControl } from "@/components/class-ai-help-control"
 import { TeacherStarters } from "@/components/starters/teacher-starters"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
-import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
+import {
+  CollapsiblePanel,
+  useCollapsiblePanel,
+  useEdgeReveal,
+  useLeaveToClose,
+} from "@/components/ide/collapsible-panel"
 import { useFullscreen } from "@/components/ide/fullscreen"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
@@ -59,6 +64,7 @@ import {
   Plus,
   FileCode,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   Copy,
   Loader2,
@@ -171,16 +177,11 @@ export function TeacherDashboard({
     list.length >= planStatus.limits.maxClasses
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+    <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
       {/* Classes list. Hidden in focus mode: it is navigation between classes
           rather than anything to do with the code on screen, and the class tree
           beside it already folds away. Exiting focus mode brings it back. */}
-      <aside
-        className={cn(
-          "flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:w-64 lg:border-b-0 lg:border-r",
-          fullscreen && "hidden",
-        )}
-      >
+      <ClassNavDrawer hidden={fullscreen}>
         {/* Classes / Library switcher */}
         <div className="flex gap-1 border-b border-border p-2">
           <button
@@ -252,7 +253,7 @@ export function TeacherDashboard({
         {planStatus && !planStatus.hasTeacherPro && (
           <TeacherPlanNotice planStatus={planStatus} />
         )}
-      </aside>
+      </ClassNavDrawer>
 
       {/* Main area: class detail or the teacher's library */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -293,6 +294,147 @@ export function TeacherDashboard({
  * Shows the free teacher tier's remaining headroom. The server is what actually
  * enforces these numbers; this only explains them before a teacher hits a wall.
  */
+/**
+ * The classes/library rail, as a drawer that keeps itself out of the way.
+ *
+ * A teacher picks a class once and then spends the lesson reading pupils'
+ * code, so the rail is 256px that stops earning its place almost immediately.
+ * It folds away by default and comes back when the pointer reaches the left
+ * edge of the screen, which hands that width to the work without burying the
+ * navigation behind a click.
+ *
+ * Two ways in, with deliberately different ways out:
+ *  - reaching the edge *peeks*. The rail floats over the workspace and leaves
+ *    again by itself, so glancing at the class list costs nothing and never
+ *    shifts the code underneath.
+ *  - clicking the tab *pins*. The rail takes its place in the layout and stays
+ *    until it is clicked shut, which is what you want while moving between
+ *    several classes in a row.
+ *
+ * Only the side-by-side layout folds. Below `lg` the rail stacks above the
+ * workspace, where there is no pointer to read and no width to reclaim.
+ */
+function ClassNavDrawer({ hidden, children }: { hidden: boolean; children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(true)
+  const [peeking, setPeeking] = useState(false)
+  // Only the folded-on-desktop case should leave the focus order; the stacked
+  // layout below `lg` still shows the rail whatever `collapsed` says.
+  const [sideBySide, setSideBySide] = useState(false)
+  const panelRef = useRef<HTMLElement>(null)
+  const panelId = useId()
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)")
+    const sync = () => setSideBySide(query.matches)
+    sync()
+    query.addEventListener("change", sync)
+    return () => query.removeEventListener("change", sync)
+  }, [])
+
+  const peek = useCallback(() => {
+    setCollapsed(false)
+    setPeeking(true)
+  }, [])
+
+  const unpeek = useCallback(() => {
+    setCollapsed(true)
+    setPeeking(false)
+  }, [])
+
+  // A click is a decision, so it drops out of peek mode either way: opening
+  // pins the rail there, and closing it means it was not wanted in the first
+  // place.
+  const toggle = useCallback(() => {
+    setPeeking(false)
+    setCollapsed((previous) => !previous)
+  }, [])
+
+  // Focus mode hides the rail outright, so neither gesture should be live —
+  // the left edge belongs to the class tree there instead.
+  useEdgeReveal({ enabled: !hidden && collapsed, onReveal: peek })
+  useLeaveToClose({
+    enabled: !hidden && !collapsed && peeking,
+    panelRef,
+    onClose: unpeek,
+  })
+
+  const action = collapsed ? "Show classes and library" : "Hide classes and library"
+
+  return (
+    <>
+      <aside
+        ref={panelRef}
+        id={panelId}
+        aria-label="Classes and library"
+        // Takes the folded rail out of the focus order and the accessibility
+        // tree together; aria-hidden alone would leave its buttons tabbable.
+        inert={(collapsed && sideBySide && !hidden) || undefined}
+        className={cn(
+          "flex w-full shrink-0 flex-col border-b border-border bg-sidebar lg:border-b-0 lg:border-r",
+          "lg:transition-[width] lg:duration-200 lg:ease-out motion-reduce:lg:transition-none",
+          // Folding is left to CSS rather than the media query above so the
+          // rail is never painted open on first load and then yanked shut.
+          collapsed ? "lg:w-0 lg:overflow-hidden lg:border-r-0" : "lg:w-64",
+          // A peek floats; reflowing the workspace every time a pointer brushed
+          // the edge would drag the code out from under the teacher's eye.
+          peeking && "lg:absolute lg:inset-y-0 lg:left-0 lg:z-40 lg:border-r lg:shadow-xl",
+          hidden && "hidden",
+        )}
+      >
+        {/* Pinned to the open width so the contents slide out of sight rather
+            than reflowing as the rail narrows. */}
+        <div className="flex min-h-0 w-full flex-1 flex-col lg:w-64">{children}</div>
+      </aside>
+
+      {!hidden && (
+        <button
+          type="button"
+          onClick={toggle}
+          title={action}
+          aria-label={action}
+          aria-expanded={!collapsed}
+          aria-controls={panelId}
+          className={cn(
+            // Sits a quarter down rather than centred: with everything folded
+            // the class tree's own chevron is centred on the same left edge,
+            // and two hit targets stacked there would fight over the clicks.
+            // A fraction rather than a fixed offset keeps them apart as the
+            // window shortens, since both move together.
+            "group/rail absolute top-1/4 z-40 hidden items-center justify-center lg:flex",
+            "h-16 overflow-hidden border border-border bg-card/70 text-muted-foreground backdrop-blur",
+            // A hairline at rest, so a folded rail really does give the width
+            // to the work, widening into a proper target under pointer or
+            // keyboard. Absolute throughout: it costs no layout either way.
+            "w-1.5 transition-[width,left,background-color,color] duration-200 ease-out",
+            "motion-reduce:transition-none",
+            "hover:w-5 hover:bg-card hover:text-foreground",
+            "focus-visible:w-5 focus-visible:bg-card focus-visible:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+            // Open, it hugs the rail's own trailing edge instead of straying
+            // over the file tree that sits beyond it.
+            collapsed
+              ? "left-0 -translate-y-1/2 rounded-r-md border-l-0"
+              : "left-64 -translate-x-full -translate-y-1/2 rounded-l-md border-r-0",
+          )}
+        >
+          {collapsed ? (
+            <ChevronRight
+              className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover/rail:opacity-100 group-focus-visible/rail:opacity-100"
+              aria-hidden="true"
+            />
+          ) : (
+            <ChevronLeft
+              className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover/rail:opacity-100 group-focus-visible/rail:opacity-100"
+              aria-hidden="true"
+            />
+          )}
+        </button>
+      )}
+    </>
+  )
+}
+
 function TeacherPlanNotice({ planStatus }: { planStatus: TeacherPlanStatus }) {
   const { limits, usage, schoolUnpaid } = planStatus
   const classesLeft =
@@ -354,7 +496,15 @@ function ClassDetail({
 
   // Focus mode folds the class tree away and restores it on exit, leaving the
   // teacher's own chevron preference untouched either way.
+  //
+  // Only an actual change of focus mode counts. Running on mount too would
+  // expand the tree every page load and quietly overwrite the collapsed state
+  // just restored from storage, so a teacher who folded everything away would
+  // find it back the next morning.
+  const previousFullscreen = useRef(fullscreen)
   useEffect(() => {
+    if (previousFullscreen.current === fullscreen) return
+    previousFullscreen.current = fullscreen
     if (fullscreen) collapse()
     else expand()
   }, [fullscreen, collapse, expand])
@@ -584,7 +734,10 @@ function ClassDetail({
   <CollapsiblePanel
   collapsed={collapsed}
   onToggle={toggle}
-  onExpand={expand}
+  // The chevron is the only way in or out of the tree, because the class rail
+  // owns the screen edge. Focus mode hides that rail, which frees the edge for
+  // the tree to use as a hover-peek drawer instead.
+  onExpand={fullscreen ? expand : undefined}
   onCollapse={fullscreen ? collapse : undefined}
   overlay={fullscreen}
   label={`${cls.name} student work`}
