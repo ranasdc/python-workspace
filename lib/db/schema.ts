@@ -365,6 +365,38 @@ export const libraryFiles = pgTable("library_file", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   })
 
+  // ---------- Public share links ----------
+
+  // One public link per file. Anyone holding the token can read the file
+  // without an account, which is the entire point — and the reason the token is
+  // random rather than derived: see scripts/011-public-file-shares.sql.
+  //
+  // `sourceKind` selects the table `sourceFileId` points into, so there is no
+  // foreign key to lean on. A share whose file has since been deleted resolves
+  // to nothing and the public page 404s.
+  export const fileShares = pgTable(
+  "file_share",
+  {
+    id: serial("id").primaryKey(),
+    token: text("token").notNull().unique(),
+    // "code" = a pupil's own file, "library" = a teacher's library file.
+    sourceKind: text("sourceKind").notNull(),
+    sourceFileId: integer("sourceFileId").notNull(),
+    // Whoever owns the file itself. Only they may publish or revoke it.
+    ownerId: text("ownerId").notNull(),
+    // Set instead of deleting the row, so the same token can be re-published
+    // later and a revoked link stays distinguishable from one that never was.
+    revokedAt: timestamp("revokedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    // Pressing Share twice returns the existing link rather than minting a
+    // second one, so revoking really does revoke every copy handed out.
+    uniqSource: unique().on(t.sourceKind, t.sourceFileId),
+  }),
+  )
+
   // ---------- Schools, membership & entitlements ----------
 
 export const schools = pgTable("school", {

@@ -13,6 +13,21 @@ export type LanguageId = "python" | "html"
 /** Prism grammar used to highlight a file. */
 export type EditorMode = "python" | "markup" | "css" | "javascript"
 
+/**
+ * How an IDE turns a file into something to look at — and therefore what any
+ * surface showing that file has to offer beside the code: the workspace, the
+ * teacher views and the public share page alike.
+ *
+ * - `document`: the files compose into a page, rendered in an iframe.
+ * - `console`: the file is executed and its output streams to a console, which
+ *   is also where input() is typed.
+ *
+ * Those surfaces branch on this rather than comparing against a language id, so
+ * a new IDE states its model here once instead of being special-cased in each
+ * of them — and a share link for it is runnable the day it ships.
+ */
+export type RunModel = "document" | "console"
+
 export type LanguageLimits = {
   /** null means unlimited. */
   maxFiles: number | null
@@ -55,6 +70,8 @@ export type LanguageDef = {
    * bare name, and the whole list is what keeps files out of the wrong tree.
    */
   extensions: string[]
+  /** What a viewer needs in order to see this IDE's files actually work. */
+  runModel: RunModel
   /** Free-tier allowance, counted per IDE rather than across the account. */
   freeLimits: LanguageLimits
   /** Prompt context for the AI task tools. */
@@ -71,6 +88,7 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     // Indigo, the product's own primary hue.
     accent: "var(--chart-1)",
     extensions: [".py"],
+    runModel: "console",
     freeLimits: { maxFiles: 2, maxFolders: 1, maxFilesPerFolder: 1 },
     ai: {
       environment:
@@ -88,6 +106,7 @@ export const LANGUAGES: Record<LanguageId, LanguageDef> = {
     // indigo, so the two IDEs are told apart at a glance rather than read.
     accent: "var(--chart-4)",
     extensions: [".html", ".htm", ".css", ".js"],
+    runModel: "document",
     freeLimits: { maxFiles: 2, maxFolders: 1, maxFilesPerFolder: 1 },
     ai: {
       environment:
@@ -126,6 +145,11 @@ export function toLanguageId(value: unknown): LanguageId {
 
 export function getLanguage(id: LanguageId): LanguageDef {
   return LANGUAGES[id]
+}
+
+/** Shorthand for the lookup every run surface starts with. */
+export function runModelFor(id: LanguageId): RunModel {
+  return LANGUAGES[id].runModel
 }
 
 /** Lower-cased extension including the dot, or "" when there is none. */

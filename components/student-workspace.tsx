@@ -7,7 +7,6 @@ import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { ShareMenu } from "@/components/ide/share-menu"
-import { clearShareParams, readShareId } from "@/lib/ide/share-link"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useFullscreen } from "@/components/ide/fullscreen"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
@@ -17,6 +16,7 @@ import {
   editorModeFor,
   getLanguage,
   type LanguageId,
+  runModelFor,
 } from "@/lib/ide/languages"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
@@ -182,7 +182,7 @@ export function StudentWorkspace({
     if (fullscreen) collapse()
     else expand()
   }, [fullscreen, collapse, expand])
-  const isWeb = language === "html"
+  const isWeb = runModelFor(language) === "document"
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
@@ -215,8 +215,9 @@ export function StudentWorkspace({
   const resizeState = useRef<{ startX: number; startW: number } | null>(null)
 
   const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = usePyodide({
-    // Python is a multi-megabyte download; don't pay for it in the HTML IDE.
-    enabled: !isWeb,
+    // Python is a multi-megabyte download, so only an IDE that actually runs
+    // code in it pays for it.
+    enabled: runModelFor(language) === "console",
   })
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -263,44 +264,6 @@ export function StudentWorkspace({
       setDraft("")
     }
   }, [tree, activeFileId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  /**
-   * Opens the file a copied link points at.
-   *
-   * The link names the class and the IDE as well as the file, because the tree
-   * holding it is keyed on both. It is read once and the URL cleaned straight
-   * away, so changing class by hand later cannot re-trigger it.
-   */
-  const [linkedFile, setLinkedFile] = useState<{
-    fileId: number
-    classId: number | null
-  } | null>(null)
-
-  useEffect(() => {
-    const fileId = readShareId("file")
-    if (!fileId) return
-    setLinkedFile({ fileId, classId: readShareId("class") })
-    clearShareParams()
-  }, [])
-
-  // Declared after the first-file effect above so its choice is the one that
-  // sticks: both run in the same commit, and the later write wins.
-  useEffect(() => {
-    if (!linkedFile) return
-
-    if (linkedFile.classId && linkedFile.classId !== activeClassId) {
-      // Nothing can resolve until the tree for the file's own class has loaded.
-      if (classes.some((c) => c.id === linkedFile.classId)) setActiveClassId(linkedFile.classId)
-      return
-    }
-
-    if (tree && allFiles.some((f) => f.id === linkedFile.fileId)) {
-      setActiveFileId(linkedFile.fileId)
-      setLinkedFile(null)
-    }
-    // Left pending when the file is not in this tree: a link can switch IDE
-    // too, which refetches, and the file may only turn up on that pass.
-  }, [linkedFile, tree, classes, activeClassId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load the active file's content into the editor draft
   useEffect(() => {
@@ -735,8 +698,7 @@ export function StudentWorkspace({
               <ShareMenu
                 fileName={activeFile.name}
                 files={previewFiles}
-                linkPath="/student"
-                linkParams={{ file: activeFile.id, class: activeClassId, ide: language }}
+                share={{ kind: "code", fileId: activeFile.id }}
               />
             )}
             {activeFile?.hasTask && (
