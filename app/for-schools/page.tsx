@@ -30,16 +30,20 @@ export const metadata = marketingMetadata(PATH)
 
 const steps = [
   {
-    title: "Choose a school plan",
-    desc: "Pick the plan that matches a single department, a whole school or a multi-academy trust. Everything is priced per organisation, not per seat negotiation.",
+    title: "A school admin sets up the school",
+    desc: "Pick the plan that matches a single department, a whole school or a multi-academy trust. Everything is priced per organisation, not per seat negotiation, and the admin gets one page to manage staff, pupils and seats.",
   },
   {
-    title: "Share your invite codes",
-    desc: "Staff and students join the school with a code. Seats and codes are managed from one school page, so there is no account provisioning project.",
+    title: "The admin invites teachers",
+    desc: "Staff join the school with a staff invite code issued from that page. There is no account provisioning project and no directory integration to commission first.",
   },
   {
-    title: "Everyone gets Pro",
-    desc: "Once someone joins the school, their account is covered. No student is asked for a card and no teacher is left on the free tier.",
+    title: "Teachers add their own students",
+    desc: "Each teacher creates their classes and shares a join code. Students enter the code once and their work is filed under that class from then on.",
+  },
+  {
+    title: "Everyone who joins is on Pro",
+    desc: "Cover follows school membership, so every teacher and student is lifted onto Pro the moment they join. No student is asked for a card and no teacher is left on the free tier.",
   },
 ]
 

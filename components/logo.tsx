@@ -97,12 +97,19 @@ export function Logo({
   textClassName = "text-lg",
   showText = true,
   showTagline = false,
+  taglineClassName,
 }: {
   className?: string
   iconClassName?: string
   textClassName?: string
   showText?: boolean
   showTagline?: boolean
+  /**
+   * Extra classes for the tagline. The tagline is the widest part of the
+   * lockup, so a crowded header can hide it at a breakpoint without having to
+   * drop the wordmark too.
+   */
+  taglineClassName?: string
 }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
@@ -110,7 +117,9 @@ export function Logo({
       {showText && (
         <span className="flex flex-col leading-none">
           <LogoWordmark className={textClassName} />
-          {showTagline && <LogoTagline className="mt-1.5 text-[9px]" />}
+          {showTagline && (
+            <LogoTagline className={cn("mt-1.5 text-[9px]", taglineClassName)} />
+          )}
         </span>
       )}
     </div>

@@ -17,6 +17,7 @@ import {
   Terminal,
   Zap,
   Users,
+  Building2,
   CheckCircle2,
   Code2,
   PanelsTopLeft,
@@ -110,6 +111,21 @@ const sections = [
     },
   },
   {
+    id: "schools",
+    eyebrow: "For Schools",
+    icon: Building2,
+    title: "One plan, and the whole department is covered",
+    desc: "A school admin invites staff with a single code, each teacher brings their own classes in, and everyone who joins lands on Pro. No per-pupil licences to chase, and no student is ever asked for a card.",
+    points: [
+      "School admin invites teachers with a staff code",
+      "Teachers add their students with a class join code",
+      "Every teacher and student is on Pro automatically",
+    ],
+    accent: "chart-4",
+    href: "/for-schools",
+    cta: "See how school / MAT works",
+  },
+  {
     id: "organized",
     eyebrow: "Always Organized",
     icon: FolderTree,
@@ -121,6 +137,48 @@ const sections = [
     accent: "chart-3",
   },
 ] as const
+
+/**
+ * The in-page anchors the nav tracks, in the order they appear down the page.
+ * Derived from `sections` so a new feature section is picked up by both the
+ * nav and the scroll highlight without a second list to keep in step. The AI
+ * section is appended because it renders after the last feature section.
+ */
+const NAV_SECTION_IDS: string[] = [...sections.map((s) => s.id), "ai"]
+
+/**
+ * A nav anchor that underlines itself while its section owns the viewport.
+ * The underline grows from the centre rather than fading, so the highlight
+ * visibly travels from one item to the next as the reader scrolls.
+ */
+function NavLink({
+  href,
+  active,
+  className = "",
+  children,
+}: {
+  href: string
+  active: boolean
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <a
+      href={href}
+      aria-current={active ? "location" : undefined}
+      className={`relative inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+        active ? "text-foreground" : "hover:text-foreground"
+      } ${className}`}
+    >
+      {children}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -bottom-1 left-1/2 h-0.5 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 ease-out"
+        style={{ width: active ? "100%" : "0%", opacity: active ? 1 : 0 }}
+      />
+    </a>
+  )
+}
 
 /**
  * The IDEs that ship today. Mirrors LANGUAGES in lib/ide/languages.ts — when a
@@ -155,6 +213,7 @@ const stats = [
 export function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [activeSection, setActiveSection] = useState<string | null>(null)
 
   useEffect(() => {
     function onScroll() {
@@ -162,10 +221,31 @@ export function LandingPage() {
       const height = document.documentElement.scrollHeight - window.innerHeight
       setScrolled(top > 12)
       setProgress(height > 0 ? Math.min(1, top / height) : 0)
+
+      // A single horizontal scanline a third of the way down the viewport
+      // decides which section the reader is "in". Measuring against one line
+      // rather than intersection ratios keeps exactly one nav item lit, even
+      // when a short section and a tall one are on screen together.
+      const line = window.innerHeight / 3
+      let current: string | null = null
+      for (const id of NAV_SECTION_IDS) {
+        const el = document.getElementById(id)
+        if (!el) continue
+        const box = el.getBoundingClientRect()
+        if (box.top <= line && box.bottom > line) {
+          current = id
+          break
+        }
+      }
+      setActiveSection(current)
     }
     onScroll()
     window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
+    window.addEventListener("resize", onScroll)
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", onScroll)
+    }
   }, [])
 
   return (
@@ -187,26 +267,32 @@ export function LandingPage() {
         }`}
       >
         <Link href="#top">
-          <Logo iconClassName="h-9 w-9" textClassName="text-lg" showTagline />
+          {/* Six nav labels need the full width, so the tagline steps aside
+              until there is room for both. */}
+          <Logo
+            iconClassName="h-9 w-9"
+            textClassName="text-lg"
+            showTagline
+            taglineClassName="hidden xl:inline-block"
+          />
         </Link>
-        <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-          {sections
-            .filter((s) => s.id !== "organized")
-            .map((s) => (
-              <a key={s.id} href={`#${s.id}`} className="transition-colors hover:text-foreground">
-                {s.eyebrow}
-              </a>
-            ))}
-            <a href="#organized" className="transition-colors hover:text-foreground">
-              Always Organized
-            </a>
-            <a href="#ai" className="ai-nav-pill inline-flex items-center gap-1.5 font-semibold">
-              <Sparkles aria-hidden className="ai-nav-pill-spark h-3.5 w-3.5" />
-              <span className="ai-nav-pill-label">AI Powered</span>
-            </a>
-            <Link href="/pricing" className="font-medium text-foreground transition-colors hover:text-primary">
-              Pricing
-            </Link>
+        <nav className="hidden items-center gap-5 text-sm text-muted-foreground xl:flex">
+          {/* Driven by `sections`, so the nav order always matches the page order. */}
+          {sections.map((s) => (
+            <NavLink key={s.id} href={`#${s.id}`} active={activeSection === s.id}>
+              {s.eyebrow}
+            </NavLink>
+          ))}
+          <NavLink href="#ai" active={activeSection === "ai"} className="ai-nav-pill font-semibold">
+            <Sparkles aria-hidden className="ai-nav-pill-spark h-3.5 w-3.5" />
+            <span className="ai-nav-pill-label">AI Powered</span>
+          </NavLink>
+          <Link
+            href="/pricing"
+            className="whitespace-nowrap font-medium text-foreground transition-colors hover:text-primary"
+          >
+            Pricing
+          </Link>
         </nav>
         <div className="flex items-center gap-2">
           <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost">

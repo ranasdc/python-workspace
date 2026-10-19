@@ -2,7 +2,19 @@
 
 import type React from "react"
 import { useEffect, useMemo, useState } from "react"
-import { Check, FileCode2, Folder, User, Pencil, Save, Sparkles, X, MessageSquare } from "lucide-react"
+import {
+  Building2,
+  Check,
+  FileCode2,
+  Folder,
+  KeyRound,
+  User,
+  Pencil,
+  Save,
+  Sparkles,
+  X,
+  MessageSquare,
+} from "lucide-react"
 
 /* ================================================================== *
  * Borderless, looping feature animations for the landing page.        *
@@ -485,6 +497,221 @@ function OrganizedAnimation() {
 }
 
 /* ------------------------------------------------------------------ */
+/* 4. Schools — admin invites staff, staff add students, everyone Pro   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Two teachers is the smallest cast that still reads as a department rather
+ * than a single classroom, and each carries its own class code so the
+ * admin → teacher → student chain is visible in one frame.
+ */
+const SCHOOL_STAFF = [
+  { initials: "MR", name: "Ms. Rivera", code: "9B-COMP", students: ["AC", "SL"] },
+  { initials: "JP", name: "Mr. Patel", code: "10A-CS", students: ["TM", "KO"] },
+] as const
+
+/** Fades a tier in from above as the roll-out reaches it. */
+function Appear({
+  visible,
+  delay = 0,
+  className = "",
+  children,
+}: {
+  visible: boolean
+  delay?: number
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className={`transition-all duration-500 ease-out ${className}`}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(-6px)",
+        transitionDelay: `${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+/** A short vertical run of the org chart's connector line. */
+function Stem({ visible, height }: { visible: boolean; height: string }) {
+  return (
+    <span
+      aria-hidden
+      className="mx-auto block w-px bg-chart-4/40 transition-all duration-500 ease-out"
+      style={{ height, opacity: visible ? 1 : 0 }}
+    />
+  )
+}
+
+function SchoolsAnimation() {
+  const [step, setStep] = useState(0)
+  const TOTAL = 6
+  const done = step >= TOTAL
+
+  useEffect(() => {
+    if (!done) {
+      const id = setTimeout(() => setStep((s) => s + 1), 560)
+      return () => clearTimeout(id)
+    }
+    // Hold the finished org chart long enough to read, then run it again.
+    const id = setTimeout(() => setStep(0), 3400)
+    return () => clearTimeout(id)
+  }, [step, done])
+
+  const at = (n: number) => step >= n
+  // Cover lands on every member at once — that is the whole point of the plan.
+  const pro = at(6)
+
+  return (
+    <div className="pyide-anim group relative mx-auto w-full max-w-md [perspective:1200px]">
+      <Glow className="from-chart-4/40" />
+
+      <div className="relative px-1 transition-transform duration-500 ease-out will-change-transform group-hover:[transform:rotateX(6deg)_scale(1.01)]">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-chart-4/15 text-chart-4">
+              <Building2 className="h-3 w-3" />
+            </span>
+            Rolling out a school
+          </span>
+          {pro && (
+            <span
+              className="flex items-center gap-1 rounded-full bg-chart-4/15 px-2 py-0.5 text-[10px] font-semibold text-chart-4"
+              style={{ animation: "pyide-pop 0.4s ease-out" }}
+            >
+              <Check className="h-3 w-3" />
+              Everyone on Pro
+            </span>
+          )}
+        </div>
+
+        {/* Tier 0 — the school itself */}
+        <Appear visible={at(1)}>
+          <div className="mx-auto flex w-fit items-center gap-2 rounded-xl bg-background/70 px-3 py-2 shadow-sm">
+            <Building2 className="h-4 w-4 shrink-0 text-chart-4" />
+            <span className="text-[11px] font-semibold text-foreground/85">Northwood Academy</span>
+            <span className="rounded-full bg-chart-4/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-chart-4">
+              School plan
+            </span>
+          </div>
+        </Appear>
+
+        {/* The admin's staff invite code */}
+        <Stem visible={at(2)} height="0.75rem" />
+        <Appear visible={at(2)}>
+          <div className="mx-auto flex w-fit items-center gap-1.5 rounded-lg bg-chart-4/10 px-2.5 py-1">
+            <KeyRound className="h-3 w-3 shrink-0 text-chart-4" />
+            <span className="font-mono text-[10px] font-semibold text-chart-4">STAFF-7K2</span>
+            <span className="text-[9px] font-medium text-muted-foreground">admin invites staff</span>
+          </div>
+        </Appear>
+
+        {/* Fork from the school down into each teacher's column */}
+        <div className="relative h-5" aria-hidden>
+          <span
+            className="absolute left-1/2 top-0 h-2.5 w-px -translate-x-1/2 bg-chart-4/40 transition-opacity duration-500"
+            style={{ opacity: at(3) ? 1 : 0 }}
+          />
+          <span
+            className="absolute left-1/4 right-1/4 top-2.5 h-px bg-chart-4/40 transition-opacity duration-500"
+            style={{ opacity: at(3) ? 1 : 0 }}
+          />
+          <span
+            className="absolute left-1/4 top-2.5 h-2.5 w-px bg-chart-4/40 transition-opacity duration-500"
+            style={{ opacity: at(3) ? 1 : 0 }}
+          />
+          <span
+            className="absolute right-1/4 top-2.5 h-2.5 w-px bg-chart-4/40 transition-opacity duration-500"
+            style={{ opacity: at(3) ? 1 : 0 }}
+          />
+        </div>
+
+        {/* Tiers 1 and 2 — teachers, then the students each one brings in */}
+        <div className="grid grid-cols-2 gap-3">
+          {SCHOOL_STAFF.map((staff, col) => (
+            <div key={staff.initials} className="flex flex-col">
+              <Appear visible={at(3)} delay={col * 110}>
+                <div className="flex items-center justify-center gap-1.5 rounded-xl bg-background/70 px-2 py-1.5 shadow-sm">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-chart-2 text-[9px] font-bold text-primary-foreground">
+                    {staff.initials}
+                  </span>
+                  <span className="truncate text-[10px] font-semibold text-foreground/85">
+                    {staff.name}
+                  </span>
+                  {pro && (
+                    <span
+                      className="rounded-full bg-chart-2/20 px-1.5 py-0.5 text-[8px] font-bold uppercase text-chart-2"
+                      style={{ animation: "pyide-pop 0.35s ease-out" }}
+                    >
+                      Pro
+                    </span>
+                  )}
+                </div>
+              </Appear>
+
+              {/* That teacher's own class join code */}
+              <Stem visible={at(4)} height="0.6rem" />
+              <Appear visible={at(4)} delay={col * 110}>
+                <div className="mx-auto w-fit rounded-md bg-chart-2/10 px-2 py-0.5">
+                  <span className="font-mono text-[9px] font-semibold text-chart-2">
+                    {staff.code}
+                  </span>
+                </div>
+              </Appear>
+
+              {/* Fork down to the two students in that class */}
+              <div className="relative h-4" aria-hidden>
+                <span
+                  className="absolute left-1/2 top-0 h-2 w-px -translate-x-1/2 bg-chart-2/40 transition-opacity duration-500"
+                  style={{ opacity: at(5) ? 1 : 0 }}
+                />
+                <span
+                  className="absolute left-1/4 right-1/4 top-2 h-px bg-chart-2/40 transition-opacity duration-500"
+                  style={{ opacity: at(5) ? 1 : 0 }}
+                />
+                <span
+                  className="absolute left-1/4 top-2 h-2 w-px bg-chart-2/40 transition-opacity duration-500"
+                  style={{ opacity: at(5) ? 1 : 0 }}
+                />
+                <span
+                  className="absolute right-1/4 top-2 h-2 w-px bg-chart-2/40 transition-opacity duration-500"
+                  style={{ opacity: at(5) ? 1 : 0 }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {staff.students.map((initials, i) => (
+                  <Appear key={initials} visible={at(5)} delay={col * 110 + i * 90}>
+                    <div className="relative mx-auto w-fit">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold text-primary">
+                        {initials}
+                      </span>
+                      {/* Pro tick on each pupil, since cover is per member */}
+                      {pro && (
+                        <span
+                          className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                          style={{ animation: "pyide-pop 0.35s ease-out" }}
+                        >
+                          <Check className="h-2 w-2" />
+                        </span>
+                      )}
+                    </div>
+                  </Appear>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Shared soft glow (borderless depth cue)                             */
 /* ------------------------------------------------------------------ */
 function Glow({ className = "" }: { className?: string }) {
@@ -499,5 +726,6 @@ function Glow({ className = "" }: { className?: string }) {
 export function FeatureAnimation({ id }: { id: string }) {
   if (id === "students") return <StudentAnimation />
   if (id === "teachers") return <TeacherAnimation />
+  if (id === "schools") return <SchoolsAnimation />
   return <OrganizedAnimation />
 }
