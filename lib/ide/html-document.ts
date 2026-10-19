@@ -82,6 +82,56 @@ export function pickEntryFile(
   return index ?? htmlFiles[0]
 }
 
+/** Every sibling file an HTML page points at through a stylesheet or script. */
+function referencedNames(html: string): string[] {
+  const names: string[] = []
+
+  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+    if (!/\brel\s*=\s*["']?stylesheet["']?/i.test(tag)) continue
+    const href = tag.match(/\bhref\s*=\s*["']([^"']*)["']/i)?.[1]
+    if (href) names.push(href)
+  }
+
+  for (const match of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']*)["'][^>]*>/gi)) {
+    names.push(match[1])
+  }
+
+  return names
+}
+
+/**
+ * The files that belong with `entryName` when it leaves the workspace: the
+ * file itself, plus every sibling it references.
+ *
+ * References are resolved exactly the way the preview resolves them, so a
+ * downloaded page behaves like the one the pupil just ran — a lone `.py` comes
+ * out on its own, while `index.html` brings its stylesheet and script along.
+ */
+export function collectAssociatedFiles(
+  files: PreviewFile[],
+  entryName: string,
+): PreviewFile[] {
+  const entry = files.find((f) => f.name.toLowerCase() === entryName.toLowerCase())
+  if (!entry) return []
+  if (!isHtml(entry.name)) return [entry]
+
+  const collected = [entry]
+  const seen = new Set([entry.name.toLowerCase()])
+
+  for (const ref of referencedNames(entry.content)) {
+    const resolved = resolveRef(files, ref)
+    // "external" points at a CDN and "missing" at nothing at all; neither is a
+    // file this workspace can hand over.
+    if (resolved.kind !== "found") continue
+    const key = resolved.file.name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    collected.push(resolved.file)
+  }
+
+  return collected
+}
+
 function inlineStylesheets(html: string, files: PreviewFile[], missing: string[]) {
   // Matches <link ... rel="stylesheet" ... href="...">, attributes in any order.
   return html.replace(/<link\b[^>]*>/gi, (tag) => {

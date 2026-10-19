@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import useSWR, { mutate } from "swr"
 import { usePyodide } from "@/hooks/use-pyodide"
@@ -52,10 +52,13 @@ import {
 import { useFullscreen } from "@/components/ide/fullscreen"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
+import { ShareMenu } from "@/components/ide/share-menu"
+import { clearShareParams, readShareId, readShareParam } from "@/lib/ide/share-link"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
   getLanguage,
+  isLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
 import { getFolderColors } from "@/lib/folder-colors"
@@ -157,6 +160,19 @@ export function TeacherDashboard({
     initialClasses[0]?.id ?? null,
   )
   const [view, setView] = useState<"classes" | "library">("classes")
+
+  /**
+   * A copied link opens on the side of the dashboard it was copied from.
+   *
+   * The parameters are deliberately left in place: the library and the class
+   * review each read the file id for themselves, and whichever one the link
+   * addresses is the one that consumes and clears it.
+   */
+  useEffect(() => {
+    if (readShareParam("view") === "library") setView("library")
+    const classId = readShareId("class")
+    if (classId && initialClasses.some((c) => c.id === classId)) setActiveClassId(classId)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // Read here as well as in ClassDetail: the class-navigation rail below is
   // owned by this component, not by the workspace that holds the editor.
   const { fullscreen } = useFullscreen()
@@ -457,6 +473,61 @@ function ClassDetail({
       : selected?.file ?? null
 
   const markedLines = parseMarkedLines(currentFile?.teacherEditedLines)
+
+  /**
+   * The pupil's project as it stands on screen, with any unsaved correction
+   * swapped in — the same view the preview takes, so a shared download matches
+   * what the teacher is actually looking at.
+   */
+  const shareFiles = useMemo(
+    () =>
+      (data?.students.find((s) => s.id === selected?.student.id)?.files ?? []).map((f) => ({
+        name: f.name,
+        content: f.id === currentFile?.id && draft !== null ? draft : f.content,
+      })),
+    [data, selected?.student.id, currentFile?.id, draft],
+  )
+
+  /**
+   * Opens the pupil's file a copied review link points at.
+   *
+   * Scoped to this class so only the matching instance takes the link: the
+   * dashboard may still be switching class while this one is mounted, and
+   * whichever instance reads the parameters also clears them.
+   */
+  const [linkedFile, setLinkedFile] = useState<{
+    fileId: number
+    studentId: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (readShareParam("view") === "library") return
+    const linkedClass = readShareId("class")
+    if (linkedClass && linkedClass !== cls.id) return
+
+    const fileId = readShareId("file")
+    if (!fileId) return
+
+    const ide = readShareParam("ide")
+    if (isLanguageId(ide)) setLanguage(ide)
+    setLinkedFile({ fileId, studentId: readShareParam("student") })
+    clearShareParams()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!linkedFile || !data) return
+    for (const student of data.students) {
+      if (linkedFile.studentId && student.id !== linkedFile.studentId) continue
+      const file = student.files.find((f) => f.id === linkedFile.fileId)
+      if (file) {
+        setSelected({ student, file })
+        setLinkedFile(null)
+        return
+      }
+    }
+    // Left pending otherwise: the link can switch IDE too, and the file may
+    // only appear once that tree has been fetched.
+  }, [linkedFile, data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Safe to undo only while the correction is still the newest version. The
   // pupil's save clears teacherEditedLines, so a null there means they have
@@ -759,6 +830,17 @@ function ClassDetail({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <ShareMenu
+                    fileName={currentFile.name}
+                    files={shareFiles}
+                    linkPath="/teacher"
+                    linkParams={{
+                      class: cls.id,
+                      student: selected.student.id,
+                      file: currentFile.id,
+                      ide: language,
+                    }}
+                  />
                   {editing ? (
                     <>
                       <Button
