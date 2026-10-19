@@ -171,17 +171,7 @@ export function AuthForm({
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            {mode === "sign-in" && (
-              <Link
-                href={email ? `/forgot-password?email=${encodeURIComponent(email)}` : "/forgot-password"}
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                Forgot password?
-              </Link>
-            )}
-          </div>
+          <Label htmlFor="password">Password</Label>
           <PasswordInput
             id="password"
             autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
@@ -203,6 +193,15 @@ export function AuthForm({
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {mode === "sign-up" ? "Create account" : "Sign in"}
         </Button>
+
+        {mode === "sign-in" && (
+          <Link
+            href={email ? `/forgot-password?email=${encodeURIComponent(email)}` : "/forgot-password"}
+            className="text-center text-sm font-medium text-primary hover:underline"
+          >
+            Forgot password?
+          </Link>
+        )}
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
