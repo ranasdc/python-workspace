@@ -17,6 +17,7 @@ import {
   editorModeFor,
   getLanguage,
   type LanguageId,
+  runModelFor,
 } from "@/lib/ide/languages"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -118,12 +119,12 @@ export function TeacherLibrary({
 
   // Teachers run the exact same execution path students get: Pyodide for
   // Python, the sandboxed iframe preview for HTML. No separate IDE.
-  const isWeb = language === "html"
+  const isWeb = runModelFor(language) === "document"
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
   const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
   const [runId, setRunId] = useState(0)
   const { status, loadError, awaitingInput, interactive, run, submitInput, stop } =
-    usePyodide({ enabled: !isWeb })
+    usePyodide({ enabled: runModelFor(language) === "console" })
 
   const allFiles = data ? [...data.rootFiles, ...data.folders.flatMap((f) => f.files)] : []
   const selected = allFiles.find((f) => f.id === selectedId) ?? null

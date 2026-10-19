@@ -109,7 +109,11 @@ export default async function SharePage({ params }: PageProps) {
           </p>
         </div>
 
-        <PublicShareView fileName={share.fileName} bundle={share.bundle} />
+        <PublicShareView
+          fileName={share.fileName}
+          language={share.language}
+          bundle={share.bundle}
+        />
       </main>
 
       <footer className="border-t border-border bg-card">

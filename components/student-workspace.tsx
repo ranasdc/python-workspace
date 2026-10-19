@@ -16,6 +16,7 @@ import {
   editorModeFor,
   getLanguage,
   type LanguageId,
+  runModelFor,
 } from "@/lib/ide/languages"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
@@ -181,7 +182,7 @@ export function StudentWorkspace({
     if (fullscreen) collapse()
     else expand()
   }, [fullscreen, collapse, expand])
-  const isWeb = language === "html"
+  const isWeb = runModelFor(language) === "document"
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses)
   const [activeClassId, setActiveClassId] = useState<number | null>(
     initialClasses[0]?.id ?? null,
@@ -214,8 +215,9 @@ export function StudentWorkspace({
   const resizeState = useRef<{ startX: number; startW: number } | null>(null)
 
   const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = usePyodide({
-    // Python is a multi-megabyte download; don't pay for it in the HTML IDE.
-    enabled: !isWeb,
+    // Python is a multi-megabyte download, so only an IDE that actually runs
+    // code in it pays for it.
+    enabled: runModelFor(language) === "console",
   })
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 

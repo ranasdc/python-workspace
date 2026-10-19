@@ -58,6 +58,7 @@ import {
   editorModeFor,
   getLanguage,
   type LanguageId,
+  runModelFor,
 } from "@/lib/ide/languages"
 import { getFolderColors } from "@/lib/folder-colors"
 import { cn } from "@/lib/utils"
@@ -442,7 +443,7 @@ function ClassDetail({
   const [draft, setDraft] = useState<string | null>(null)
   const [savingCorrection, setSavingCorrection] = useState(false)
 
-  const isWeb = language === "html"
+  const isWeb = runModelFor(language) === "document"
   const editing = draft !== null
 
   const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = pyodide
