@@ -7,6 +7,13 @@ import "prismjs/components/prism-python"
 // markup, css and javascript ship in Prism's core bundle, so HTML, CSS and JS
 // need no extra grammar imports.
 
+// We highlight by hand with Prism.highlight(). Left to itself Prism also scans
+// the DOM after load for `code[class*="language-"]`, re-highlights the markup
+// React just rendered and sets tabindex="0" on the parent <pre> — which React
+// then reports as a hydration mismatch. The flag is re-read when that deferred
+// pass fires, so setting it at import time is enough to cancel it.
+Prism.manual = true
+
 import { cn } from "@/lib/utils"
 import type { EditorMode } from "@/lib/ide/languages"
 
