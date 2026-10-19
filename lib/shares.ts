@@ -6,7 +6,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { codeFiles, fileShares, libraryFiles } from "@/lib/db/schema"
 import { collectAssociatedFiles, type PreviewFile } from "@/lib/ide/html-document"
-import { toLanguageId, type LanguageId } from "@/lib/ide/languages"
+import { isLanguageId, type LanguageId } from "@/lib/ide/languages"
 
 /** Which table a share's `sourceFileId` points into. */
 export type ShareSourceKind = "code" | "library"
@@ -75,11 +75,14 @@ export async function loadPublicShare(token: string): Promise<PublicShare | null
       : await loadCodeSource(share.sourceFileId)
 
   if (!source) return null
+  // A 404 rather than a thrown 500 if a row ever carries a language this build
+  // no longer ships: the page is public, so it should fail quietly.
+  if (!isLanguageId(source.language)) return null
 
   return {
     token: share.token,
     fileName: source.name,
-    language: toLanguageId(source.language),
+    language: source.language,
     bundle: collectAssociatedFiles(source.siblings, source.name),
     updatedAt: source.updatedAt,
   }

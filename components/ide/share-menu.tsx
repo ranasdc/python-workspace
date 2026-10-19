@@ -181,12 +181,11 @@ export function ShareMenu({
         {share && (
           <>
             <DropdownMenuItem
-              onClick={(event) => {
-                // The copy has to outlive the menu closing, and closing unmounts
-                // this item mid-await.
-                event.preventDefault()
-                void copyLink()
-              }}
+              // The menu stays open so the item can turn into "Link copied" and
+              // "Stop sharing" can appear underneath it. Closing would unmount
+              // both mid-await and leave the click with nothing to show for it.
+              closeOnClick={false}
+              onClick={() => void copyLink()}
               disabled={busy}
             >
               {busy ? (
@@ -203,10 +202,8 @@ export function ShareMenu({
             </p>
             {token && (
               <DropdownMenuItem
-                onClick={(event) => {
-                  event.preventDefault()
-                  void stopSharing()
-                }}
+                closeOnClick={false}
+                onClick={() => void stopSharing()}
                 disabled={busy}
                 className="text-muted-foreground"
               >

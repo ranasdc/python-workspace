@@ -70,9 +70,12 @@ export default async function SharePage({ params }: PageProps) {
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link
+            href="/"
+            aria-label={`${SITE.name} home`}
+            className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <Logo iconClassName="h-8 w-8" textClassName="text-base" />
-            <span className="sr-only">{SITE.name} home</span>
           </Link>
           <Button size="sm" render={<Link href="/" />} nativeButton={false}>
             Try {SITE.name}
