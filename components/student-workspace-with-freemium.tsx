@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { StudentWorkspace } from "@/components/student-workspace"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
@@ -11,13 +11,7 @@ import { cn } from "@/lib/utils"
 import { getUserSubscriptionInfo } from "@/app/actions/onboarding"
 import { setLastIde } from "@/app/actions/preferences"
 import { subscriptionInfoKey } from "@/lib/swr-keys"
-import {
-  DEFAULT_LANGUAGE,
-  getLanguage,
-  isLanguageId,
-  type LanguageId,
-} from "@/lib/ide/languages"
-import { readShareParam } from "@/lib/ide/share-link"
+import { DEFAULT_LANGUAGE, getLanguage, type LanguageId } from "@/lib/ide/languages"
 
 type ClassItem = {
   id: number
@@ -44,19 +38,6 @@ export function StudentWorkspaceWithFreemium({
   const [limitType, setLimitType] = useState<"file" | "folder" | null>(null)
   const [language, setLanguage] = useState<LanguageId>(initialLanguage)
   const { fullscreen } = useFullscreen()
-
-  /**
-   * A copied link names the IDE its file belongs to, so the workspace opens
-   * there instead of on whichever IDE was last used.
-   *
-   * Applied after mount rather than from the initial state: reading the URL
-   * during render would disagree with the server and break hydration. The
-   * workspace itself consumes the file id and clears the parameters.
-   */
-  useEffect(() => {
-    const linked = readShareParam("ide")
-    if (isLanguageId(linked)) setLanguage(linked)
-  }, [])
 
   // Keyed by IDE, because the free tier is metered per IDE. The workspace
   // revalidates this exact key after every create or delete, so the usage

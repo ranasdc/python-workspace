@@ -10,14 +10,12 @@ import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { ShareMenu } from "@/components/ide/share-menu"
-import { clearShareParams, readShareId, readShareParam } from "@/lib/ide/share-link"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useLeftSideCascade } from "@/components/teacher-class-nav"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
   getLanguage,
-  isLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
 import { Button } from "@/components/ui/button"
@@ -170,35 +168,6 @@ export function TeacherLibrary({
   }, [language])
 
   /**
-   * Opens the file a copied library link points at.
-   *
-   * The library is fetched per IDE, so the link names one and that is switched
-   * first — the id would not resolve against the other IDE's tree. Only links
-   * addressed to the library are taken: a class link belongs to the review
-   * view, which reads the same parameters.
-   */
-  const [linkedFileId, setLinkedFileId] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (readShareParam("view") !== "library") return
-    const fileId = readShareId("file")
-    if (!fileId) return
-
-    const ide = readShareParam("ide")
-    if (isLanguageId(ide)) setLanguage(ide)
-    setLinkedFileId(fileId)
-    clearShareParams()
-  }, [])
-
-  useEffect(() => {
-    if (!linkedFileId || !data) return
-    if (allFiles.some((f) => f.id === linkedFileId)) {
-      setSelectedId(linkedFileId)
-      setLinkedFileId(null)
-    }
-  }, [linkedFileId, data]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  /**
    * The library as the preview should see it: saved content for every file,
    * but the live draft for the one being edited, so Run reflects what is on
    * screen and cross-file links (e.g. style.css from index.html) resolve.
@@ -338,8 +307,7 @@ export function TeacherLibrary({
                 <ShareMenu
                   fileName={selected.name}
                   files={previewFiles}
-                  linkPath="/teacher"
-                  linkParams={{ view: "library", file: selected.id, ide: language }}
+                  share={{ kind: "library", fileId: selected.id }}
                 />
                 <RunStopButton
                   isWeb={isWeb}

@@ -53,12 +53,10 @@ import { useFullscreen } from "@/components/ide/fullscreen"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import { ShareMenu } from "@/components/ide/share-menu"
-import { clearShareParams, readShareId, readShareParam } from "@/lib/ide/share-link"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
   getLanguage,
-  isLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
 import { getFolderColors } from "@/lib/folder-colors"
@@ -161,20 +159,6 @@ export function TeacherDashboard({
   )
   const [view, setView] = useState<"classes" | "library">("classes")
 
-  /**
-   * A copied link opens on the side of the dashboard it was copied from.
-   *
-   * The parameters are deliberately left in place: the library and the class
-   * review each read the file id for themselves, and whichever one the link
-   * addresses is the one that consumes and clears it.
-   */
-  useEffect(() => {
-    if (readShareParam("view") === "library") setView("library")
-    const classId = readShareId("class")
-    if (classId && initialClasses.some((c) => c.id === classId)) setActiveClassId(classId)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  // Read here as well as in ClassDetail: the class-navigation rail below is
-  // owned by this component, not by the workspace that holds the editor.
   const { fullscreen } = useFullscreen()
 
   // Load the Python runtime once for the whole dashboard so switching between
@@ -488,47 +472,6 @@ function ClassDetail({
     [data, selected?.student.id, currentFile?.id, draft],
   )
 
-  /**
-   * Opens the pupil's file a copied review link points at.
-   *
-   * Scoped to this class so only the matching instance takes the link: the
-   * dashboard may still be switching class while this one is mounted, and
-   * whichever instance reads the parameters also clears them.
-   */
-  const [linkedFile, setLinkedFile] = useState<{
-    fileId: number
-    studentId: string | null
-  } | null>(null)
-
-  useEffect(() => {
-    if (readShareParam("view") === "library") return
-    const linkedClass = readShareId("class")
-    if (linkedClass && linkedClass !== cls.id) return
-
-    const fileId = readShareId("file")
-    if (!fileId) return
-
-    const ide = readShareParam("ide")
-    if (isLanguageId(ide)) setLanguage(ide)
-    setLinkedFile({ fileId, studentId: readShareParam("student") })
-    clearShareParams()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!linkedFile || !data) return
-    for (const student of data.students) {
-      if (linkedFile.studentId && student.id !== linkedFile.studentId) continue
-      const file = student.files.find((f) => f.id === linkedFile.fileId)
-      if (file) {
-        setSelected({ student, file })
-        setLinkedFile(null)
-        return
-      }
-    }
-    // Left pending otherwise: the link can switch IDE too, and the file may
-    // only appear once that tree has been fetched.
-  }, [linkedFile, data]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // Safe to undo only while the correction is still the newest version. The
   // pupil's save clears teacherEditedLines, so a null there means they have
   // worked on it since and restoring would delete that work.
@@ -830,17 +773,12 @@ function ClassDetail({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <ShareMenu
-                    fileName={currentFile.name}
-                    files={shareFiles}
-                    linkPath="/teacher"
-                    linkParams={{
-                      class: cls.id,
-                      student: selected.student.id,
-                      file: currentFile.id,
-                      ide: language,
-                    }}
-                  />
+                  {/* Download only, with no `share`: a public link publishes a
+                      pupil's work to anyone who holds it, and that is the
+                      pupil's call to make from their own workspace. A teacher
+                      publishing an exemplar copies it into their library, where
+                      they are the owner. */}
+                  <ShareMenu fileName={currentFile.name} files={shareFiles} />
                   {editing ? (
                     <>
                       <Button
