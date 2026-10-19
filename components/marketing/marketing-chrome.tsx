@@ -135,7 +135,13 @@ export function MarketingFooter() {
           <span>
             © {new Date().getFullYear()} <LogoWordmark className="text-sm" />. All rights reserved.
           </span>
-          <span>Made for classrooms in the UK and beyond.</span>
+          <p className="max-w-md text-balance text-center sm:text-right">
+            Online coding editors and collaborative learning tools for students, teachers, tutors
+            and schools.{" "}
+            <span className="font-medium text-foreground">
+              Built for learning. Ready for what you create next.
+            </span>
+          </p>
         </div>
       </div>
     </footer>
