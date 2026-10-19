@@ -9,12 +9,15 @@ import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
+import { ShareMenu } from "@/components/ide/share-menu"
+import { clearShareParams, readShareId, readShareParam } from "@/lib/ide/share-link"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useLeftSideCascade } from "@/components/teacher-class-nav"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
   getLanguage,
+  isLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
 import { Button } from "@/components/ui/button"
@@ -167,6 +170,35 @@ export function TeacherLibrary({
   }, [language])
 
   /**
+   * Opens the file a copied library link points at.
+   *
+   * The library is fetched per IDE, so the link names one and that is switched
+   * first — the id would not resolve against the other IDE's tree. Only links
+   * addressed to the library are taken: a class link belongs to the review
+   * view, which reads the same parameters.
+   */
+  const [linkedFileId, setLinkedFileId] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (readShareParam("view") !== "library") return
+    const fileId = readShareId("file")
+    if (!fileId) return
+
+    const ide = readShareParam("ide")
+    if (isLanguageId(ide)) setLanguage(ide)
+    setLinkedFileId(fileId)
+    clearShareParams()
+  }, [])
+
+  useEffect(() => {
+    if (!linkedFileId || !data) return
+    if (allFiles.some((f) => f.id === linkedFileId)) {
+      setSelectedId(linkedFileId)
+      setLinkedFileId(null)
+    }
+  }, [linkedFileId, data]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
    * The library as the preview should see it: saved content for every file,
    * but the live draft for the one being edited, so Run reflects what is on
    * screen and cross-file links (e.g. style.css from index.html) resolve.
@@ -303,6 +335,12 @@ export function TeacherLibrary({
                     <RotateCcw className="mr-1.5 h-4 w-4" /> Reset
                   </Button>
                 )}
+                <ShareMenu
+                  fileName={selected.name}
+                  files={previewFiles}
+                  linkPath="/teacher"
+                  linkParams={{ view: "library", file: selected.id, ide: language }}
+                />
                 <RunStopButton
                   isWeb={isWeb}
                   status={status}
@@ -416,7 +454,7 @@ function FolderNode({
           label={`Distribute folder "${folder.name}"`}
           trigger={
             <button
-              className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
               aria-label={`Distribute folder ${folder.name}`}
             >
               <Send className="h-3.5 w-3.5" />
@@ -430,7 +468,7 @@ function FolderNode({
           onConfirm={remove}
           trigger={
             <button
-              className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
               aria-label={`Delete folder ${folder.name}`}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -505,7 +543,7 @@ function FileRow({
         label={`Distribute ${file.name}`}
         trigger={
           <button
-            className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+            className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
             aria-label={`Distribute ${file.name}`}
           >
             <Send className="h-3.5 w-3.5" />
@@ -519,7 +557,7 @@ function FileRow({
         onConfirm={remove}
         trigger={
           <button
-            className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
             aria-label={`Delete ${file.name}`}
           >
             <Trash2 className="h-3.5 w-3.5" />
