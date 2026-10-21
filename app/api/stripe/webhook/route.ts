@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { stripeEvents } from "@/lib/db/schema"
 import { stripe } from "@/lib/stripe"
 import { markSubscriptionCanceled, syncSubscriptionFromStripe } from "@/lib/billing-sync"
+import { settleIndividualPlanAfterUpgrade } from "@/lib/plan-transition"
 import { sendBillingEmailForEvent } from "@/lib/transactional-emails"
 
 // Stripe needs the raw body for signature verification, so this route must not
@@ -112,6 +113,15 @@ export async function POST(req: Request) {
       error instanceof Error ? error.message : error,
     )
     return new Response("Handler error", { status: 500 })
+  }
+
+  // An upgraded teacher's personal plan stops renewing only once the school
+  // plan replacing it is verified paid, which `subscription` now is. Driven off
+  // the subscription's own metadata, so every later event for that
+  // subscription is another chance to complete a transition that an earlier
+  // delivery failed to — and so a repeat delivery finds it already done.
+  if (subscription) {
+    await settleIndividualPlanAfterUpgrade(subscription)
   }
 
   // Runs only once the event is applied and its marker kept, so duplicate

@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { schoolSubscriptions, subscriptions } from "@/lib/db/schema"
-import { PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
+import { ACTIVE_STATUSES, PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
 
 // Stripe subscriptions carry the metadata we attached at checkout time, so both
 // the webhook and the post-checkout reconciliation can call into here with
@@ -54,6 +54,31 @@ function readAccessEnd(sub: Stripe.Subscription): Date | null {
   const { cancelAt } = readCancellation(sub)
   if (cancelAt && (!periodEnd || cancelAt.getTime() < periodEnd.getTime())) return cancelAt
   return periodEnd
+}
+
+/**
+ * What Stripe currently says about a subscription, including whether it is
+ * genuinely granting access.
+ *
+ * Exported so that callers deciding something off the back of a Stripe object —
+ * notably the upgrade settlement, which must not stop an individual plan until
+ * the school plan replacing it is really paid for — read the same period and
+ * cancellation fields this module writes, rather than re-deriving them and
+ * getting the Dahlia API's relocated `current_period_end` wrong.
+ *
+ * `live` deliberately matches `isSubscriptionLive` in lib/entitlements.ts,
+ * which cannot be imported here without a cycle.
+ */
+export function readStripeSubscriptionState(sub: Stripe.Subscription) {
+  const accessEnd = readAccessEnd(sub)
+  const activeStatus = (ACTIVE_STATUSES as readonly string[]).includes(sub.status)
+
+  return {
+    status: sub.status,
+    accessEnd,
+    scheduledToCancel: readCancellation(sub).scheduledToCancel,
+    live: activeStatus && (!accessEnd || accessEnd.getTime() > Date.now()),
+  }
 }
 
 export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {

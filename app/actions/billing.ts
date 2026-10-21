@@ -1,8 +1,6 @@
 "use server"
 
-import { headers } from "next/headers"
 import { and, eq } from "drizzle-orm"
-import type Stripe from "stripe"
 
 import { db } from "@/lib/db"
 import { schoolSubscriptions, subscriptions } from "@/lib/db/schema"
@@ -10,21 +8,10 @@ import { requireUser } from "@/lib/session"
 import { stripe } from "@/lib/stripe"
 import { syncSubscriptionFromStripe } from "@/lib/billing-sync"
 import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
+import { settleIndividualPlanAfterUpgrade } from "@/lib/plan-transition"
+import { createSubscriptionCheckout, getRequestOrigin } from "@/lib/checkout"
 import { getEntitlement, isSchoolAdminRole, requireSchoolAdmin } from "@/lib/entitlements"
-import { CURRENCY, PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
-
-async function getOrigin() {
-  const h = await headers()
-  const host = h.get("x-forwarded-host") ?? h.get("host")
-  const proto = h.get("x-forwarded-proto") ?? "https"
-  return `${proto}://${host}`
-}
-
-// `managed_payments` is missing from the installed SDK's types (22.6.2), so it
-// is declared here rather than cast away at the call site.
-type CheckoutSessionParams = Stripe.Checkout.SessionCreateParams & {
-  managed_payments?: { enabled: boolean }
-}
+import { PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
 
 /**
  * Creates a Checkout Session. The price is always read from the server-side
@@ -48,51 +35,22 @@ export async function startCheckout(planId: PlanId, schoolId?: number) {
     resolvedSchoolId = admin.schoolId
   }
 
-  const origin = await getOrigin()
+  const origin = await getRequestOrigin()
 
   const metadata: Record<string, string> = { userId: me.id, planId }
   if (resolvedSchoolId) metadata.schoolId = String(resolvedSchoolId)
 
-  const params: CheckoutSessionParams = {
-    mode: "subscription",
-    customer_email: me.email,
-    client_reference_id: me.id,
-    line_items: [
-      {
-        price_data: {
-          currency: CURRENCY,
-          product_data: { name: plan.name, description: plan.blurb },
-          unit_amount: plan.priceInPence,
-          recurring: { interval: plan.interval },
-        },
-        quantity: 1,
-      },
-    ],
+  return createSubscriptionCheckout({
+    plan,
+    customerEmail: me.email,
+    clientReferenceId: me.id,
     metadata,
-    // Mirrored onto the subscription so webhooks are self-describing.
-    subscription_data: { metadata },
-    success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/pricing`,
-    // Stripe switched Managed Payments on by default for this account, which
-    // makes Stripe the merchant of record and rejects ad-hoc prices that carry
-    // no product tax code — every checkout was failing outright. Opting out per
-    // session keeps MyCodePad as merchant of record and leaves both the
-    // account-level setting and the VAT treatment untouched.
-    managed_payments: { enabled: false },
-  }
-
-  const session = await stripe.checkout.sessions.create(
-    params,
-    {
-      // Collapses accidental double-clicks into one session.
-      idempotencyKey: `checkout:${me.id}:${planId}:${resolvedSchoolId ?? "none"}:${Math.floor(
-        Date.now() / 60000,
-      )}`,
-    },
-  )
-
-  if (!session.url) throw new Error("Stripe did not return a checkout URL")
-  return { url: session.url }
+    successUrl: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${origin}/pricing`,
+    idempotencyKey: `checkout:${me.id}:${planId}:${resolvedSchoolId ?? "none"}:${Math.floor(
+      Date.now() / 60000,
+    )}`,
+  })
 }
 
 /**
@@ -123,13 +81,28 @@ export async function reconcileCheckoutSession(sessionId: string) {
   // (they read the session cookie), so they pick the new entitlement up anyway.
   await syncSubscriptionFromStripe(sub)
 
-  return { ok: true as const, status: sub.status }
+  // Now that Stripe's own copy of the subscription has been read and found
+  // paid, an upgraded teacher's personal plan can be wound down. Runs here as
+  // well as in the webhook so the teacher sees the outcome on this page rather
+  // than waiting on a delivery, and reports rather than throws so a Stripe
+  // problem cannot turn a successful payment into an error screen.
+  const settlement = await settleIndividualPlanAfterUpgrade(sub)
+
+  return {
+    ok: true as const,
+    status: sub.status,
+    // The success page reads these to send a school upgrade to the right
+    // place, and to be honest if the old plan is still renewing.
+    planId: (sub.metadata?.planId as PlanId | undefined) ?? null,
+    schoolId: sub.metadata?.schoolId ? Number(sub.metadata.schoolId) : null,
+    settlement,
+  }
 }
 
 /** Opens the Stripe Customer Portal for whatever the caller actually owns. */
 export async function openBillingPortal(schoolId?: number) {
   const me = await requireUser()
-  const origin = await getOrigin()
+  const origin = await getRequestOrigin()
 
   let customerId: string | null = null
   // Whether a plan exists at all, as opposed to existing without a card behind

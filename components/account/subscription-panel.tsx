@@ -55,6 +55,11 @@ export function SubscriptionPanel({ profile }: { profile: AccountProfile }) {
   // personal subscription, so they are pointed at the school area instead of
   // the individual upgrade modal.
   const needsSchoolPlan = canManageSchool && isFree
+  // A teacher paying for their own Teacher Pro is the one account that can move
+  // up to a school plan. The upgrade screen re-resolves this server-side, so
+  // this only decides whether to offer the route.
+  const canUpgradeToSchool =
+    plan.kind === "personal" && entitlement.plan === "teacher_pro"
 
   return (
     <div className="flex flex-col gap-5">
@@ -107,6 +112,13 @@ export function SubscriptionPanel({ profile }: { profile: AccountProfile }) {
           ) : isFree ? (
             <Button onClick={() => setUpgradeOpen(true)}>Upgrade</Button>
           ) : null}
+
+          {canUpgradeToSchool && (
+            <Link href="/billing/upgrade" className={buttonVariants()}>
+              <Building2 data-icon="inline-start" />
+              Upgrade to a School Plan
+            </Link>
+          )}
 
           {administersSchoolPlan && (
             <Link href="/school" className={buttonVariants({ variant: "outline" })}>

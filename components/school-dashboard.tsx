@@ -1,18 +1,20 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CheckoutButton } from "@/components/checkout-button"
 import { InviteCodes } from "@/components/school/invite-codes"
 import { removeSchoolMember, type getSchoolOverview } from "@/app/actions/schools"
 import { openBillingPortal } from "@/app/actions/billing"
-import { PLANS, SCHOOL_PLAN_IDS } from "@/lib/plans"
+import { PLANS, SCHOOL_PLAN_IDS, formatPrice, type PlanId } from "@/lib/plans"
 import { describeSchoolPlan } from "@/lib/school-billing"
+import { describeUpgrades, offerFor } from "@/lib/plan-upgrades"
 import { PriceTag } from "@/components/price-tag"
 import { SaleBanner } from "@/components/sale-banner"
 
@@ -37,6 +39,16 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
   const view = describeSchoolPlan(plan, isAdmin)
   const planActive = view.active
   const accessEndsOn = formatDate(plan?.currentPeriodEnd ?? null)
+
+  // The same rule the upgrade screen and the server action read, so a tier this
+  // school cannot move to is never offered here. A MAT plan yields nothing,
+  // which is what removes the section for the highest tier.
+  const upgrade = describeUpgrades({
+    currentPlan: (plan?.tier as PlanId | undefined) ?? null,
+    currentPlanLive: planActive,
+    canManage: isAdmin,
+    stripeManaged: Boolean(plan?.manageable),
+  })
 
   async function run(key: string, fn: () => Promise<unknown>, success: string) {
     setBusy(key)
@@ -172,6 +184,55 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
               used={seats.student}
               limit={plan.studentSeatLimit}
             />
+          </div>
+        </section>
+      )}
+
+      {/* Only an administrator of a live, Stripe-backed plan below MAT gets
+          here, and only the tiers above the current one are listed. */}
+      {upgrade.reason === "available" && plan && (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold">Need more seats?</h2>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Move up a tier and your school keeps this subscription — same renewal date,
+            no second plan, and every class, file and piece of student work stays
+            exactly where it is.
+          </p>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            {upgrade.options.map((id) => {
+              const offer = offerFor(plan.tier as PlanId, id)
+              return (
+                <div key={id} className="rounded-lg border border-border p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="font-medium">{offer.name}</h3>
+                    <span className="text-sm text-muted-foreground">
+                      {formatPrice(offer.priceInPence)}/{offer.interval}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {offer.teacherSeatLimit} teachers ·{" "}
+                    {offer.studentSeatLimit?.toLocaleString("en-GB")} students
+                  </p>
+                  {offer.extraTeacherSeats !== null &&
+                    offer.extraStudentSeats !== null && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        +{offer.extraTeacherSeats} teacher seats, +
+                        {offer.extraStudentSeats.toLocaleString("en-GB")} student seats
+                      </p>
+                    )}
+                  <Link
+                    href={`/billing/upgrade?plan=${id}`}
+                    className={buttonVariants({
+                      variant: "outline",
+                      className: "mt-4 w-full",
+                    })}
+                  >
+                    Upgrade to {offer.name}
+                  </Link>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}
