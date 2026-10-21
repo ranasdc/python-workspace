@@ -1,12 +1,25 @@
 import { Sparkles, Tag } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { PLANS, SALE, discountPercent } from "@/lib/plans"
+import { SALE, discountPercent, plansOnSale } from "@/lib/plans"
 
 export function SaleBanner({ className }: { className?: string }) {
   if (!SALE.active) return null
-  const maxDiscount = Math.max(...Object.values(PLANS).map(discountPercent))
+
+  // Named rather than implied. The sale no longer covers every plan — the
+  // school tiers are sold at their plain prices — so saying "every plan" would
+  // promise a discount that three of the cards below cannot honour. The list
+  // comes from the catalogue, so a plan joining or leaving the sale changes this
+  // sentence without anyone having to remember to edit it.
+  const onSale = plansOnSale()
+  if (onSale.length === 0) return null
+
+  const maxDiscount = Math.max(...onSale.map(discountPercent))
   if (maxDiscount <= 0) return null
+
+  const names = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" }).format(
+    onSale.map((plan) => plan.name),
+  )
 
   return (
     <aside
@@ -27,7 +40,7 @@ export function SaleBanner({ className }: { className?: string }) {
             {SALE.name}
           </span>
           <p className="text-lg font-semibold text-balance">
-            Save up to {maxDiscount}% on every plan
+            Save up to {maxDiscount}% on {names}
           </p>
         </div>
         {/* Carries the price lock above the fold; the full promise, with the

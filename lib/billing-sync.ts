@@ -110,6 +110,7 @@ export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
         schoolId,
         tier: planId,
         status: sub.status,
+        interval: readInterval(sub),
         teacherSeatLimit: plan.teacherSeatLimit ?? null,
         studentSeatLimit: plan.studentSeatLimit ?? null,
         stripeCustomerId: customerId ?? null,
@@ -123,6 +124,7 @@ export async function syncSubscriptionFromStripe(sub: Stripe.Subscription) {
         set: {
           tier: planId,
           status: sub.status,
+          interval: readInterval(sub),
           teacherSeatLimit: plan.teacherSeatLimit ?? null,
           studentSeatLimit: plan.studentSeatLimit ?? null,
           stripeCustomerId: customerId ?? null,

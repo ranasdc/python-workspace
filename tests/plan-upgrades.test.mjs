@@ -204,12 +204,42 @@ describe("offerFor", () => {
   it("quotes the configured price and interval, not an invented one", () => {
     const offer = offerFor("school_small", "school_medium")
     assert.equal(offer.priceInPence, PLANS.school_medium.priceInPence)
-    assert.equal(offer.originalPriceInPence, PLANS.school_medium.originalPriceInPence)
     assert.equal(offer.interval, PLANS.school_medium.interval)
     assert.equal(offer.name, PLANS.school_medium.name)
   })
 
-  it("resolves a getter-backed price to a plain number for the client", () => {
+  it("quotes no list price for a tier that has none", () => {
+    // The school tiers are sold at their plain prices, so there is nothing for
+    // an upgrade screen to strike through. Null rather than a copy of the
+    // current price, so a renderer cannot mistake it for a real discount.
+    const offer = offerFor("school_small", "school_medium")
+    assert.equal(offer.originalPriceInPence, null)
+  })
+
+  it("prices an upgrade on the interval the buyer is already billed on", () => {
+    // A monthly school must never be quoted — or charged — the annual figure
+    // just because it moved up a tier.
+    const monthly = offerFor("school_small", "school_medium", "month")
+    assert.equal(monthly.interval, "month")
+    assert.equal(monthly.priceInPence, PLANS.school_medium.prices.month)
+
+    const yearly = offerFor("school_small", "school_medium", "year")
+    assert.equal(yearly.interval, "year")
+    assert.equal(yearly.priceInPence, PLANS.school_medium.prices.year)
+  })
+
+  it("falls back to the tier default when the buyer has no interval yet", () => {
+    // A row synced before school plans could be bought monthly has a null
+    // interval, and an individual teacher buying their first school plan has
+    // none at all.
+    for (const interval of [null, undefined]) {
+      const offer = offerFor("school_small", "school_medium", interval)
+      assert.equal(offer.interval, PLANS.school_medium.interval)
+      assert.equal(offer.priceInPence, PLANS.school_medium.priceInPence)
+    }
+  })
+
+  it("carries a plain price value, not a live getter, for the client", () => {
     const offer = offerFor("school_small", "school_medium")
     assert.equal(typeof offer.priceInPence, "number")
     assert.equal(
@@ -221,8 +251,8 @@ describe("offerFor", () => {
 
   it("reports the seats gained when both plans have allowances", () => {
     const offer = offerFor("school_small", "school_medium")
-    assert.equal(offer.teacherSeatLimit, 9)
-    assert.equal(offer.studentSeatLimit, 900)
+    assert.equal(offer.teacherSeatLimit, 8)
+    assert.equal(offer.studentSeatLimit, 1100)
     assert.equal(offer.extraTeacherSeats, 4)
     assert.equal(offer.extraStudentSeats, 400)
   })
@@ -231,8 +261,8 @@ describe("offerFor", () => {
     const offer = offerFor("teacher_pro", "school_small")
     assert.equal(offer.extraTeacherSeats, null)
     assert.equal(offer.extraStudentSeats, null)
-    assert.equal(offer.teacherSeatLimit, 5, "the absolute allowance is still quoted")
-    assert.equal(offer.studentSeatLimit, 500)
+    assert.equal(offer.teacherSeatLimit, 4, "the absolute allowance is still quoted")
+    assert.equal(offer.studentSeatLimit, 700)
   })
 
   it("never reports a negative seat change on a supported path", () => {

@@ -4,7 +4,7 @@ import { headers } from "next/headers"
 import type Stripe from "stripe"
 
 import { stripe } from "@/lib/stripe"
-import { CURRENCY, type Plan } from "@/lib/plans"
+import { CURRENCY, type Plan, type PlanPurchase } from "@/lib/plans"
 
 // How MyCodePad asks Stripe for money, in one place.
 //
@@ -30,8 +30,11 @@ type CheckoutSessionParams = Stripe.Checkout.SessionCreateParams & {
 }
 
 export type SubscriptionCheckoutRequest = {
-  /** Read from the server-side catalog. The client only ever names a plan. */
-  plan: Plan
+  /**
+   * Resolved from the server-side catalog by `resolvePurchase`. The client only
+   * ever names a plan and an interval; the amount is never accepted from it.
+   */
+  purchase: PlanPurchase
   customerEmail: string
   clientReferenceId: string
   /** Mirrored onto the subscription so webhooks are self-describing. */
@@ -45,7 +48,8 @@ export type SubscriptionCheckoutRequest = {
 export async function createSubscriptionCheckout(
   request: SubscriptionCheckoutRequest,
 ): Promise<{ url: string }> {
-  const { plan, metadata } = request
+  const { purchase, metadata } = request
+  const { plan, interval, priceInPence } = purchase
 
   const params: CheckoutSessionParams = {
     mode: "subscription",
@@ -56,8 +60,8 @@ export async function createSubscriptionCheckout(
         price_data: {
           currency: CURRENCY,
           product_data: { name: plan.name, description: plan.blurb },
-          unit_amount: plan.priceInPence,
-          recurring: { interval: plan.interval },
+          unit_amount: priceInPence,
+          recurring: { interval },
         },
         quantity: 1,
       },
@@ -119,14 +123,14 @@ async function ensurePlanProduct(plan: Plan): Promise<string> {
  * charge yesterday's amount. Stripe treats unused prices as inert, so creating
  * one per tier change costs nothing.
  */
-export async function createPlanPrice(plan: Plan): Promise<string> {
-  const product = await ensurePlanProduct(plan)
+export async function createPlanPrice(purchase: PlanPurchase): Promise<string> {
+  const product = await ensurePlanProduct(purchase.plan)
 
   const price = await stripe.prices.create({
     currency: CURRENCY,
     product,
-    unit_amount: plan.priceInPence,
-    recurring: { interval: plan.interval },
+    unit_amount: purchase.priceInPence,
+    recurring: { interval: purchase.interval },
   })
 
   return price.id

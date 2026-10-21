@@ -8,15 +8,19 @@ import { toast } from "sonner"
 
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CheckoutButton } from "@/components/checkout-button"
 import { InviteCodes } from "@/components/school/invite-codes"
 import { removeSchoolMember, type getSchoolOverview } from "@/app/actions/schools"
 import { openBillingPortal } from "@/app/actions/billing"
-import { PLANS, SCHOOL_PLAN_IDS, formatPrice, type PlanId } from "@/lib/plans"
+import {
+  PLANS,
+  SCHOOL_PLAN_IDS,
+  formatPrice,
+  type BillingInterval,
+  type PlanId,
+} from "@/lib/plans"
 import { describeSchoolPlan } from "@/lib/school-billing"
 import { describeUpgrades, offerFor } from "@/lib/plan-upgrades"
-import { PriceTag } from "@/components/price-tag"
-import { SaleBanner } from "@/components/sale-banner"
+import { SchoolPlanCard } from "@/components/school-plan-card"
 
 type Overview = NonNullable<Awaited<ReturnType<typeof getSchoolOverview>>>
 
@@ -29,7 +33,14 @@ function formatDate(value: Date | string | null) {
   })
 }
 
-export function SchoolDashboard({ overview }: { overview: Overview }) {
+export function SchoolDashboard({
+  overview,
+  preselectedInterval,
+}: {
+  overview: Overview
+  /** The interval chosen on the pricing page, if the reader came from there. */
+  preselectedInterval?: BillingInterval
+}) {
   const { school, plan, seats, members, codes, isAdmin, entitlement } = overview
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
@@ -103,31 +114,25 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
               : "Your school administrator needs to activate a plan before members get Pro access."}
           </p>
 
-          {isAdmin && <SaleBanner className="mt-5" />}
-
+          {/* No sale banner here. The launch sale covers the individual Pro
+              plans, not the school tiers, so on a screen whose only purchase is
+              a school tier it advertised a discount none of these three cards
+              can give. It still runs on /pricing, beside the plans it applies
+              to. */}
           {isAdmin && (
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              {SCHOOL_PLAN_IDS.map((id) => {
-                const p = PLANS[id]
-                return (
-                  <div key={id} className="rounded-lg border border-border p-4">
-                    <h3 className="font-medium">{p.name}</h3>
-                    <PriceTag plan={p} size="md" className="mt-2" />
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {p.teacherSeatLimit} teachers ·{" "}
-                      {p.studentSeatLimit?.toLocaleString("en-GB")} students
-                    </p>
-                    <CheckoutButton
-                      planId={id}
-                      schoolId={school.id}
-                      size="default"
-                      className="mt-4 w-full"
-                    >
-                      Choose
-                    </CheckoutButton>
-                  </div>
-                )
-              })}
+              {SCHOOL_PLAN_IDS.map((id) => (
+                <SchoolPlanCard
+                  key={id}
+                  plan={PLANS[id]}
+                  action="checkout"
+                  schoolId={school.id}
+                  variant="compact"
+                  // Carried from the pricing page, so an administrator who chose
+                  // Monthly there does not have to choose it again here.
+                  initialInterval={preselectedInterval}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -203,7 +208,13 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             {upgrade.options.map((id) => {
-              const offer = offerFor(plan.tier as PlanId, id)
+              // Priced on the interval this school is already billed on, so a
+              // monthly school is not shown an annual figure it will never pay.
+              const offer = offerFor(
+                plan.tier as PlanId,
+                id,
+                plan.interval as BillingInterval | null,
+              )
               return (
                 <div key={id} className="rounded-lg border border-border p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">

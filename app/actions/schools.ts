@@ -390,6 +390,7 @@ export async function getSchoolOverview() {
         .select({
           tier: schoolSubscriptions.tier,
           status: schoolSubscriptions.status,
+          interval: schoolSubscriptions.interval,
           teacherSeatLimit: schoolSubscriptions.teacherSeatLimit,
           studentSeatLimit: schoolSubscriptions.studentSeatLimit,
           currentPeriodEnd: schoolSubscriptions.currentPeriodEnd,
@@ -422,6 +423,9 @@ export async function getSchoolOverview() {
     ? {
         tier: stored.tier,
         status: stored.status,
+        // What this school actually renews on, so the upgrade tiles can quote
+        // the amount it would really be charged rather than the tier default.
+        interval: stored.interval,
         teacherSeatLimit: stored.teacherSeatLimit,
         studentSeatLimit: stored.studentSeatLimit,
         currentPeriodEnd: stored.currentPeriodEnd,

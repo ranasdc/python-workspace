@@ -8,8 +8,9 @@ import { JoinClassDialog } from "@/components/join-class-dialog"
 import { getSessionUser } from "@/lib/session"
 import { getEntitlement } from "@/lib/entitlements"
 import { marketingMetadata } from "@/lib/seo/marketing"
-import { PLANS, SCHOOL_PLAN_IDS, type Plan } from "@/lib/plans"
+import { PLANS, SCHOOL_PLAN_IDS, priceFor, type Plan } from "@/lib/plans"
 import { PriceTag } from "@/components/price-tag"
+import { SchoolPlanCard } from "@/components/school-plan-card"
 import { SaleBanner } from "@/components/sale-banner"
 import { PriceLockPromise } from "@/components/price-lock-promise"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -162,6 +163,11 @@ export default async function PricingPage() {
         <SchoolsTeaserCard />
       </section>
 
+      {/* Sits with the plans it actually covers. The school tiers below are not
+          sale priced, so a promise about holding a sale price would be talking
+          about cards that are nowhere near it. */}
+      {!covered && <PriceLockPromise className="mt-10" />}
+
       <section className="mt-16 scroll-mt-8" id="school-plans-section" aria-labelledby="school-plans">
         <div className="flex flex-col items-center text-center">
           <h2 id="school-plans" className="text-2xl font-semibold tracking-tight">
@@ -173,16 +179,22 @@ export default async function PricingPage() {
           </p>
         </div>
 
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          Pay monthly or yearly — each plan below prices both ways, so you can see the
+          difference before you choose.
+        </p>
+
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {SCHOOL_PLAN_IDS.map((id) => (
-            <SchoolPlanCard key={id} plan={PLANS[id]} signedIn={Boolean(sessionUser)} />
+            <SchoolPlanCard
+              key={id}
+              plan={PLANS[id]}
+              action="setup"
+              signedIn={Boolean(sessionUser)}
+            />
           ))}
         </div>
       </section>
-
-      {/* Closing reassurance, placed after every card it applies to and hidden
-          from viewers who have nothing to buy — same audience as the banner. */}
-      {!covered && <PriceLockPromise className="mt-16" />}
     </main>
   )
 }
@@ -247,8 +259,10 @@ function SchoolsTeaserCard() {
   const cheapest = schoolPlans.reduce((a, b) => (a.priceInPence <= b.priceInPence ? a : b))
   const teacherSeats = schoolPlans.map((p) => p.teacherSeatLimit ?? 0)
   const studentSeats = schoolPlans.map((p) => p.studentSeatLimit ?? 0)
+  // Both sides annualised, so the comparison is a year against a year.
   const teacherProYearly = PLANS.teacher_pro.priceInPence * 12
-  const breakEvenTeachers = Math.ceil(cheapest.priceInPence / teacherProYearly)
+  const cheapestYearly = priceFor(cheapest, "year") ?? cheapest.priceInPence
+  const breakEvenTeachers = Math.ceil(cheapestYearly / teacherProYearly)
 
   return (
     <div className="flex flex-col rounded-lg bg-foreground p-6 text-background ring-primary ring-offset-2 ring-offset-background transition-shadow duration-150 hover:ring-2 md:col-span-2 lg:col-span-1">
@@ -262,7 +276,7 @@ function SchoolsTeaserCard() {
       <p className="mt-1 text-sm opacity-75 text-pretty">
         One subscription. Every teacher and student gets Pro.
       </p>
-      <PriceTag plan={cheapest} prefix="from" inverted className="mt-4" />
+      <PriceTag plan={cheapest} prefix="from" interval="month" inverted className="mt-4" />
 
       <div className="mt-6">
         <a
@@ -272,10 +286,23 @@ function SchoolsTeaserCard() {
           Compare school plans
           <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
         </a>
+        {/* Which sentence is true depends on the prices, so the component works
+            out which one it is entitled to say. At one it has to drop the
+            "N or more teachers?" framing, which would otherwise read as
+            "buying for 1 or more teachers?" and undersell a stronger fact. */}
         <p className="mt-3 rounded-md bg-background/10 px-3 py-3 text-center text-sm text-pretty">
-          Buying for {breakEvenTeachers} or more teachers? {cheapest.name} covers{" "}
-          {cheapest.teacherSeatLimit} teachers for less than {breakEvenTeachers} Teacher Pro
-          subscriptions.
+          {breakEvenTeachers <= 1 ? (
+            <>
+              A year of {cheapest.name} costs less than one Teacher Pro subscription — and
+              covers {cheapest.teacherSeatLimit} teachers instead of one.
+            </>
+          ) : (
+            <>
+              Buying for {breakEvenTeachers} or more teachers? {cheapest.name} covers{" "}
+              {cheapest.teacherSeatLimit} teachers for less than {breakEvenTeachers} Teacher
+              Pro subscriptions.
+            </>
+          )}
         </p>
       </div>
 
@@ -296,32 +323,4 @@ function SchoolsTeaserCard() {
   )
 }
 
-function SchoolPlanCard({ plan, signedIn }: { plan: Plan; signedIn: boolean }) {
-  return (
-    <div className={`flex flex-col rounded-lg border border-border bg-card p-6 ${cardHover}`}>
-      <h3 className="text-lg font-semibold">{plan.name}</h3>
-      <p className="mt-1 text-sm text-muted-foreground text-pretty">{plan.blurb}</p>
-      <PriceTag plan={plan} size="md" className="mt-4" />
 
-      <Link
-        href={signedIn ? "/school" : "/sign-up?next=/school"}
-        className={buttonVariants({
-          size: "lg",
-          variant: "outline",
-          className: "mt-6 w-full",
-        })}
-      >
-        Set up your school
-      </Link>
-
-      <ul className="mt-6 space-y-3">
-        {plan.features.map((feature) => (
-          <li key={feature} className="flex items-start gap-3">
-            <Check className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" aria-hidden="true" />
-            <span className="text-sm">{feature}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}

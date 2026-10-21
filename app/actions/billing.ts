@@ -11,16 +11,21 @@ import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
 import { settleIndividualPlanAfterUpgrade } from "@/lib/plan-transition"
 import { createSubscriptionCheckout, getRequestOrigin } from "@/lib/checkout"
 import { getEntitlement, isSchoolAdminRole, requireSchoolAdmin } from "@/lib/entitlements"
-import { PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
+import { type PlanId, isSchoolPlan, resolvePurchase } from "@/lib/plans"
 
 /**
  * Creates a Checkout Session. The price is always read from the server-side
  * catalog — the client only ever names a plan, never a price.
  */
-export async function startCheckout(planId: PlanId, schoolId?: number) {
+export async function startCheckout(
+  planId: PlanId,
+  options?: { interval?: string | null; schoolId?: number },
+) {
   const me = await requireUser()
-  const plan = PLANS[planId]
-  if (!plan) throw new Error("Unknown plan")
+  // Resolves the plan and validates the requested interval against what the
+  // catalogue actually sells, before anything is charged.
+  const purchase = resolvePurchase(planId, options?.interval)
+  const schoolId = options?.schoolId
 
   const entitlement = await getEntitlement(me.id)
 
@@ -41,15 +46,18 @@ export async function startCheckout(planId: PlanId, schoolId?: number) {
   if (resolvedSchoolId) metadata.schoolId = String(resolvedSchoolId)
 
   return createSubscriptionCheckout({
-    plan,
+    purchase,
     customerEmail: me.email,
     clientReferenceId: me.id,
     metadata,
     successUrl: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${origin}/pricing`,
-    idempotencyKey: `checkout:${me.id}:${planId}:${resolvedSchoolId ?? "none"}:${Math.floor(
-      Date.now() / 60000,
-    )}`,
+    // Two clicks a minute apart on the same plan and interval are one purchase;
+    // a click on Monthly followed by one on Yearly are not, so the interval has
+    // to be part of the key or the second would return the first's session.
+    idempotencyKey: `checkout:${me.id}:${planId}:${purchase.interval}:${
+      resolvedSchoolId ?? "none"
+    }:${Math.floor(Date.now() / 60000)}`,
   })
 }
 

@@ -6,10 +6,12 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { startCheckout } from "@/app/actions/billing"
-import type { PlanId } from "@/lib/plans"
+import type { BillingInterval, PlanId } from "@/lib/plans"
 
 type Props = {
   planId: PlanId
+  /** Which billing interval to buy. Defaults to the one the plan is sold on. */
+  interval?: BillingInterval
   schoolId?: number
   children: React.ReactNode
   className?: string
@@ -19,6 +21,7 @@ type Props = {
 
 export function CheckoutButton({
   planId,
+  interval,
   schoolId,
   children,
   className,
@@ -30,7 +33,7 @@ export function CheckoutButton({
   async function handleClick() {
     setLoading(true)
     try {
-      const { url } = await startCheckout(planId, schoolId)
+      const { url } = await startCheckout(planId, { interval, schoolId })
       // Stripe refuses to render inside an iframe, so break out when embedded.
       if (window.self !== window.top) {
         window.open(url, "_blank", "noopener,noreferrer")

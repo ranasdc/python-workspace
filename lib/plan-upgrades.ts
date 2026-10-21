@@ -3,6 +3,7 @@ import {
   type BillingInterval,
   type PlanId,
   isSchoolPlan,
+  priceFor,
 } from "@/lib/plans"
 
 // The subscription ladder and the rules for climbing it.
@@ -223,9 +224,9 @@ export function decideSettlement(inputs: SettlementInputs): SettlementVerdict {
  * One upgrade, priced and sized.
  *
  * Returned as plain data rather than as a `Plan` so it can cross to a client
- * component: `priceInPence` is a getter on at least one tier, and spreading it
- * here resolves it once, on the server, at the moment of asking. The price
- * quoted on screen is therefore the same number the server will charge.
+ * component, and priced on one explicit interval, resolved here on the server
+ * at the moment of asking. The price quoted on screen is therefore the same
+ * number the server will charge.
  */
 export type UpgradeOffer = {
   planId: LadderPlanId
@@ -233,7 +234,8 @@ export type UpgradeOffer = {
   blurb: string
   features: string[]
   priceInPence: number
-  originalPriceInPence: number
+  /** Null when the tier has no verified list price, i.e. is not sale priced. */
+  originalPriceInPence: number | null
   interval: BillingInterval
   teacherSeatLimit: number | null
   studentSeatLimit: number | null
@@ -254,7 +256,19 @@ function seatLimits(planId: PlanId) {
   }
 }
 
-export function offerFor(from: PlanId | null | undefined, to: LadderPlanId): UpgradeOffer {
+/**
+ * @param interval The interval the buyer is already on, when they are on one.
+ *   An upgrade must not move a monthly subscriber onto an annual bill, so a
+ *   school paying monthly has to be quoted the monthly amount for the tier
+ *   above — quoting the annual price would be showing them a figure the
+ *   upgrade is never going to charge. Falls back to the tier's own default for
+ *   a buyer who has no interval yet.
+ */
+export function offerFor(
+  from: PlanId | null | undefined,
+  to: LadderPlanId,
+  interval?: BillingInterval | null,
+): UpgradeOffer {
   const plan = PLANS[to]
   const target = seatLimits(to)
   const current = from ? seatLimits(from) : { teacher: null, student: null }
@@ -262,14 +276,17 @@ export function offerFor(from: PlanId | null | undefined, to: LadderPlanId): Upg
   const delta = (next: number | null, now: number | null) =>
     next !== null && now !== null ? next - now : null
 
+  const quoted = interval && priceFor(plan, interval) !== null ? interval : plan.interval
+
   return {
     planId: to,
     name: plan.name,
     blurb: plan.blurb,
     features: plan.features,
-    priceInPence: plan.priceInPence,
-    originalPriceInPence: plan.originalPriceInPence,
-    interval: plan.interval,
+    priceInPence: priceFor(plan, quoted) ?? plan.priceInPence,
+    originalPriceInPence:
+      quoted === plan.interval ? (plan.originalPriceInPence ?? null) : null,
+    interval: quoted,
     teacherSeatLimit: target.teacher,
     studentSeatLimit: target.student,
     extraTeacherSeats: delta(target.teacher, current.teacher),
@@ -277,6 +294,11 @@ export function offerFor(from: PlanId | null | undefined, to: LadderPlanId): Upg
   }
 }
 
-export function offersFor(situation: UpgradeSituation): UpgradeOffer[] {
-  return describeUpgrades(situation).options.map((id) => offerFor(situation.currentPlan, id))
+export function offersFor(
+  situation: UpgradeSituation,
+  interval?: BillingInterval | null,
+): UpgradeOffer[] {
+  return describeUpgrades(situation).options.map((id) =>
+    offerFor(situation.currentPlan, id, interval),
+  )
 }

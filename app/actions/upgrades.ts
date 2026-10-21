@@ -14,7 +14,13 @@ import {
   syncSubscriptionFromStripe,
 } from "@/lib/billing-sync"
 import { createPlanPrice, createSubscriptionCheckout, getRequestOrigin } from "@/lib/checkout"
-import { PLANS, formatPrice, type BillingInterval, type PlanId } from "@/lib/plans"
+import {
+  PLANS,
+  formatPrice,
+  resolvePurchase,
+  type BillingInterval,
+  type PlanId,
+} from "@/lib/plans"
 import {
   canUpgradeTo,
   describeUpgrades,
@@ -227,7 +233,11 @@ async function resolveSchoolForUpgrade(userId: string, requestedName: string | u
  * nothing broken behind. The existing individual subscription is untouched
  * here: it is stopped only once Stripe confirms the school plan is paid for.
  */
-export async function startSchoolUpgrade(planId: PlanId, schoolName?: string) {
+export async function startSchoolUpgrade(
+  planId: PlanId,
+  schoolName?: string,
+  interval?: string | null,
+) {
   const me = await requireUser()
   const position = await resolvePosition(me.id)
   const decision = describeUpgrades(position.situation)
@@ -246,7 +256,9 @@ export async function startSchoolUpgrade(planId: PlanId, schoolName?: string) {
     throw new Error("That is not an available upgrade for this account")
   }
 
-  const plan = PLANS[planId]
+  // Validated here rather than trusted: an interval the tier is not sold on
+  // throws instead of quietly falling back to a different amount.
+  const purchase = resolvePurchase(planId, interval)
   const schoolId = await resolveSchoolForUpgrade(me.id, schoolName)
   const origin = await getRequestOrigin()
 
@@ -264,7 +276,7 @@ export async function startSchoolUpgrade(planId: PlanId, schoolName?: string) {
   }
 
   const { url } = await createSubscriptionCheckout({
-    plan,
+    purchase,
     customerEmail: me.email,
     clientReferenceId: me.id,
     metadata,
@@ -272,7 +284,12 @@ export async function startSchoolUpgrade(planId: PlanId, schoolName?: string) {
     // Cancelling returns to the comparison rather than dropping the user on the
     // public pricing page, which would have lost their place entirely.
     cancelUrl: `${origin}/billing/upgrade?cancelled=1`,
-    idempotencyKey: `upgrade:${me.id}:${planId}:${schoolId}:${Math.floor(Date.now() / 60000)}`,
+    // The interval is part of the key: changing it is a different purchase, and
+    // collapsing the two would hand back the session for the amount the buyer
+    // just moved away from.
+    idempotencyKey: `upgrade:${me.id}:${planId}:${purchase.interval}:${schoolId}:${Math.floor(
+      Date.now() / 60000,
+    )}`,
   })
 
   revalidatePath("/school")
@@ -348,12 +365,27 @@ export async function changeSchoolTier(
     )
   }
 
-  const plan = PLANS[planId]
   const current = await stripe.subscriptions.retrieve(row.stripeSubscriptionId)
   const item = current.items?.data?.[0]
   if (!item) throw new Error("This subscription has no billable item to upgrade")
 
-  const price = await createPlanPrice(plan)
+  // The interval comes from Stripe's own copy of what this school renews on,
+  // not from the catalogue default and not from our stored column. A tier
+  // change must never also move someone between monthly and yearly: doing so
+  // would re-date their renewal and re-price their plan by a factor of ten
+  // without them ever asking for it. Taking it from the live subscription also
+  // means a row synced before the interval column existed is still handled
+  // correctly.
+  const currentInterval = item.price?.recurring?.interval
+  if (currentInterval !== "month" && currentInterval !== "year") {
+    throw new Error(
+      "This subscription does not renew on a monthly or yearly cycle, so its tier cannot be changed here.",
+    )
+  }
+
+  const purchase = resolvePurchase(planId, currentInterval)
+  const plan = purchase.plan
+  const price = await createPlanPrice(purchase)
 
   const updated = await stripe.subscriptions.update(
     row.stripeSubscriptionId,
@@ -384,6 +416,6 @@ export async function changeSchoolTier(
     ok: readStripeSubscriptionState(updated).live,
     status: updated.status,
     alreadyApplied: false,
-    planName: `${plan.name} (${formatPrice(plan.priceInPence)} per ${plan.interval})`,
+    planName: `${plan.name} (${formatPrice(purchase.priceInPence)} per ${purchase.interval})`,
   }
 }

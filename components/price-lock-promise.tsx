@@ -1,7 +1,7 @@
 import { CalendarCheck, Lock, RefreshCcw } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { PLANS, SALE, discountPercent } from "@/lib/plans"
+import { SALE, discountPercent, plansOnSale } from "@/lib/plans"
 
 /**
  * The sale's price-lock promise: subscribe during the sale and renewals stay at
@@ -11,13 +11,23 @@ import { PLANS, SALE, discountPercent } from "@/lib/plans"
  * sale ends there is no sale price left to lock, so promising one would be
  * untrue — which is why this component decides for itself rather than trusting
  * a caller to remember to remove it.
+ *
+ * It also names the plans it covers. The promise is about holding a sale price,
+ * so it can only speak for plans that have one: a plan sold at its plain price
+ * has no sale price to keep, and quietly letting this sit under it would read
+ * as a commitment nobody made.
  */
 export function PriceLockPromise({ className }: { className?: string }) {
   if (!SALE.active) return null
-  const maxDiscount = Math.max(...Object.values(PLANS).map(discountPercent))
-  if (maxDiscount <= 0) return null
+
+  const onSale = plansOnSale()
+  if (onSale.length === 0) return null
+  if (Math.max(...onSale.map(discountPercent)) <= 0) return null
 
   const years = SALE.priceLockYears
+  const names = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" }).format(
+    onSale.map((plan) => plan.name),
+  )
 
   const promises = [
     {
@@ -58,8 +68,7 @@ export function PriceLockPromise({ className }: { className?: string }) {
         </h2>
         <p className="mt-2 max-w-2xl text-pretty text-muted-foreground">
           The sale price is not an introductory rate that quietly jumps at renewal. Subscribe
-          while the sale is on and it stays your price for {years} full years — on every plan
-          above.
+          to {names} while the sale is on and it stays your price for {years} full years.
         </p>
       </div>
 

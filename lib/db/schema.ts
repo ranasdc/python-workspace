@@ -483,6 +483,9 @@ export const schoolSubscriptions = pgTable("school_subscription", {
     .references(() => schools.id, { onDelete: "cascade" }),
   tier: text("tier").notNull(), // school_small | school_medium | school_large
   status: text("status").notNull().default("inactive"),
+  // month | year. Null on rows last synced before school plans could be bought
+  // monthly; readers treat null as the tier's default interval.
+  interval: text("interval"),
   teacherSeatLimit: integer("teacherSeatLimit"),
   studentSeatLimit: integer("studentSeatLimit"),
   stripeCustomerId: text("stripeCustomerId"),
