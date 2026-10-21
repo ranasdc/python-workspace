@@ -181,18 +181,21 @@ function NavLink({
 }
 
 /**
- * Breaks a nav label after its first word and centres the remainder beneath it.
+ * Breaks a nav label after its first word and centres the remainder beneath it,
+ * then rejoins both words on one line from 1536px up.
  *
  * Six section links, the logo tagline and both account buttons have to share
  * one row from 1280px up — the width Windows reports on a 1920px laptop panel
- * at 150% display scaling. Stacking each label roughly halves the width the
- * nav asks for, which keeps the buttons on screen instead of pushing them past
- * the right edge.
+ * at 150% display scaling. Stacking roughly halves the width the nav asks for,
+ * which keeps the account buttons on screen in that range instead of pushing
+ * them past the right edge.
  */
 function StackedLabel({ children, className = "" }: { children: string; className?: string }) {
   const [first, ...rest] = children.split(" ")
   return (
-    <span className={`inline-flex flex-col items-center leading-[1.15] ${className}`}>
+    <span
+      className={`inline-flex flex-col items-center leading-[1.15] 2xl:flex-row 2xl:gap-[0.3em] 2xl:leading-normal ${className}`}
+    >
       <span>{first}</span>
       {rest.length > 0 ? <span>{rest.join(" ")}</span> : null}
     </span>
