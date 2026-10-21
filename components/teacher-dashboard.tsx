@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { TEACHER_PRO_STUDENT_SEATS } from "@/lib/plans"
 import { DeleteClassDialog } from "@/components/delete-class-dialog"
 import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import {
@@ -1168,7 +1169,7 @@ function CreateClassDialog({
 function ClassLimitUpgrade() {
   const perks = [
     "Unlimited classes",
-    "Unlimited students in every class",
+    `Up to ${TEACHER_PRO_STUDENT_SEATS} students across them`,
     "An unlimited resource library",
   ]
   return (

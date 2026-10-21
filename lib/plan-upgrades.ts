@@ -241,8 +241,11 @@ export type UpgradeOffer = {
   studentSeatLimit: number | null
   /**
    * Seats gained over the current plan, or null when the two cannot be
-   * compared — an individual plan has no seat allowance to count up from, so
-   * quoting "+5 teacher seats" would be inventing a baseline of zero.
+   * compared — quoting "+5 teacher seats" against a plan with no teacher
+   * allowance would be inventing a baseline of zero.
+   *
+   * Teacher Pro does carry a pupil allowance, so the student delta is real on
+   * that path and only the teacher delta stays null.
    */
   extraTeacherSeats: number | null
   extraStudentSeats: number | null

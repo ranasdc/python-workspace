@@ -257,12 +257,21 @@ describe("offerFor", () => {
     assert.equal(offer.extraStudentSeats, 400)
   })
 
-  it("reports no delta from an individual plan, which has no seat allowance", () => {
+  it("reports no teacher delta from an individual plan, which covers one teacher", () => {
     const offer = offerFor("teacher_pro", "school_small")
     assert.equal(offer.extraTeacherSeats, null)
-    assert.equal(offer.extraStudentSeats, null)
     assert.equal(offer.teacherSeatLimit, 4, "the absolute allowance is still quoted")
     assert.equal(offer.studentSeatLimit, 700)
+  })
+
+  it("counts the pupil places a Teacher Pro actually gains", () => {
+    // Teacher Pro covers a fixed number of pupils, so unlike the teacher seats
+    // there is a real baseline here and the gain can be stated honestly.
+    const offer = offerFor("teacher_pro", "school_small")
+    assert.equal(
+      offer.extraStudentSeats,
+      PLANS.school_small.studentSeatLimit - PLANS.teacher_pro.studentSeatLimit,
+    )
   })
 
   it("never reports a negative seat change on a supported path", () => {

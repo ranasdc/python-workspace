@@ -40,8 +40,16 @@ export type Plan = {
   originalPriceInPence?: number
   blurb: string
   features: string[]
-  /** Only meaningful for school tiers. */
+  /** Teacher seats a school tier buys. An individual plan covers its one buyer. */
   teacherSeatLimit?: number
+  /**
+   * How many distinct pupils the plan covers.
+   *
+   * Set for the school tiers and for Teacher Pro, whose pupils are counted
+   * across all of that teacher's classes rather than per class. Absent means
+   * genuinely uncapped, so it must stay absent rather than be written as 0 —
+   * every reader treats a missing value as "no ceiling".
+   */
   studentSeatLimit?: number
 }
 
@@ -108,6 +116,19 @@ function definePlan(plan: Omit<Plan, "priceInPence">): Plan {
   return { ...plan, priceInPence }
 }
 
+/**
+ * Pupils covered by an individually bought Teacher Pro.
+ *
+ * Three things have to agree on this number — the feature list below, the
+ * allowance enforced in lib/entitlements.ts, and the seat figure quoted on the
+ * upgrade page — so it is written once here.
+ *
+ * A teacher who gets Teacher Pro through their school is NOT capped by this.
+ * Their pupils occupy the school's own student seats, which are sized per tier
+ * and already enforced when a pupil joins the school.
+ */
+export const TEACHER_PRO_STUDENT_SEATS = 100
+
 const SCHOOL_FEATURES = [
   "Every student and teacher gets Pro",
   "School invite codes",
@@ -127,7 +148,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "student_pro",
     name: "Student Pro",
     audience: "student",
-    prices: { month: 399 },
+    prices: { month: 199 },
     interval: "month",
     originalPriceInPence: 499,
     blurb: "For individual learners who want the full workspace.",
@@ -143,12 +164,15 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "teacher_pro",
     name: "Teacher Pro",
     audience: "teacher",
-    prices: { month: 1499 },
+    prices: { month: 999 },
     interval: "month",
     originalPriceInPence: 1899,
     blurb: "For individual teachers running their own classes.",
+    // Counted across every class, not per class, so the figure cannot be read
+    // as "100 each" by a teacher who runs several groups.
+    studentSeatLimit: TEACHER_PRO_STUDENT_SEATS,
     features: [
-      "Unlimited classes and students",
+      `Unlimited classes, up to ${TEACHER_PRO_STUDENT_SEATS} students in total`,
       "Every student you teach gets Pro, free",
       "Reusable lesson library",
       "Marking and feedback tools",
