@@ -309,11 +309,25 @@ export function annualSavingFor(plan: Plan) {
   }
 }
 
+/**
+ * Cost per teacher seat on one interval, in pence.
+ *
+ * Takes the interval so a card showing a monthly price can quote a monthly
+ * per-seat figure. Dividing the annual price under a monthly headline would
+ * put two different periods in the same breath and read as a far better deal
+ * than the reader is being offered.
+ *
+ * Null when the plan has no seat allowance or is not sold on that interval.
+ */
+export function costPerTeacher(plan: Plan, interval: BillingInterval): number | null {
+  const price = priceFor(plan, interval)
+  if (price === null || !plan.teacherSeatLimit) return null
+  return price / plan.teacherSeatLimit
+}
+
 /** Annual cost per teacher seat, in pence. Null when the plan has no seat allowance. */
 export function annualCostPerTeacher(plan: Plan): number | null {
-  const yearly = priceFor(plan, "year")
-  if (yearly === null || !plan.teacherSeatLimit) return null
-  return yearly / plan.teacherSeatLimit
+  return costPerTeacher(plan, "year")
 }
 
 /** Annual cost per student seat, in pence. Null when the plan has no seat allowance. */
@@ -336,6 +350,19 @@ export function formatPrice(priceInPence: number) {
 /** Always two decimal places, for per-seat figures that are pennies wide. */
 export function formatPricePrecise(priceInPence: number) {
   return `£${(priceInPence / 100).toFixed(2)}`
+}
+
+/**
+ * A saving percentage, keeping the decimal only when it says something.
+ *
+ * The annual saving works out at 17.0% on one tier and 17.2% on another, so
+ * the decimal has to survive where it distinguishes them — but printing "17.0%"
+ * on its own reads like a rendering fault. Rounding is never applied here: the
+ * value arrives already rounded to one decimal, and rounding it again to a
+ * whole number would overstate a 16.7% saving as 17%.
+ */
+export function formatPercent(percent: number) {
+  return `${percent.toLocaleString("en-GB", { maximumFractionDigits: 1 })}%`
 }
 
 /** "a month" / "a year", for prose. */

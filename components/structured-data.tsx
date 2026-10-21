@@ -1,4 +1,4 @@
-import { PLANS } from "@/lib/plans"
+import { PLANS, intervalsFor, priceFor, type BillingInterval } from "@/lib/plans"
 import { SITE } from "@/lib/site"
 import { marketingRoute } from "@/lib/seo/marketing"
 
@@ -32,6 +32,9 @@ function JsonLd({ data }: { data: unknown }) {
 const ORGANIZATION_ID = `${SITE.url}/#organization`
 const WEBSITE_ID = `${SITE.url}/#website`
 
+/** UN/CEFACT unit codes for a billing period, which is how schema.org states one. */
+const UNIT_CODE: Record<BillingInterval, string> = { month: "MON", year: "ANN" }
+
 function buildStructuredData() {
   const offers = [
     {
@@ -41,14 +44,37 @@ function buildStructuredData() {
       priceCurrency: "GBP",
       url: `${SITE.url}/pricing`,
     },
-    ...Object.values(PLANS).map((plan) => ({
-      "@type": "Offer",
-      name: plan.name,
-      description: plan.blurb,
-      price: (plan.priceInPence / 100).toFixed(2),
-      priceCurrency: "GBP",
-      url: `${SITE.url}/pricing`,
-    })),
+    // One offer per interval a plan is genuinely sold on, each stating its
+    // billing period. A bare `price` is what a one-off purchase looks like, so
+    // quoting the school tiers that way asserted "Small School, £149" with
+    // nothing to say whether that buys a month or a year — and said it once for
+    // a plan now sold both ways. The periods come from the catalogue, so the
+    // markup cannot advertise an interval checkout would refuse.
+    ...Object.values(PLANS).flatMap((plan) =>
+      intervalsFor(plan).map((interval) => {
+        const price = ((priceFor(plan, interval) as number) / 100).toFixed(2)
+
+        return {
+          "@type": "Offer",
+          name:
+            intervalsFor(plan).length > 1
+              ? `${plan.name} (${interval === "year" ? "yearly" : "monthly"})`
+              : plan.name,
+          description: plan.blurb,
+          price,
+          priceCurrency: "GBP",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price,
+            priceCurrency: "GBP",
+            billingDuration: 1,
+            billingIncrement: 1,
+            unitCode: UNIT_CODE[interval],
+          },
+          url: `${SITE.url}/pricing`,
+        }
+      }),
+    ),
   ]
 
   return {

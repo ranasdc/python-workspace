@@ -6,8 +6,9 @@ import { Check } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
-  annualCostPerTeacher,
   annualSavingFor,
+  costPerTeacher,
+  formatPercent,
   formatPrice,
   formatPricePrecise,
   intervalsFor,
@@ -58,7 +59,7 @@ export function SchoolPlanCard({
 
   const priceInPence = priceFor(plan, interval) ?? plan.priceInPence
   const saving = annualSavingFor(plan)
-  const perTeacher = annualCostPerTeacher(plan)
+  const perTeacher = costPerTeacher(plan, interval)
   const compact = variant === "compact"
 
   return (
@@ -71,8 +72,12 @@ export function SchoolPlanCard({
       )}
     >
       <h3 className={cn("font-semibold", compact ? "text-base" : "text-lg")}>{plan.name}</h3>
+      {/* Reserves two lines so a one-line blurb and MAT's two-line one occupy
+          the same height, which keeps the three prices on a shared baseline. */}
       {!compact && (
-        <p className="mt-1 text-sm text-muted-foreground text-pretty">{plan.blurb}</p>
+        <p className="mt-1 min-h-[2.5rem] text-sm text-muted-foreground text-pretty">
+          {plan.blurb}
+        </p>
       )}
 
       <IntervalChoice
@@ -103,7 +108,7 @@ export function SchoolPlanCard({
             <>
               Saves {formatPrice(saving.savingInPence)} a year against{" "}
               {formatPrice(saving.annualisedMonthlyInPence)} in monthly payments — that is{" "}
-              {saving.percent.toFixed(1)}% less.
+                  {formatPercent(saving.percent)} less.
             </>
           ) : (
             <>
@@ -124,9 +129,13 @@ export function SchoolPlanCard({
         <span className="text-muted-foreground">student seats</span>
       </p>
 
-      {interval === "year" && perTeacher !== null && !compact && (
+      {/* Shown on both intervals. Hiding it under a monthly price left one card
+          a line shorter than its neighbours and staggered the buttons across a
+          row meant for comparing them. */}
+      {perTeacher !== null && !compact && (
         <p className="mt-1 text-xs text-muted-foreground">
-          {formatPricePrecise(perTeacher)} per teacher for the year
+          {formatPricePrecise(perTeacher)} per teacher{" "}
+          {interval === "year" ? "for the year" : "a month"}
         </p>
       )}
 
@@ -243,7 +252,7 @@ function IntervalChoice({
                       selected ? "text-primary" : "text-muted-foreground",
                     )}
                   >
-                    Save {saving.percent.toFixed(1)}%
+                    Save {formatPercent(saving.percent)}
                   </span>
                 )}
               </label>

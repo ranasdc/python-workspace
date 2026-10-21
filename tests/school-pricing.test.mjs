@@ -8,7 +8,9 @@ import {
   annualCostPerStudentSeat,
   annualCostPerTeacher,
   annualSavingFor,
+  costPerTeacher,
   discountPercent,
+  formatPercent,
   formatPrice,
   formatPricePrecise,
   intervalsFor,
@@ -112,6 +114,18 @@ describe("school plan catalogue", () => {
           formatPricePrecise(annualCostPerStudentSeat(plan)),
           expected.perStudent,
         )
+      })
+
+      it("quotes the per-seat cost on the interval it is asked about", () => {
+        // The card prints this next to the headline price, so a monthly
+        // headline has to divide the monthly price. Dividing the annual one
+        // would understate a monthly seat by a factor of twelve.
+        assert.equal(costPerTeacher(plan, "year"), expected.yearly / plan.teacherSeatLimit)
+        assert.equal(
+          costPerTeacher(plan, "month"),
+          expected.monthly / plan.teacherSeatLimit,
+        )
+        assert.equal(costPerTeacher(plan, "year"), annualCostPerTeacher(plan))
       })
 
       it("claims no discount, because it has no list price to discount from", () => {
@@ -237,5 +251,24 @@ describe("catalogue invariants", () => {
     assert.equal(formatPrice(99900), "£999")
     assert.equal(formatPrice(119988), "£1,199.88")
     assert.equal(formatPrice(3088), "£30.88")
+  })
+
+  it("drops a saving's trailing zero decimal but keeps a meaningful one", () => {
+    assert.equal(formatPercent(17), "17%")
+    assert.equal(formatPercent(17.2), "17.2%")
+    assert.equal(formatPercent(16.7), "16.7%")
+  })
+
+  it("never rounds a saving up to a figure the prices do not support", () => {
+    // 16.7% must not reach the reader as "17%": the money saved is the same
+    // either way, but the percentage is the part they will check.
+    for (const plan of SCHOOL_PLAN_IDS.map((id) => PLANS[id])) {
+      const saving = annualSavingFor(plan)
+      const exact = (saving.savingInPence / saving.annualisedMonthlyInPence) * 100
+      assert.ok(
+        saving.percent <= Math.ceil(exact * 10) / 10,
+        `${plan.id} quotes ${saving.percent}% against an actual ${exact}%`,
+      )
+    }
   })
 })
