@@ -30,9 +30,11 @@ export function SaleBanner({ className }: { className?: string }) {
             Save up to {maxDiscount}% on every plan
           </p>
         </div>
+        {/* Carries the price lock above the fold; the full promise, with the
+            renewal detail, sits in PriceLockPromise further down the page. */}
         <p className="flex items-center gap-1.5 text-sm opacity-90">
           <Tag className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-          Sale prices are applied automatically at checkout
+          Applied automatically at checkout, then locked in for {SALE.priceLockYears} years
         </p>
       </div>
     </aside>

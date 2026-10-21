@@ -11,6 +11,7 @@ import { marketingMetadata } from "@/lib/seo/marketing"
 import { PLANS, SCHOOL_PLAN_IDS, type Plan } from "@/lib/plans"
 import { PriceTag } from "@/components/price-tag"
 import { SaleBanner } from "@/components/sale-banner"
+import { PriceLockPromise } from "@/components/price-lock-promise"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { CheckoutButton } from "@/components/checkout-button"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
@@ -178,6 +179,10 @@ export default async function PricingPage() {
           ))}
         </div>
       </section>
+
+      {/* Closing reassurance, placed after every card it applies to and hidden
+          from viewers who have nothing to buy — same audience as the banner. */}
+      {!covered && <PriceLockPromise className="mt-16" />}
     </main>
   )
 }

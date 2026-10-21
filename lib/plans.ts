@@ -54,6 +54,17 @@ export const SALE = {
   active: true,
   name: "Launch sale",
   tagline: "Save up to 28% on every plan",
+  /**
+   * How long a subscriber keeps the sale price, in years, counted from the day
+   * they subscribe rather than from a fixed calendar date — so the promise
+   * stays true however long the sale itself runs.
+   *
+   * Lives here rather than in the copy because it is a commercial commitment:
+   * the pricing page quotes this number, and anything that renews a subscriber
+   * must honour it. Changing it changes the promise, so it should only ever be
+   * changed deliberately and for new subscribers.
+   */
+  priceLockYears: 2,
 } as const
 
 /**
