@@ -469,6 +469,24 @@ textarea.pycharm-code::placeholder {
   }
 }
 
+/*
+ * Two-word nav labels. They sit on one line by default and only fold onto two
+ * centred lines while the header carries NAV_STACKED_CLASS, which the header
+ * applies after measuring that the row has run out of room — see the measuring
+ * effect in components/landing-page.tsx.
+ */
+.nav-stack-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.nav-labels-stacked .nav-stack-label {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.15;
+}
+
 /* Emerald shimmer moving right to left. */
 @keyframes emerald-text-shimmer {
   0% {

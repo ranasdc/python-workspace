@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Reveal } from "@/components/reveal"
 import { AiPoweredSection } from "@/components/ai-powered-section"
 import Link from "next/link"
@@ -180,22 +180,33 @@ function NavLink({
   )
 }
 
+/** Marks the nav while its labels are folded onto two lines. */
+const NAV_STACKED_CLASS = "nav-labels-stacked"
+
 /**
- * Breaks a nav label after its first word and centres the remainder beneath it,
- * then rejoins both words on one line from 1536px up.
- *
- * Six section links, the logo tagline and both account buttons have to share
- * one row from 1280px up — the width Windows reports on a 1920px laptop panel
- * at 150% display scaling. Stacking roughly halves the width the nav asks for,
- * which keeps the account buttons on screen in that range instead of pushing
- * them past the right edge.
+ * Empty pixels the header insists on keeping around a one-line nav. The row is
+ * justified apart, so this is shared between the logo-to-nav and nav-to-buttons
+ * gaps — roughly 72px each. Below that the three groups read as one crowded
+ * block, and any extra demand (a wider fallback font, a classic Windows
+ * scrollbar) starts pushing the account buttons off the right edge. A 1920px
+ * panel at 150% display scaling reports 1280 CSS pixels and lands here, which
+ * is the case this guards.
  */
-function StackedLabel({ children, className = "" }: { children: string; className?: string }) {
+const NAV_MIN_SLACK = 144
+
+/** useLayoutEffect in the browser, useEffect on the server — measuring before
+ *  paint without tripping React's server-rendering warning. */
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect
+
+/**
+ * A two-word nav label that can fold after its first word, with the second
+ * word centred underneath. Whether it folds is decided by the header measuring
+ * its own row, not by a viewport breakpoint.
+ */
+function NavLabel({ children, className = "" }: { children: string; className?: string }) {
   const [first, ...rest] = children.split(" ")
   return (
-    <span
-      className={`inline-flex flex-col items-center leading-[1.15] 2xl:flex-row 2xl:gap-[0.3em] 2xl:leading-normal ${className}`}
-    >
+    <span className={`nav-stack-label ${className}`}>
       <span>{first}</span>
       {rest.length > 0 ? <span>{rest.join(" ")}</span> : null}
     </span>
@@ -236,6 +247,12 @@ export function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [progress, setProgress] = useState(0)
   const [activeSection, setActiveSection] = useState<string | null>(null)
+  const [navStacked, setNavStacked] = useState(false)
+
+  const headerRef = useRef<HTMLElement>(null)
+  const logoRef = useRef<HTMLAnchorElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function onScroll() {
@@ -270,6 +287,79 @@ export function LandingPage() {
     }
   }, [])
 
+  /**
+   * Fold the nav labels only when this particular row has genuinely run out of
+   * room. Browser or display zoom shrinks the usable width without changing
+   * anything else, so measuring the row catches it, while a fixed breakpoint
+   * would either fire early on a roomy screen or miss a crowded one.
+   *
+   * The nav is measured with the fold removed every time, so the next decision
+   * is read from the one-line width rather than from the state the last
+   * decision produced — that is what stops it flipping back and forth.
+   */
+  useIsomorphicLayoutEffect(() => {
+    const header = headerRef.current
+    const nav = navRef.current
+    const logo = logoRef.current
+    const actions = actionsRef.current
+    if (!header || !nav || !logo || !actions) return
+
+    const measure = () => {
+      const headerWidth = header.clientWidth
+
+      // Below xl the nav is display:none and the buttons own the row.
+      if (nav.offsetParent === null) {
+        setNavStacked(false)
+        return
+      }
+
+      const folded = nav.classList.contains(NAV_STACKED_CLASS)
+      if (folded) nav.classList.remove(NAV_STACKED_CLASS)
+      const oneLineNavWidth = nav.getBoundingClientRect().width
+      if (folded) nav.classList.add(NAV_STACKED_CLASS)
+
+      const style = getComputedStyle(header)
+      const room = headerWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      const slack =
+        room -
+        logo.getBoundingClientRect().width -
+        actions.getBoundingClientRect().width -
+        oneLineNavWidth
+
+      setNavStacked(slack < NAV_MIN_SLACK)
+    }
+
+    measure()
+
+    // Measuring from the one-line width makes the result independent of the
+    // fold it produces, so re-running after our own change settles rather than
+    // oscillates. Batching into a frame keeps the class swap out of the
+    // observer callback that triggered it.
+    let frame = 0
+    const schedule = () => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        measure()
+      })
+    }
+
+    // The header catches zoom and window resizes; the nav catches anything that
+    // changes what the labels themselves demand.
+    const observer = new ResizeObserver(schedule)
+    observer.observe(header)
+    observer.observe(nav)
+    window.addEventListener("resize", schedule)
+    // Label widths shift when the webfont swaps in, which no resize reports.
+    document.fonts?.ready.then(schedule).catch(() => {})
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      observer.disconnect()
+      window.removeEventListener("resize", schedule)
+    }
+  }, [])
+
   return (
     <main className="flex min-h-svh flex-col scroll-smooth">
       {/* Scroll progress bar */}
@@ -282,13 +372,14 @@ export function LandingPage() {
 
       {/* Sticky header */}
       <header
+        ref={headerRef}
         className={`sticky top-0 z-40 flex items-center justify-between px-6 py-4 transition-all duration-300 sm:px-10 ${
           scrolled
             ? "border-b border-border bg-background/80 backdrop-blur-xl"
             : "border-b border-transparent bg-transparent"
         }`}
       >
-        <Link href="#top">
+        <Link href="#top" ref={logoRef}>
           {/* Six nav labels need the full width, so the tagline steps aside
               until there is room for both. */}
           <Logo
@@ -298,16 +389,21 @@ export function LandingPage() {
             taglineClassName="hidden xl:inline-block"
           />
         </Link>
-        <nav className="hidden items-center gap-5 text-sm text-muted-foreground xl:flex">
+        <nav
+          ref={navRef}
+          className={`hidden items-center gap-5 text-sm text-muted-foreground xl:flex ${
+            navStacked ? NAV_STACKED_CLASS : ""
+          }`}
+        >
           {/* Driven by `sections`, so the nav order always matches the page order. */}
           {sections.map((s) => (
             <NavLink key={s.id} href={`#${s.id}`} active={activeSection === s.id}>
-              <StackedLabel>{s.eyebrow}</StackedLabel>
+              <NavLabel>{s.eyebrow}</NavLabel>
             </NavLink>
           ))}
           <NavLink href="#ai" active={activeSection === "ai"} className="ai-nav-pill font-semibold">
             <Sparkles aria-hidden className="ai-nav-pill-spark h-3.5 w-3.5" />
-            <StackedLabel className="ai-nav-pill-label">AI Powered</StackedLabel>
+            <NavLabel className="ai-nav-pill-label">AI Powered</NavLabel>
           </NavLink>
           <Link
             href="/pricing"
@@ -316,7 +412,7 @@ export function LandingPage() {
             Pricing
           </Link>
         </nav>
-        <div className="flex items-center gap-2">
+        <div ref={actionsRef} className="flex items-center gap-2">
           <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost">
             Sign in
           </Button>
