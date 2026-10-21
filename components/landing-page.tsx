@@ -434,15 +434,17 @@ export function LandingPage() {
         }`}
       >
         <Link href="#top" ref={logoRef}>
-          {/* Six nav labels need the full width, so the tagline steps aside
-              until there is room for both. Holding it back below 1280px is
-              what lets the nav still sit on one line on a 1920px panel at 150%
+          {/* Below 1024px the nav lives in the menu panel, so the tagline has
+              the row to itself. From 1024px to 1279px the six inline nav
+              labels need that width, so it steps aside; holding it back there
+              is what lets the nav sit on one line on a 1920px panel at 150%
               display scaling, which reports roughly 1264 usable pixels. */}
           <Logo
             iconClassName="h-9 w-9"
             textClassName="text-lg"
             showTagline
-            taglineClassName="hidden xl:inline-block"
+            animateTagline
+            taglineClassName="inline-block max-[379px]:tracking-[0.1em] lg:hidden xl:inline-block"
           />
         </Link>
         <nav

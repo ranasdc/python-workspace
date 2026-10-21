@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { TypingTagline } from "@/components/typing-tagline"
 
 /**
  * The My Code Pad app-icon mark: a dark rounded "code file" tile with window
@@ -98,6 +99,7 @@ export function Logo({
   showText = true,
   showTagline = false,
   taglineClassName,
+  animateTagline = false,
 }: {
   className?: string
   iconClassName?: string
@@ -110,6 +112,8 @@ export function Logo({
    * drop the wordmark too.
    */
   taglineClassName?: string
+  /** Type the tagline out on mount instead of showing it all at once. */
+  animateTagline?: boolean
 }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
@@ -117,9 +121,12 @@ export function Logo({
       {showText && (
         <span className="flex flex-col leading-none">
           <LogoWordmark className={textClassName} />
-          {showTagline && (
-            <LogoTagline className={cn("mt-1.5 text-[9px]", taglineClassName)} />
-          )}
+          {showTagline &&
+            (animateTagline ? (
+              <TypingTagline className={cn("mt-1.5 text-[9px]", taglineClassName)} />
+            ) : (
+              <LogoTagline className={cn("mt-1.5 text-[9px]", taglineClassName)} />
+            ))}
         </span>
       )}
     </div>
