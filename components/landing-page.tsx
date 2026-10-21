@@ -181,6 +181,28 @@ function NavLink({
 }
 
 /**
+ * Breaks a nav label after its first word and centres the remainder beneath it,
+ * then rejoins both words on one line from 1536px up.
+ *
+ * Six section links, the logo tagline and both account buttons have to share
+ * one row from 1280px up — the width Windows reports on a 1920px laptop panel
+ * at 150% display scaling. Stacking roughly halves the width the nav asks for,
+ * which keeps the account buttons on screen in that range instead of pushing
+ * them past the right edge.
+ */
+function StackedLabel({ children, className = "" }: { children: string; className?: string }) {
+  const [first, ...rest] = children.split(" ")
+  return (
+    <span
+      className={`inline-flex flex-col items-center leading-[1.15] 2xl:flex-row 2xl:gap-[0.3em] 2xl:leading-normal ${className}`}
+    >
+      <span>{first}</span>
+      {rest.length > 0 ? <span>{rest.join(" ")}</span> : null}
+    </span>
+  )
+}
+
+/**
  * The IDEs that ship today. Mirrors LANGUAGES in lib/ide/languages.ts — when a
  * third IDE lands there, add it here so the hero stops promising and starts
  * showing it.
@@ -280,12 +302,12 @@ export function LandingPage() {
           {/* Driven by `sections`, so the nav order always matches the page order. */}
           {sections.map((s) => (
             <NavLink key={s.id} href={`#${s.id}`} active={activeSection === s.id}>
-              {s.eyebrow}
+              <StackedLabel>{s.eyebrow}</StackedLabel>
             </NavLink>
           ))}
           <NavLink href="#ai" active={activeSection === "ai"} className="ai-nav-pill font-semibold">
             <Sparkles aria-hidden className="ai-nav-pill-spark h-3.5 w-3.5" />
-            <span className="ai-nav-pill-label">AI Powered</span>
+            <StackedLabel className="ai-nav-pill-label">AI Powered</StackedLabel>
           </NavLink>
           <Link
             href="/pricing"
@@ -299,7 +321,7 @@ export function LandingPage() {
             Sign in
           </Button>
           <Button render={<Link href="/sign-up" />} nativeButton={false}>
-            Get started
+            Get started free
           </Button>
         </div>
       </header>
@@ -397,7 +419,7 @@ export function LandingPage() {
         <Reveal delay={240}>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button render={<Link href="/sign-up" />} nativeButton={false} size="lg" className="group">
-              Start coding
+                  Start coding for free
               <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>
             <Button render={<Link href="/sign-in" />} nativeButton={false} size="lg" variant="outline">
