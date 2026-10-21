@@ -22,6 +22,9 @@ import {
   Code2,
   PanelsTopLeft,
   Sparkles,
+  Menu,
+  X,
+  Tag,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { MarketingFooter } from "@/components/marketing/marketing-chrome"
@@ -147,6 +150,18 @@ const sections = [
 const NAV_SECTION_IDS: string[] = [...sections.map((s) => s.id), "ai"]
 
 /**
+ * The same destinations as the desktop nav, carrying an icon each so the
+ * slide-down panel can be scanned down a column rather than read across a row.
+ * Built from `sections` for the same reason as NAV_SECTION_IDS — one list to
+ * keep in step instead of three.
+ */
+const MOBILE_NAV_ITEMS = [
+  ...sections.map((s) => ({ id: s.id, href: `#${s.id}`, label: s.eyebrow, icon: s.icon })),
+  { id: "ai", href: "#ai", label: "AI Powered", icon: Sparkles },
+  { id: "pricing", href: "/pricing", label: "Pricing", icon: Tag },
+] as const
+
+/**
  * A nav anchor that underlines itself while its section owns the viewport.
  * The underline grows from the centre rather than fading, so the highlight
  * visibly travels from one item to the next as the reader scrolls.
@@ -248,6 +263,7 @@ export function LandingPage() {
   const [progress, setProgress] = useState(0)
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [navStacked, setNavStacked] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const headerRef = useRef<HTMLElement>(null)
   const logoRef = useRef<HTMLAnchorElement>(null)
@@ -288,6 +304,30 @@ export function LandingPage() {
   }, [])
 
   /**
+   * While the slide-down panel is open: Escape closes it, and so does growing
+   * past the point where the full nav returns — otherwise the panel would be
+   * left open behind a header that no longer has a button to close it.
+   */
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false)
+    }
+    const desktop = window.matchMedia("(min-width: 1024px)")
+    const onBreakpoint = () => {
+      if (desktop.matches) setMenuOpen(false)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    desktop.addEventListener("change", onBreakpoint)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      desktop.removeEventListener("change", onBreakpoint)
+    }
+  }, [menuOpen])
+
+  /**
    * Fold the nav labels only when this particular row has genuinely run out of
    * room. Browser or display zoom shrinks the usable width without changing
    * anything else, so measuring the row catches it, while a fixed breakpoint
@@ -307,7 +347,7 @@ export function LandingPage() {
     const measure = () => {
       const headerWidth = header.clientWidth
 
-      // Below xl the nav is display:none and the buttons own the row.
+      // Below lg the nav is display:none and the buttons own the row.
       if (nav.offsetParent === null) {
         setNavStacked(false)
         return
@@ -370,18 +410,34 @@ export function LandingPage() {
         />
       </div>
 
+      {/* Scrim for the slide-down panel. It has to sit outside the header:
+          the header's backdrop-blur makes it the containing block for fixed
+          children, which would shrink this to the header's own box instead of
+          covering the viewport. Below the header's z-40, above the page. */}
+      {menuOpen ? (
+        <div
+          aria-hidden
+          onClick={() => setMenuOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
+        />
+      ) : null}
+
       {/* Sticky header */}
       <header
         ref={headerRef}
         className={`sticky top-0 z-40 flex items-center justify-between px-6 py-4 transition-all duration-300 sm:px-10 ${
-          scrolled
+          // An open panel needs an opaque row above it, or the dimmed page
+          // shows through behind the logo and close button.
+          scrolled || menuOpen
             ? "border-b border-border bg-background/80 backdrop-blur-xl"
             : "border-b border-transparent bg-transparent"
         }`}
       >
         <Link href="#top" ref={logoRef}>
           {/* Six nav labels need the full width, so the tagline steps aside
-              until there is room for both. */}
+              until there is room for both. Holding it back below 1280px is
+              what lets the nav still sit on one line on a 1920px panel at 150%
+              display scaling, which reports roughly 1264 usable pixels. */}
           <Logo
             iconClassName="h-9 w-9"
             textClassName="text-lg"
@@ -391,7 +447,7 @@ export function LandingPage() {
         </Link>
         <nav
           ref={navRef}
-          className={`hidden items-center gap-5 text-sm text-muted-foreground xl:flex ${
+          className={`hidden items-center gap-5 text-sm text-muted-foreground lg:flex ${
             navStacked ? NAV_STACKED_CLASS : ""
           }`}
         >
@@ -412,7 +468,7 @@ export function LandingPage() {
             Pricing
           </Link>
         </nav>
-        <div ref={actionsRef} className="flex items-center gap-2">
+        <div ref={actionsRef} className="hidden items-center gap-2 lg:flex">
           <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost">
             Sign in
           </Button>
@@ -420,6 +476,84 @@ export function LandingPage() {
             Get started free
           </Button>
         </div>
+
+        {/* Below lg the links have nowhere to sit, so they move into a panel
+            behind this button rather than disappearing. */}
+        <button
+          type="button"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-expanded={menuOpen}
+          aria-controls="mobile-nav"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground transition-colors hover:bg-muted lg:hidden"
+        >
+          {menuOpen ? <X className="h-5 w-5" aria-hidden /> : <Menu className="h-5 w-5" aria-hidden />}
+        </button>
+
+        {menuOpen ? (
+          /* Absolutely positioned so opening the panel overlays the page
+             instead of pushing it down — the header row above stays a plain
+             flex line, which is what the width measuring depends on. */
+          <nav
+            id="mobile-nav"
+            aria-label="Main"
+            className="absolute inset-x-0 top-full animate-in border-b border-border bg-background px-3 pb-4 pt-2 shadow-lg duration-200 fade-in slide-in-from-top-2 lg:hidden"
+          >
+              <ul className="flex flex-col">
+                {MOBILE_NAV_ITEMS.map((item) => {
+                  const active = activeSection === item.id
+                  const content = (
+                    <Fragment>
+                      <item.icon
+                        aria-hidden
+                        className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`}
+                      />
+                      {item.label}
+                    </Fragment>
+                  )
+                  const className = `flex items-center gap-3 rounded-lg px-3 py-3 text-[15px] transition-colors hover:bg-muted ${
+                    active ? "bg-muted font-medium text-foreground" : "text-foreground"
+                  } ${item.id === "ai" ? "font-semibold" : ""}`
+
+                  return (
+                    <li key={item.id}>
+                      {item.href.startsWith("#") ? (
+                        <a
+                          href={item.href}
+                          aria-current={active ? "location" : undefined}
+                          onClick={() => setMenuOpen(false)}
+                          className={className}
+                        >
+                          {content}
+                        </a>
+                      ) : (
+                        <Link href={item.href} className={className}>
+                          {content}
+                        </Link>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="mt-3 flex flex-col gap-2 border-t border-border px-1 pt-4">
+                <Button
+                  render={<Link href="/sign-in" />}
+                  nativeButton={false}
+                  variant="outline"
+                  className="w-full justify-center"
+                >
+                  Sign in
+                </Button>
+                <Button
+                  render={<Link href="/sign-up" />}
+                  nativeButton={false}
+                  className="w-full justify-center"
+                >
+                  Get started free
+                </Button>
+              </div>
+          </nav>
+        ) : null}
       </header>
 
       {/* Hero */}
