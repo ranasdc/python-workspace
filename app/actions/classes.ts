@@ -331,7 +331,9 @@ async function callerIp() {
  *
  * Seat limits are enforced inside a transaction that holds a row lock on the
  * class (and on the school's plan when one applies), so two pupils claiming the
- * last seat at the same instant cannot both succeed.
+ * last seat at the same instant cannot both succeed. A teacher-wide allowance
+ * spans classes, so it additionally takes an advisory lock on the teacher —
+ * a lock on this class alone would not see a simultaneous join to another.
  */
 /**
  * Where a pupil's access stands immediately after joining.
@@ -535,7 +537,7 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
         if (totalRows[0].used >= maxTotal) {
           throw new EntitlementError(
             "student_limit",
-            `Your teacher has reached the ${maxTotal} students their plan covers. Ask them to move your school onto a school plan for more places.`,
+            `Your teacher has reached the ${maxTotal} students their plan covers. Ask them to upgrade for more places.`,
           )
         }
       }

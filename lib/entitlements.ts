@@ -19,7 +19,12 @@ import {
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
-import { ACTIVE_STATUSES, PLANS } from "@/lib/plans"
+import {
+  ACTIVE_STATUSES,
+  teacherLimitsFor,
+  type EntitlementPlan,
+  type TeacherLimits,
+} from "@/lib/plans"
 import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 
 // This module is the ONLY place allowed to decide what a user may do.
@@ -27,7 +32,6 @@ import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 // any more: those columns are cosmetic leftovers and are trivially forgeable
 // through the onboarding action, so they carry no authority.
 
-export type EntitlementPlan = "free" | "student_pro" | "teacher_pro" | "school"
 export type EntitlementSource = "school" | "teacher" | "individual" | "free"
 export type SchoolRole = "student" | "teacher" | "school_admin"
 
@@ -65,82 +69,22 @@ export type Limits = {
   maxFilesPerFolder: number | null
 }
 
-export type TeacherLimits = {
-  /** null means unlimited. Personal workspaces never count. */
-  maxClasses: number | null
-  maxStudentsPerClass: number | null
-  /**
-   * Distinct pupils this teacher may have across all of their classes.
-   *
-   * Separate from `maxStudentsPerClass` because the two cap different things:
-   * a per-class ceiling does nothing once a plan allows unlimited classes, so
-   * Teacher Pro's allowance has to be counted over the whole account. A pupil
-   * in two of the teacher's classes is one pupil, not two.
-   */
-  maxStudentsTotal: number | null
-  maxLibraryFiles: number | null
-  maxLibraryFolders: number | null
-}
+/**
+ * Teaching allowances live in lib/plans.ts, the pure description of what each
+ * plan buys, so a client component can state a plan's limits without importing
+ * this server-only module. Re-exported here because this remains the module
+ * that enforces them.
+ */
+export {
+  TEACHER_FREE_LIMITS,
+  TEACHER_PRO_LIMITS,
+  TEACHER_UNLIMITED,
+  teacherLimitsFor,
+  type TeacherLimits,
+  type EntitlementPlan,
+} from "@/lib/plans"
 
 export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null, maxFilesPerFolder: null }
-
-/**
- * An unpaid teacher can genuinely trial the product — run one real class,
- * build a small library — but not operate on it indefinitely for free.
- */
-export const TEACHER_FREE_LIMITS: TeacherLimits = {
-  maxClasses: 1,
-  maxStudentsPerClass: 25,
-  // Equal to the one class times its 25 places, stated rather than implied so
-  // the ceiling still holds for a teacher who kept extra classes after a
-  // downgrade and is no longer bounded by `maxClasses`.
-  maxStudentsTotal: 25,
-  maxLibraryFiles: 2,
-  maxLibraryFolders: 2,
-}
-
-/**
- * An individually bought Teacher Pro.
- *
- * Classes and library are uncapped; pupils are not. The allowance is a single
- * pool spanning every class, so there is deliberately no per-class ceiling —
- * the teacher can split 100 pupils into whatever groups they teach.
- */
-export const TEACHER_PRO_LIMITS: TeacherLimits = {
-  maxClasses: null,
-  maxStudentsPerClass: null,
-  maxStudentsTotal: PLANS.teacher_pro.studentSeatLimit ?? null,
-  maxLibraryFiles: null,
-  maxLibraryFolders: null,
-}
-
-/** A school plan. Teaching is uncapped here; the school's own seats are the limit. */
-export const TEACHER_UNLIMITED: TeacherLimits = {
-  maxClasses: null,
-  maxStudentsPerClass: null,
-  maxStudentsTotal: null,
-  maxLibraryFiles: null,
-  maxLibraryFolders: null,
-}
-
-/**
- * Which allowance applies to a teaching account.
- *
- * Keyed on the plan rather than on `source` because the plan is what the
- * allowance belongs to, and the two cannot disagree: `teacher_pro` is only ever
- * produced by an individual subscription, while a teacher covered by their
- * school resolves to `school`. That is what keeps a school's staff off the
- * 100-pupil cap — their pupils are already counted against the school's student
- * seats when they join the school, so capping them here would charge the same
- * pupil to two different allowances.
- */
-export function teacherLimitsFor(
-  plan: EntitlementPlan,
-  hasTeacherPro: boolean,
-): TeacherLimits {
-  if (!hasTeacherPro) return TEACHER_FREE_LIMITS
-  return plan === "teacher_pro" ? TEACHER_PRO_LIMITS : TEACHER_UNLIMITED
-}
 
 /**
  * AI task generation policy, per plan.

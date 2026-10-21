@@ -18,6 +18,7 @@ import {
   plansOnSale,
   priceFor,
   resolvePurchase,
+  teacherLimitsFor,
 } from "../lib/plans.ts"
 
 // The published school pricing, pinned.
@@ -140,6 +141,84 @@ describe("school plan catalogue", () => {
       })
     })
   }
+})
+
+describe("individual plan pricing", () => {
+  // Pinned as literals for the same reason as the school tiers above: these
+  // are the amounts Checkout charges, taken straight from the catalogue.
+  const PUBLISHED_INDIVIDUAL = {
+    student_pro: { now: 199, was: 499, discount: 60 },
+    teacher_pro: { now: 999, was: 1899, discount: 47 },
+  }
+
+  for (const [planId, expected] of Object.entries(PUBLISHED_INDIVIDUAL)) {
+    it(`charges ${expected.now}p for ${planId}`, () => {
+      assert.equal(PLANS[planId].priceInPence, expected.now)
+      assert.equal(PLANS[planId].originalPriceInPence, expected.was)
+      assert.equal(discountPercent(PLANS[planId]), expected.discount)
+      assert.equal(resolvePurchase(planId, "month").priceInPence, expected.now)
+    })
+  }
+
+  it("still has a sale to advertise after the repricing", () => {
+    // Both prices moved below their old sale prices. The struck-through list
+    // price has to stay above what is actually charged or the banner would be
+    // claiming a saving the catalogue no longer supports.
+    for (const [planId, expected] of Object.entries(PUBLISHED_INDIVIDUAL)) {
+      assert.ok(expected.now < expected.was, `${planId} must still be discounted`)
+      assert.ok(isOnSale(PLANS[planId]))
+    }
+  })
+})
+
+describe("Teacher Pro student allowance", () => {
+  it("covers a fixed number of pupils rather than unlimited", () => {
+    assert.equal(PLANS.teacher_pro.studentSeatLimit, 100)
+  })
+
+  it("says so in the feature list a buyer reads", () => {
+    // The card must not promise "unlimited students" while the join path is
+    // turning pupil 101 away.
+    const features = PLANS.teacher_pro.features.join(" ")
+    assert.match(features, /100 students/)
+    assert.doesNotMatch(features, /[Uu]nlimited classes and students/)
+  })
+
+  it("counts the allowance across all classes, not per class", () => {
+    const limits = teacherLimitsFor("teacher_pro", true)
+    assert.equal(limits.maxStudentsTotal, 100)
+    assert.equal(
+      limits.maxStudentsPerClass,
+      null,
+      "a per-class cap would stack on top of the pool and cap each class at 100",
+    )
+    assert.equal(limits.maxClasses, null, "classes stay unlimited")
+  })
+
+  it("does not cap a teacher whose Pro comes from their school", () => {
+    // The whole point of keying on the plan: a school's staff teach against
+    // the school's own student seats, which are sized per tier and already
+    // enforced when a pupil joins the school. Capping them here would charge
+    // the same pupil to two allowances and break large schools outright.
+    const limits = teacherLimitsFor("school", true)
+    assert.equal(limits.maxStudentsTotal, null)
+    assert.equal(limits.maxStudentsPerClass, null)
+    assert.equal(limits.maxClasses, null)
+  })
+
+  it("leaves the school tiers' own allowances alone", () => {
+    for (const planId of SCHOOL_PLAN_IDS) {
+      assert.equal(PLANS[planId].studentSeatLimit, PUBLISHED[planId].students)
+    }
+  })
+
+  it("still limits an unpaid teacher", () => {
+    for (const plan of ["free", "student_pro", "teacher_pro", "school"]) {
+      const limits = teacherLimitsFor(plan, false)
+      assert.equal(limits.maxClasses, 1, `${plan} without Pro gets the free ceiling`)
+      assert.equal(limits.maxStudentsTotal, 25)
+    }
+  })
 })
 
 describe("sale scope", () => {

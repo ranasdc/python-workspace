@@ -371,6 +371,84 @@ export function formatPrice(priceInPence: number) {
   })}`
 }
 
+/** What a teaching account is allowed, by the plan covering it. */
+export type EntitlementPlan = "free" | "student_pro" | "teacher_pro" | "school"
+
+export type TeacherLimits = {
+  /** null means unlimited. Personal workspaces never count. */
+  maxClasses: number | null
+  maxStudentsPerClass: number | null
+  /**
+   * Distinct pupils this teacher may have across all of their classes.
+   *
+   * Separate from `maxStudentsPerClass` because the two cap different things:
+   * a per-class ceiling does nothing once a plan allows unlimited classes, so
+   * Teacher Pro's allowance has to be counted over the whole account. A pupil
+   * in two of the teacher's classes is one pupil, not two.
+   */
+  maxStudentsTotal: number | null
+  maxLibraryFiles: number | null
+  maxLibraryFolders: number | null
+}
+
+/**
+ * An unpaid teacher can genuinely trial the product — run one real class,
+ * build a small library — but not operate on it indefinitely for free.
+ */
+export const TEACHER_FREE_LIMITS: TeacherLimits = {
+  maxClasses: 1,
+  maxStudentsPerClass: 25,
+  // Equal to the one class times its 25 places, stated rather than implied so
+  // the ceiling still holds for a teacher who kept extra classes after a
+  // downgrade and is no longer bounded by `maxClasses`.
+  maxStudentsTotal: 25,
+  maxLibraryFiles: 2,
+  maxLibraryFolders: 2,
+}
+
+/**
+ * An individually bought Teacher Pro.
+ *
+ * Classes and library are uncapped; pupils are not. The allowance is a single
+ * pool spanning every class, so there is deliberately no per-class ceiling —
+ * the teacher can split their places into whatever groups they teach.
+ */
+export const TEACHER_PRO_LIMITS: TeacherLimits = {
+  maxClasses: null,
+  maxStudentsPerClass: null,
+  maxStudentsTotal: TEACHER_PRO_STUDENT_SEATS,
+  maxLibraryFiles: null,
+  maxLibraryFolders: null,
+}
+
+/** A school plan. Teaching is uncapped here; the school's own seats are the limit. */
+export const TEACHER_UNLIMITED: TeacherLimits = {
+  maxClasses: null,
+  maxStudentsPerClass: null,
+  maxStudentsTotal: null,
+  maxLibraryFiles: null,
+  maxLibraryFolders: null,
+}
+
+/**
+ * Which allowance applies to a teaching account.
+ *
+ * Keyed on the plan rather than on how it was obtained, because the plan is
+ * what the allowance belongs to and the two cannot disagree: `teacher_pro` is
+ * only ever produced by an individual subscription, while a teacher covered by
+ * their school resolves to `school`. That is what keeps a school's staff off
+ * the Teacher Pro pupil cap — their pupils are already counted against the
+ * school's student seats when they join the school, so capping them here would
+ * charge the same pupil to two different allowances.
+ */
+export function teacherLimitsFor(
+  plan: EntitlementPlan,
+  hasTeacherPro: boolean,
+): TeacherLimits {
+  if (!hasTeacherPro) return TEACHER_FREE_LIMITS
+  return plan === "teacher_pro" ? TEACHER_PRO_LIMITS : TEACHER_UNLIMITED
+}
+
 /** Always two decimal places, for per-seat figures that are pennies wide. */
 export function formatPricePrecise(priceInPence: number) {
   return `£${(priceInPence / 100).toFixed(2)}`
