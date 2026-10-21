@@ -12,9 +12,19 @@ export const metadata = {
   description: "Manage your school's plan, seats and invite codes.",
 }
 
-export default async function SchoolPage() {
+export default async function SchoolPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ interval?: string }>
+}) {
   const sessionUser = await getSessionUser()
   if (!sessionUser) redirect("/sign-in?next=/school")
+
+  // Narrowed rather than passed through: the value arrives in a URL anyone can
+  // edit, and it only ever decides which of two buttons starts selected.
+  const { interval } = await searchParams
+  const preselectedInterval =
+    interval === "month" || interval === "year" ? interval : undefined
 
   const [overview, identity] = await Promise.all([
     getSchoolOverview(),
@@ -35,7 +45,7 @@ export default async function SchoolPage() {
       />
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
         {overview ? (
-          <SchoolDashboard overview={overview} />
+          <SchoolDashboard overview={overview} preselectedInterval={preselectedInterval} />
         ) : (
           <SchoolOnboarding />
         )}

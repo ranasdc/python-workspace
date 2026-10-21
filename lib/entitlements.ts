@@ -19,7 +19,12 @@ import {
 } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { refreshSubscriptionFromStripe } from "@/lib/billing-refresh"
-import { ACTIVE_STATUSES } from "@/lib/plans"
+import {
+  ACTIVE_STATUSES,
+  teacherLimitsFor,
+  type EntitlementPlan,
+  type TeacherLimits,
+} from "@/lib/plans"
 import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 
 // This module is the ONLY place allowed to decide what a user may do.
@@ -27,7 +32,6 @@ import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 // any more: those columns are cosmetic leftovers and are trivially forgeable
 // through the onboarding action, so they carry no authority.
 
-export type EntitlementPlan = "free" | "student_pro" | "teacher_pro" | "school"
 export type EntitlementSource = "school" | "teacher" | "individual" | "free"
 export type SchoolRole = "student" | "teacher" | "school_admin"
 
@@ -65,33 +69,22 @@ export type Limits = {
   maxFilesPerFolder: number | null
 }
 
-export type TeacherLimits = {
-  /** null means unlimited. Personal workspaces never count. */
-  maxClasses: number | null
-  maxStudentsPerClass: number | null
-  maxLibraryFiles: number | null
-  maxLibraryFolders: number | null
-}
+/**
+ * Teaching allowances live in lib/plans.ts, the pure description of what each
+ * plan buys, so a client component can state a plan's limits without importing
+ * this server-only module. Re-exported here because this remains the module
+ * that enforces them.
+ */
+export {
+  TEACHER_FREE_LIMITS,
+  TEACHER_PRO_LIMITS,
+  TEACHER_UNLIMITED,
+  teacherLimitsFor,
+  type TeacherLimits,
+  type EntitlementPlan,
+} from "@/lib/plans"
 
 export const UNLIMITED: Limits = { maxFiles: null, maxFolders: null, maxFilesPerFolder: null }
-
-/**
- * An unpaid teacher can genuinely trial the product — run one real class,
- * build a small library — but not operate on it indefinitely for free.
- */
-export const TEACHER_FREE_LIMITS: TeacherLimits = {
-  maxClasses: 1,
-  maxStudentsPerClass: 25,
-  maxLibraryFiles: 2,
-  maxLibraryFolders: 2,
-}
-
-export const TEACHER_UNLIMITED: TeacherLimits = {
-  maxClasses: null,
-  maxStudentsPerClass: null,
-  maxLibraryFiles: null,
-  maxLibraryFolders: null,
-}
 
 /**
  * AI task generation policy, per plan.
@@ -350,7 +343,7 @@ export const getEntitlement = cache(async (userId: string): Promise<Entitlement>
       ...fields,
       isTeacher,
       hasTeacherPro,
-      teacherLimits: hasTeacherPro ? TEACHER_UNLIMITED : TEACHER_FREE_LIMITS,
+      teacherLimits: teacherLimitsFor(fields.plan, hasTeacherPro),
       canGenerateAiTasks: isTeacher && aiPolicy.enabled,
       aiTaskMonthlyLimit: aiPolicy.monthlyLimit,
     }

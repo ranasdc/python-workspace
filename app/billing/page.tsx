@@ -50,6 +50,12 @@ export default async function BillingPage() {
       ? PLANS[entitlement.plan]
       : null
 
+  // A teacher paying for their own Teacher Pro can move up to a school plan.
+  // The upgrade screen resolves eligibility again server-side and explains
+  // itself when the answer is no, so this only decides whether to offer it.
+  const canUpgradeToSchool =
+    entitlement.source === "individual" && entitlement.plan === "teacher_pro"
+
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-12">
       <Link
@@ -165,9 +171,20 @@ export default async function BillingPage() {
               </Link>
             ) : (
               <>
+                {canUpgradeToSchool ? (
+                  <Link href="/billing/upgrade" className={buttonVariants()}>
+                    Upgrade to a School Plan
+                  </Link>
+                ) : null}
                 {hasBillingAccount ? (
                   <ManageBillingButton
-                    variant={entitlement.isPro ? "default" : "outline"}
+                    variant={
+                      canUpgradeToSchool
+                        ? "outline"
+                        : entitlement.isPro
+                          ? "default"
+                          : "outline"
+                    }
                   >
                     {entitlement.isPro ? "Manage or cancel" : "Manage billing"}
                   </ManageBillingButton>

@@ -331,7 +331,9 @@ async function callerIp() {
  *
  * Seat limits are enforced inside a transaction that holds a row lock on the
  * class (and on the school's plan when one applies), so two pupils claiming the
- * last seat at the same instant cannot both succeed.
+ * last seat at the same instant cannot both succeed. A teacher-wide allowance
+ * spans classes, so it additionally takes an advisory lock on the teacher —
+ * a lock on this class alone would not see a simultaneous join to another.
  */
 /**
  * Where a pupil's access stands immediately after joining.
@@ -399,6 +401,10 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
   // round trip must never happen while we are holding row locks.
   const owner = await getEntitlement(preview.teacherId)
   const maxPerClass = owner.teacherLimits.maxStudentsPerClass
+  // Teacher Pro allows unlimited classes, so its pupil allowance is a pool
+  // spanning all of them. A school teacher has no pool here: their pupils are
+  // counted against the school's student seats instead.
+  const maxTotal = owner.teacherLimits.maxStudentsTotal
 
   // Read here, outside the transaction, for the same reason: the class list
   // names its teacher the moment the pupil joins, with no second round trip.
@@ -498,7 +504,40 @@ export async function joinClass(formData: FormData): Promise<JoinClassResult> {
         if (seatRows[0].used >= maxPerClass) {
           throw new EntitlementError(
             "student_limit",
-            "This class is full. Ask your teacher to upgrade to Teacher Pro for unlimited students.",
+            "This class is full. Ask your teacher to upgrade for more student places.",
+          )
+        }
+      }
+
+      if (maxTotal !== null) {
+        // The class row lock above only serialises joins to *this* class, and
+        // this allowance spans every class the teacher owns. Without a lock on
+        // the teacher, two pupils joining two different classes at once could
+        // both read 99 and both be admitted. Taken after the class lock, which
+        // every path through here acquires in that same order, so the two
+        // cannot deadlock against each other.
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, [
+          target.teacherId,
+        ])
+
+        // Counts the pupils who are *not* this one, so a pupil already in
+        // another of the teacher's classes takes no second seat: they are
+        // excluded from the tally and admitted whenever the others fit.
+        // Personal workspaces are the pupil's own storage and never taught.
+        const { rows: totalRows } = await client.query(
+          `SELECT COUNT(DISTINCT e."studentId")::int AS used
+             FROM "enrollment" e
+             JOIN "class" c ON c."id" = e."classId"
+            WHERE c."teacherId" = $1
+              AND c."isPersonal" = false
+              AND e."studentId" <> $1
+              AND e."studentId" <> $2`,
+          [target.teacherId, student.id],
+        )
+        if (totalRows[0].used >= maxTotal) {
+          throw new EntitlementError(
+            "student_limit",
+            `Your teacher has reached the ${maxTotal} students their plan covers. Ask them to upgrade for more places.`,
           )
         }
       }

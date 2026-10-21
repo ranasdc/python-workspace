@@ -52,7 +52,7 @@ export function SubscriptionModal({
       : limitType === "folder"
         ? "You've reached your folder limit. There are two ways to unlock unlimited files and folders."
         : role === "teacher"
-          ? "Two ways to unlock unlimited classes, students and the AI teaching tools."
+          ? "Two ways to unlock unlimited classes, more students and the AI teaching tools."
           : "Two ways to unlock unlimited files and folders in every IDE.")
 
   return (

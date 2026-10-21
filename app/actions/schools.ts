@@ -390,6 +390,7 @@ export async function getSchoolOverview() {
         .select({
           tier: schoolSubscriptions.tier,
           status: schoolSubscriptions.status,
+          interval: schoolSubscriptions.interval,
           teacherSeatLimit: schoolSubscriptions.teacherSeatLimit,
           studentSeatLimit: schoolSubscriptions.studentSeatLimit,
           currentPeriodEnd: schoolSubscriptions.currentPeriodEnd,
@@ -422,6 +423,9 @@ export async function getSchoolOverview() {
     ? {
         tier: stored.tier,
         status: stored.status,
+        // What this school actually renews on, so the upgrade tiles can quote
+        // the amount it would really be charged rather than the tier default.
+        interval: stored.interval,
         teacherSeatLimit: stored.teacherSeatLimit,
         studentSeatLimit: stored.studentSeatLimit,
         currentPeriodEnd: stored.currentPeriodEnd,
@@ -437,6 +441,17 @@ export async function getSchoolOverview() {
          * only possible outcome is "No billing account found".
          */
         manageable: Boolean(stored.stripeCustomerId),
+        /**
+         * Whether this plan's tier can be moved in place.
+         *
+         * Deliberately a different question from `manageable`: opening the
+         * portal needs a Stripe *customer*, while changing a tier edits the
+         * *subscription*. A plan with a customer but no subscription — one
+         * invoiced manually under an existing customer record — can open the
+         * portal yet has nothing to re-price, so offering it an upgrade would
+         * promise a change the server would then have to refuse.
+         */
+        tierChangeable: Boolean(stored.stripeSubscriptionId),
       }
     : null
 

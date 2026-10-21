@@ -1,7 +1,7 @@
 import { registerHooks } from "node:module"
 import { pathToFileURL } from "node:url"
 import { resolve as resolvePath } from "node:path"
-import { existsSync } from "node:fs"
+import { statSync } from "node:fs"
 
 // `server-only` and the `@/` path alias are both resolved by Next's bundler
 // rather than by Node, so they are taught to the test runner here. Without the
@@ -20,7 +20,12 @@ registerHooks({
       const base = new URL(specifier.slice(2), projectRoot)
       for (const suffix of ["", ".ts", ".tsx", "/index.ts", "/index.tsx"]) {
         const candidate = new URL(base.href + suffix)
-        if (existsSync(candidate)) return next(candidate.href, context)
+        // Must be a *file*: a specifier like `@/lib/db` matches the directory
+        // on the bare suffix, and Node cannot import a directory, so a plain
+        // existence check would stop on a path that can never load.
+        if (statSync(candidate, { throwIfNoEntry: false })?.isFile()) {
+          return next(candidate.href, context)
+        }
       }
     }
     return next(specifier, context)

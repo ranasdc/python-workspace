@@ -12,6 +12,7 @@ import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { ShareMenu } from "@/components/ide/share-menu"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useLeftSideCascade } from "@/components/teacher-class-nav"
+import { TEACHER_PRO_STUDENT_SEATS } from "@/lib/plans"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
@@ -768,7 +769,7 @@ function LibraryLimitUpgrade({
   const perks = [
     "An unlimited resource library",
     "Unlimited folders to organize tasks",
-    "Unlimited classes and students",
+    `Unlimited classes, up to ${TEACHER_PRO_STUDENT_SEATS} students`,
   ]
   return (
     <>
