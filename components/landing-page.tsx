@@ -307,7 +307,7 @@ export function LandingPage() {
     const measure = () => {
       const headerWidth = header.clientWidth
 
-      // Below xl the nav is display:none and the buttons own the row.
+      // Below lg the nav is display:none and the buttons own the row.
       if (nav.offsetParent === null) {
         setNavStacked(false)
         return
@@ -381,7 +381,9 @@ export function LandingPage() {
       >
         <Link href="#top" ref={logoRef}>
           {/* Six nav labels need the full width, so the tagline steps aside
-              until there is room for both. */}
+              until there is room for both. Holding it back below 1280px is
+              what lets the nav still sit on one line on a 1920px panel at 150%
+              display scaling, which reports roughly 1264 usable pixels. */}
           <Logo
             iconClassName="h-9 w-9"
             textClassName="text-lg"
@@ -391,7 +393,7 @@ export function LandingPage() {
         </Link>
         <nav
           ref={navRef}
-          className={`hidden items-center gap-5 text-sm text-muted-foreground xl:flex ${
+          className={`hidden items-center gap-5 text-sm text-muted-foreground lg:flex ${
             navStacked ? NAV_STACKED_CLASS : ""
           }`}
         >
