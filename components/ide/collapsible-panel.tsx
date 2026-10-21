@@ -288,6 +288,18 @@ export function CollapsiblePanel({
 
   return (
     <>
+      {/* In overlay mode the panel and its rail float together. Floating the
+          panel alone laid it over its own rail, leaving an open drawer with no
+          visible way to fold it besides moving the pointer away — which some
+          browsers and trackpads never report. Riding along, the rail sits on
+          the drawer's edge when open and back at the screen edge when shut. */}
+      {overlay && <div aria-hidden="true" className="hidden shrink-0 lg:block lg:w-6" />}
+      <div
+        className={cn(
+          overlay ? "flex flex-col lg:absolute lg:inset-y-0 lg:left-0 lg:z-30 lg:flex-row" : "contents",
+          overlay && !collapsed && "lg:shadow-xl",
+        )}
+      >
       <aside
         ref={panelRef}
         id={panelId}
@@ -304,7 +316,7 @@ export function CollapsiblePanel({
             : cn("max-h-[60vh] w-full lg:max-h-none", widthClassName),
           // Floating keeps the editor still while the drawer slides over it.
           // Shadow and border give it an edge to read against the code beneath.
-          overlay && "lg:absolute lg:inset-y-0 lg:left-0 lg:z-30 lg:border-r lg:border-border lg:bg-sidebar lg:shadow-xl",
+          overlay && "lg:bg-sidebar",
           className,
         )}
       >
@@ -365,6 +377,7 @@ export function CollapsiblePanel({
           )}
         </span>
       </button>
+      </div>
     </>
   )
 }
