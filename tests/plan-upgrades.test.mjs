@@ -2,13 +2,14 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import {
-  UPGRADE_LADDER,
   canUpgradeTo,
+  decideSettlement,
   describeUpgrades,
   isOnLadder,
   offerFor,
   offersFor,
   rungOf,
+  UPGRADE_LADDER,
 } from "../lib/plan-upgrades.ts"
 import { PLANS } from "../lib/plans.ts"
 
@@ -241,6 +242,106 @@ describe("offerFor", () => {
           if (delta !== null) {
             assert.ok(delta > 0, `${currentPlan} to ${offer.planId} lost seats`)
           }
+        }
+      }
+    }
+  })
+})
+
+// The ordering rule the money depends on: the plan being replaced must not stop
+// until the plan replacing it is verified paid.
+describe("decideSettlement", () => {
+  function settlement(overrides = {}) {
+    return {
+      upgradedFrom: "teacher_pro",
+      targetPlan: "school_small",
+      schoolPlanLive: true,
+      individualPlan: "teacher_pro",
+      individualHasStripeSubscription: true,
+      individualAlreadyStopping: false,
+      ...overrides,
+    }
+  }
+
+  it("stops the personal plan renewing once the school plan is verified paid", () => {
+    assert.equal(decideSettlement(settlement()), "stop_renewal")
+  })
+
+  // The single most important case here. An unpaid or pending school plan must
+  // leave the personal plan alone, because it is the only thing still granting
+  // this teacher access to their classes.
+  it("leaves the personal plan alone until the school plan is live", () => {
+    assert.equal(
+      decideSettlement(settlement({ schoolPlanLive: false })),
+      "not_applicable",
+    )
+  })
+
+  it("ignores a school purchase that was not an upgrade", () => {
+    for (const upgradedFrom of [undefined, null, "", "student_pro", "school_small"]) {
+      assert.equal(
+        decideSettlement(settlement({ upgradedFrom })),
+        "not_applicable",
+        `a marker of ${String(upgradedFrom)} must not settle anything`,
+      )
+    }
+  })
+
+  it("ignores a marker whose target is not a school plan", () => {
+    for (const targetPlan of [undefined, null, "teacher_pro", "student_pro", "free"]) {
+      assert.equal(
+        decideSettlement(settlement({ targetPlan })),
+        "not_applicable",
+        `a target of ${String(targetPlan)} must not settle anything`,
+      )
+    }
+  })
+
+  it("finds nothing to settle when no personal Teacher Pro is held", () => {
+    assert.equal(
+      decideSettlement(settlement({ individualPlan: "student_pro" })),
+      "nothing_to_settle",
+    )
+    assert.equal(
+      decideSettlement(settlement({ individualPlan: null })),
+      "nothing_to_settle",
+    )
+  })
+
+  it("finds nothing to settle when the personal plan has no Stripe subscription", () => {
+    assert.equal(
+      decideSettlement(settlement({ individualHasStripeSubscription: false })),
+      "nothing_to_settle",
+    )
+  })
+
+  // Repeat webhook deliveries are expected, so a second pass must report the
+  // work as already done rather than asking Stripe to cancel twice.
+  it("reports an already-stopping plan as settled", () => {
+    assert.equal(
+      decideSettlement(settlement({ individualAlreadyStopping: true })),
+      "already_settled",
+    )
+  })
+
+  it("only ever returns stop_renewal for a live, stamped, card-backed upgrade", () => {
+    for (const schoolPlanLive of [true, false]) {
+      for (const individualAlreadyStopping of [true, false]) {
+        for (const individualHasStripeSubscription of [true, false]) {
+          const verdict = decideSettlement(
+            settlement({
+              schoolPlanLive,
+              individualAlreadyStopping,
+              individualHasStripeSubscription,
+            }),
+          )
+          const shouldStop =
+            schoolPlanLive && individualHasStripeSubscription && !individualAlreadyStopping
+          assert.equal(
+            verdict === "stop_renewal",
+            shouldStop,
+            `live=${schoolPlanLive} stripe=${individualHasStripeSubscription} stopping=${individualAlreadyStopping}`,
+          )
         }
       }
     }

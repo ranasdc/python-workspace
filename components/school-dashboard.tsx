@@ -47,7 +47,9 @@ export function SchoolDashboard({ overview }: { overview: Overview }) {
     currentPlan: (plan?.tier as PlanId | undefined) ?? null,
     currentPlanLive: planActive,
     canManage: isAdmin,
-    stripeManaged: Boolean(plan?.manageable),
+    // The subscription, not the customer: this is the thing an upgrade
+    // re-prices, and it is what the server action checks before charging.
+    stripeManaged: Boolean(plan?.tierChangeable),
   })
 
   async function run(key: string, fn: () => Promise<unknown>, success: string) {

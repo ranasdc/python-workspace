@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { subscriptions } from "@/lib/db/schema"
 import { PLANS, type PlanId, isSchoolPlan } from "@/lib/plans"
+import { decideSettlement } from "@/lib/plan-upgrades"
 import {
   readStripeSubscriptionState,
   syncSubscriptionFromStripe,
@@ -58,16 +59,16 @@ export async function settleIndividualPlanAfterUpgrade(
   const userId = schoolSub.metadata?.userId
   const upgradedFrom = schoolSub.metadata?.upgradedFrom
 
-  // Only subscriptions stamped as an upgrade at checkout time are eligible, so
-  // an ordinary school purchase can never cancel a bystander's personal plan.
+  // Cheap disqualifications first, so an ordinary school purchase costs no
+  // database read at all. The authoritative version of these same checks runs
+  // again below, against the individual row, through decideSettlement.
   if (upgradedFrom !== "teacher_pro") return "not_applicable"
   if (!planId || !PLANS[planId] || !isSchoolPlan(planId)) return "not_applicable"
   if (!userId) return "not_applicable"
 
-  // The verification gate: Stripe's own view of the school plan, not the
-  // customer's return from Checkout and not a webhook's say-so.
+  // Stripe's own view of the school plan, not the customer's return from
+  // Checkout and not a webhook's say-so.
   const state = readStripeSubscriptionState(schoolSub)
-  if (!state.live) return "not_applicable"
 
   const [individual] = await db
     .select({
@@ -80,20 +81,35 @@ export async function settleIndividualPlanAfterUpgrade(
     .where(eq(subscriptions.userId, userId))
     .limit(1)
 
-  if (!individual?.stripeSubscriptionId) return "nothing_to_settle"
-  if (individual.plan !== "teacher_pro") return "nothing_to_settle"
-  if (individual.cancelAtPeriodEnd) return "already_settled"
+  // The ordering rule itself, decided by the tested pure function rather than
+  // by this function's own reasoning.
+  const verdict = decideSettlement({
+    upgradedFrom,
+    targetPlan: planId,
+    schoolPlanLive: state.live,
+    individualPlan: individual?.plan as PlanId | undefined,
+    individualHasStripeSubscription: Boolean(individual?.stripeSubscriptionId),
+    individualAlreadyStopping: Boolean(individual?.cancelAtPeriodEnd),
+  })
+
+  if (verdict !== "stop_renewal") return verdict
+
+  // decideSettlement only returns stop_renewal when this is present, so this
+  // re-narrowing is the compiler checking that invariant rather than this
+  // function assuming it.
+  const individualSubscriptionId = individual?.stripeSubscriptionId
+  if (!individualSubscriptionId) return "nothing_to_settle"
 
   try {
     const { stripe } = await import("@/lib/stripe")
 
     const updated = await stripe.subscriptions.update(
-      individual.stripeSubscriptionId,
+      individualSubscriptionId,
       { cancel_at_period_end: true },
       {
         // Stable rather than time-bucketed: this transition should happen once
         // for this pair of subscriptions, ever.
-        idempotencyKey: `settle:${individual.stripeSubscriptionId}:${schoolSub.id}`,
+        idempotencyKey: `settle:${individualSubscriptionId}:${schoolSub.id}`,
       },
     )
 

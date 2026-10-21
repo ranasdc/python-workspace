@@ -159,6 +159,67 @@ export function describeUpgrades(situation: UpgradeSituation): UpgradeDecision {
 }
 
 /**
+ * What the old individual plan's fate depends on.
+ *
+ * All of it is read from Stripe's own copy of the school subscription and from
+ * our record of the individual one — never from anything the client sent.
+ */
+export type SettlementInputs = {
+  /** The upgrade marker stamped on the school subscription at checkout. */
+  upgradedFrom: string | null | undefined
+  /** The plan that subscription is for. */
+  targetPlan: PlanId | null | undefined
+  /** Whether Stripe currently reports the school plan as paid and unexpired. */
+  schoolPlanLive: boolean
+  /** The plan our records show the teacher paying for personally. */
+  individualPlan: PlanId | null | undefined
+  /** Whether that individual plan is backed by a Stripe subscription. */
+  individualHasStripeSubscription: boolean
+  /** Whether it is already set to stop at the end of its term. */
+  individualAlreadyStopping: boolean
+}
+
+export type SettlementVerdict =
+  | "stop_renewal"
+  | "not_applicable"
+  | "nothing_to_settle"
+  | "already_settled"
+
+/**
+ * Whether an upgraded teacher's personal plan should stop renewing yet.
+ *
+ * This is the ordering rule the whole upgrade depends on, which is why it lives
+ * here as a pure function rather than inline beside the Stripe call: the plan
+ * being replaced must not stop until the plan replacing it is verified paid, or
+ * a teacher who abandons payment is left with nothing. Separating the decision
+ * from the act means that guarantee can be tested exhaustively without Stripe.
+ *
+ * Deliberately conservative: every uncertain case resolves to leaving the
+ * individual plan alone. The cost of wrongly keeping it is one more month
+ * billed and refundable; the cost of wrongly stopping it is a paying teacher
+ * losing access to their classes.
+ */
+export function decideSettlement(inputs: SettlementInputs): SettlementVerdict {
+  // Only a subscription explicitly stamped as an upgrade is eligible, so an
+  // ordinary school purchase can never stop a bystander's personal plan.
+  if (inputs.upgradedFrom !== "teacher_pro") return "not_applicable"
+
+  // The target must really be a school plan. A corrupted or forged marker
+  // naming something else is not an upgrade and settles nothing.
+  if (!inputs.targetPlan || !isSchoolPlan(inputs.targetPlan)) return "not_applicable"
+
+  // The verification gate. Until Stripe says the school plan is live, the old
+  // plan is the only thing granting this teacher access.
+  if (!inputs.schoolPlanLive) return "not_applicable"
+
+  if (inputs.individualPlan !== "teacher_pro") return "nothing_to_settle"
+  if (!inputs.individualHasStripeSubscription) return "nothing_to_settle"
+  if (inputs.individualAlreadyStopping) return "already_settled"
+
+  return "stop_renewal"
+}
+
+/**
  * One upgrade, priced and sized.
  *
  * Returned as plain data rather than as a `Plan` so it can cross to a client

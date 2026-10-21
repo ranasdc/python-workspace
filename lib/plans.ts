@@ -171,8 +171,12 @@ export const SCHOOL_PLAN_IDS: PlanId[] = [
   "school_large",
 ]
 
+// Optional-chained because plan ids do not only arrive from our own types:
+// Stripe metadata carries them back as plain strings, and a forged, renamed or
+// retired id must answer "not a school plan" rather than crash the webhook that
+// asked.
 export function isSchoolPlan(planId: PlanId) {
-  return PLANS[planId].audience === "school"
+  return PLANS[planId]?.audience === "school"
 }
 
 export function isOnSale(plan: Plan) {
