@@ -1,10 +1,10 @@
 "use server"
 
-import { and, eq, sql } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 import { db } from "@/lib/db"
-import { codeFiles, fileTasks, libraryFiles } from "@/lib/db/schema"
+import { codeFiles, fileTasks, libraryFiles, libraryFolders } from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import { requireTeacherCapability, EntitlementError } from "@/lib/entitlements"
 
@@ -151,6 +151,103 @@ export async function saveLibraryTask(
   revalidatePath("/teacher")
   revalidatePath("/student")
   return { ok: true, task }
+}
+
+/* ----------------------- Reuse across the classes ---------------------- */
+
+export type ReusableTask = {
+  id: number
+  libraryFileId: number
+  title: string
+  preview: string
+  fileName: string
+  folderName: string | null
+  language: string
+  topic: string | null
+  difficulty: string | null
+  yearGroup: string | null
+  hasSolution: boolean
+}
+
+/**
+ * Every task this teacher has attached to a library file, so one can be copied
+ * onto another file instead of being written again. A library file is the
+ * thing a teacher hands to a class, so this is the whole back catalogue of
+ * tasks they have ever set, whichever class received them.
+ *
+ * Scoped to `teacherId`, which is what makes it work for every teacher role at
+ * once while keeping a colleague's library private. The instructions and the
+ * solution are summarised in SQL rather than loaded: the list only has to be
+ * browsable, and getTaskForReuse fetches the one that is chosen.
+ */
+export async function listReusableTasks(): Promise<ReusableTask[]> {
+  const me = await requireUser()
+  await requireTeacherCapability(me.id)
+
+  return db
+    .select({
+      id: fileTasks.id,
+      libraryFileId: fileTasks.libraryFileId,
+      title: fileTasks.title,
+      preview: sql<string>`left(${fileTasks.instructions}, 180)`,
+      fileName: libraryFiles.name,
+      folderName: libraryFolders.name,
+      language: libraryFiles.language,
+      topic: fileTasks.topic,
+      difficulty: fileTasks.difficulty,
+      yearGroup: fileTasks.yearGroup,
+      hasSolution: sql<boolean>`coalesce(${fileTasks.solution}, '') <> ''`.mapWith(Boolean),
+    })
+    .from(fileTasks)
+    .innerJoin(libraryFiles, eq(libraryFiles.id, fileTasks.libraryFileId))
+    .leftJoin(libraryFolders, eq(libraryFolders.id, libraryFiles.folderId))
+    .where(eq(fileTasks.teacherId, me.id))
+    .orderBy(desc(fileTasks.updatedAt))
+    .limit(200)
+}
+
+export type TaskReuseSource = {
+  title: string
+  instructions: string
+  topic: string | null
+  difficulty: string | null
+  yearGroup: string | null
+  learningObjective: string | null
+  origin: string
+  aiRefined: boolean
+  solution: string | null
+  solutionSource: string | null
+  /** The IDE the source file belongs to, so a solution is only carried across when it still runs. */
+  language: string
+}
+
+/** The copyable content of one of the teacher's own tasks. */
+export async function getTaskForReuse(taskId: number): Promise<TaskReuseSource> {
+  const me = await requireUser()
+  await requireTeacherCapability(me.id)
+
+  const [row] = await db
+    .select({ task: fileTasks, language: libraryFiles.language })
+    .from(fileTasks)
+    .innerJoin(libraryFiles, eq(libraryFiles.id, fileTasks.libraryFileId))
+    .where(and(eq(fileTasks.id, taskId), eq(fileTasks.teacherId, me.id)))
+    .limit(1)
+  if (!row) throw new EntitlementError("forbidden", "Task not found")
+
+  const { task } = row
+  return {
+    title: task.title,
+    instructions: task.instructions,
+    topic: task.topic,
+    difficulty: task.difficulty,
+    yearGroup: task.yearGroup,
+    learningObjective: task.learningObjective,
+    origin: task.origin,
+    aiRefined: task.aiRefined,
+    solution: task.solution,
+    solutionSource: task.solutionSource,
+    language: row.language,
+  }
 }
 
 export async function deleteLibraryTask(libraryFileId: number) {

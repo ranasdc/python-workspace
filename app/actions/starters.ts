@@ -1,9 +1,16 @@
 "use server"
 
-import { and, desc, eq, inArray, lte } from "drizzle-orm"
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { dailyStarterOpens, dailyStarters, dailyStarterResponses, enrollments, user } from "@/lib/db/schema"
+import {
+  classes,
+  dailyStarterOpens,
+  dailyStarters,
+  dailyStarterResponses,
+  enrollments,
+  user,
+} from "@/lib/db/schema"
 import { requireUser } from "@/lib/session"
 import {
   assertStudentInClass,
@@ -208,6 +215,90 @@ export async function saveStarter(input: StarterInput) {
     .values({ ...values, aiGenerated: Boolean(input.aiGenerated) })
     .returning({ id: dailyStarters.id })
   return { ok: true as const, id: row.id }
+}
+
+/* ----------------------- Reuse across the classes ---------------------- */
+
+export type ReusableStarter = {
+  id: number
+  classId: number
+  className: string
+  title: string
+  topic: string
+  language: string
+  difficulty: string
+  starterDate: string
+  status: string
+  questionCount: number
+}
+
+/**
+ * Every starter this teacher has written, across all of their classes, so one
+ * can be copied into a new one instead of being written again.
+ *
+ * Scoped to `teacherId`, which is what makes this safe for every teacher role
+ * at once: a school teacher sees their own back catalogue and a colleague's
+ * stays private, without the caller needing to know which plan they are on.
+ * The questions themselves are counted in SQL rather than loaded, because the
+ * list only has to be browsable — getStarterForReuse fetches the one chosen.
+ */
+export async function listReusableStarters(): Promise<ReusableStarter[]> {
+  const me = await requireUser()
+
+  return db
+    .select({
+      id: dailyStarters.id,
+      classId: dailyStarters.classId,
+      className: classes.name,
+      title: dailyStarters.title,
+      topic: dailyStarters.topic,
+      language: dailyStarters.language,
+      difficulty: dailyStarters.difficulty,
+      starterDate: dailyStarters.starterDate,
+      status: dailyStarters.status,
+      questionCount: sql<number>`jsonb_array_length(${dailyStarters.questions})`.mapWith(Number),
+    })
+    .from(dailyStarters)
+    .innerJoin(classes, eq(classes.id, dailyStarters.classId))
+    .where(and(eq(dailyStarters.teacherId, me.id), eq(classes.isPersonal, false)))
+    .orderBy(desc(dailyStarters.starterDate), desc(dailyStarters.id))
+    .limit(200)
+}
+
+export type StarterReuseSource = Pick<
+  StarterInput,
+  | "title"
+  | "topic"
+  | "language"
+  | "difficulty"
+  | "yearGroup"
+  | "objective"
+  | "timeLimitSeconds"
+  | "allowRetake"
+  | "questions"
+> & { aiGenerated: boolean }
+
+/**
+ * The copyable content of one of the teacher's own starters.
+ *
+ * The date is deliberately not returned: a reused starter is for a new lesson,
+ * so the composer keeps the day the teacher is planning for.
+ */
+export async function getStarterForReuse(starterId: number): Promise<StarterReuseSource> {
+  const me = await requireUser()
+  const starter = await loadOwnedStarter(me.id, starterId)
+  return {
+    title: starter.title,
+    topic: starter.topic,
+    language: starter.language,
+    difficulty: starter.difficulty,
+    yearGroup: starter.yearGroup,
+    objective: starter.objective,
+    timeLimitSeconds: starter.timeLimitSeconds,
+    allowRetake: starter.allowRetake,
+    questions: questionsOf(starter),
+    aiGenerated: starter.aiGenerated,
+  }
 }
 
 export async function setStarterAssigned(starterId: number, assigned: boolean) {
