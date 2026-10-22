@@ -85,6 +85,19 @@ const SOURCE_LABEL: Record<SolutionSource, string> = {
 type Draft = { title: string; instructions: string }
 type Refinement = Draft & { summary: string }
 
+/** The whole form, as it stood before a reuse replaced it. */
+type TaskSnapshot = Draft & {
+  topic: string
+  difficulty: string
+  yearGroup: string
+  learningObjective: string
+  origin: "manual" | "ai"
+  aiRefined: boolean
+  solution: string | null
+  solutionSource: SolutionSource | null
+  solutionFingerprint: string | null
+}
+
 export function TaskWorkspace({
   file,
   language,
@@ -122,11 +135,15 @@ export function TaskWorkspace({
     null,
   )
   const [refinement, setRefinement] = useState<Refinement | null>(null)
-  // `from` names the task this was copied from; absent means AI wrote it.
+  // `from` names the task this was copied from; absent means AI wrote it. The
+  // AI path only replaces the wording, so it snapshots the draft alone.
   const [generatedNotice, setGeneratedNotice] = useState<
     { previous: Draft | null; from?: string } | null
   >(null)
   const [reuseOpen, setReuseOpen] = useState(false)
+  // A reuse overwrites the details and the solution as well as the wording, so
+  // putting the teacher's own draft back takes a snapshot of all of it.
+  const [reuseUndo, setReuseUndo] = useState<TaskSnapshot | null>(null)
 
   // The upgrade prompt is rendered inside this dialog, so it stacks above it as
   // a nested dialog and the task form underneath is never unmounted.
@@ -279,7 +296,20 @@ export function TaskWorkspace({
    */
   async function applyReuse(item: ReuseItem) {
     const source = await getTaskForReuse(item.id)
-    const previous = title.trim() || instructions.trim() ? { title, instructions } : null
+    const hadDraft = Boolean(title.trim() || instructions.trim())
+    setReuseUndo({
+      title,
+      instructions,
+      topic,
+      difficulty,
+      yearGroup,
+      learningObjective,
+      origin,
+      aiRefined,
+      solution,
+      solutionSource,
+      solutionFingerprint,
+    })
 
     setTitle(source.title)
     setInstructions(source.instructions)
@@ -302,8 +332,27 @@ export function TaskWorkspace({
     setSolutionFingerprint(carried ? taskFingerprint(source.title, source.instructions) : null)
     setSolutionView("closed")
 
-    setGeneratedNotice({ previous, from: item.title })
+    setGeneratedNotice({ previous: hadDraft ? { title, instructions } : null, from: item.title })
     track("task_reused", { language, withSolution: Boolean(carried) })
+  }
+
+  /** Put the teacher's own draft, details and solution back after a reuse. */
+  function restoreReuse() {
+    if (!reuseUndo) return
+    setTitle(reuseUndo.title)
+    setInstructions(reuseUndo.instructions)
+    setTopic(reuseUndo.topic)
+    setDifficulty(reuseUndo.difficulty)
+    setYearGroup(reuseUndo.yearGroup)
+    setLearningObjective(reuseUndo.learningObjective)
+    setOrigin(reuseUndo.origin)
+    setAiRefined(reuseUndo.aiRefined)
+    setSolution(reuseUndo.solution)
+    setSolutionSource(reuseUndo.solutionSource)
+    setSolutionFingerprint(reuseUndo.solutionFingerprint)
+    setSolutionView("closed")
+    setReuseUndo(null)
+    setGeneratedNotice(null)
   }
 
   function editManually() {
@@ -485,7 +534,11 @@ export function TaskWorkspace({
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Refine
                     </Button>
                     {generatedNotice.previous && (
-                      <Button size="sm" variant="ghost" onClick={restorePrevious}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={generatedNotice.from && reuseUndo ? restoreReuse : restorePrevious}
+                      >
                         <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Restore my draft
                       </Button>
                     )}
