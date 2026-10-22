@@ -12,7 +12,7 @@ import type { LanguageId } from "@/lib/ide/languages"
  * files that then drift apart. Anything missing from this table is either
  * private — and blocked in robots.ts — or a utility route that should not rank.
  */
-export type MarketingGroup = "ide" | "audience" | "platform"
+export type MarketingGroup = "ide" | "audience" | "platform" | "legal"
 
 export type MarketingRoute = {
   path: string
@@ -122,6 +122,39 @@ export const MARKETING_ROUTES: MarketingRoute[] = [
     group: "platform",
     priority: 0.9,
     changeFrequency: "weekly",
+  },
+  // The legal documents. Public and indexable on purpose: a school evaluating
+  // the platform has to be able to read them before anyone signs anything, and
+  // a signed-out visitor must reach them without an account.
+  {
+    path: "/privacy",
+    title: "Privacy Policy | MyCodePad",
+    description:
+      "How MyCodePad collects, uses, shares and protects personal data for students, teachers and schools, and how to exercise your rights under UK data protection law.",
+    label: "Privacy Policy",
+    group: "legal",
+    priority: 0.4,
+    changeFrequency: "yearly",
+  },
+  {
+    path: "/terms",
+    title: "Terms of Service | MyCodePad",
+    description:
+      "The terms on which students, teachers, tutors and schools may use MyCodePad, including accounts, acceptable use, content ownership, subscriptions and cancellation.",
+    label: "Terms of Service",
+    group: "legal",
+    priority: 0.4,
+    changeFrequency: "yearly",
+  },
+  {
+    path: "/data-processing-agreement",
+    title: "School Data Processing Agreement | MyCodePad",
+    description:
+      "Draft Article 28 processor terms for schools using MyCodePad, covering processing instructions, security, subprocessors, breach notification, audits and deletion.",
+    label: "School DPA",
+    group: "legal",
+    priority: 0.4,
+    changeFrequency: "yearly",
   },
 ]
 

@@ -97,11 +97,12 @@ function FooterColumn({
 export function MarketingFooter() {
   const ides = routesInGroup("ide")
   const audiences = routesInGroup("audience")
+  const legal = routesInGroup("legal")
 
   return (
     <footer className="border-t border-border">
       <div className="mx-auto w-full max-w-6xl px-6 py-14">
-        <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr]">
           <div className="max-w-xs">
             <Logo iconClassName="h-8 w-8" textClassName="text-base" />
             <p className="mt-3 text-pretty text-sm text-muted-foreground">
@@ -128,6 +129,12 @@ export function MarketingFooter() {
               { label: "Create account", href: "/sign-up" },
               { label: "Sign in", href: "/sign-in" },
             ]}
+          />
+          {/* Reachable while signed out, which is the point: a school has to be
+              able to read the DPA before anyone creates an account. */}
+          <FooterColumn
+            heading="Legal"
+            links={legal.map((route) => ({ label: route.label, href: route.path }))}
           />
         </div>
 
