@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2, Sparkles, Wand2, AlertCircle, RefreshCw } from "lucide-react"
+import { Loader2, Sparkles, Wand2, AlertCircle, RefreshCw, Copy, Undo2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,14 @@ import {
   type QuestionType,
   type StarterQuestion,
 } from "@/lib/daily-starter"
-import { saveStarter, setStarterAssigned, type StarterInput } from "@/app/actions/starters"
+import {
+  getStarterForReuse,
+  listReusableStarters,
+  saveStarter,
+  setStarterAssigned,
+  type StarterInput,
+} from "@/app/actions/starters"
+import { ReusePicker, type ReuseItem } from "@/components/reuse-picker"
 
 export type ComposerInitial = Partial<StarterInput> & { id?: number; status?: string }
 
@@ -32,6 +39,26 @@ const selectClass =
 function blankQuestions() {
   const types: QuestionType[] = ["mcq", "predict_output", "true_false", "fill_blank", "spot_bug"]
   return types.map((t) => emptyQuestion(t))
+}
+
+function formatStarterDate(value: string) {
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+}
+
+/** Everything a reuse replaces, so the teacher can put their own draft back. */
+type ComposerSnapshot = {
+  title: string
+  topic: string
+  language: string
+  difficulty: string
+  yearGroup: string
+  objective: string
+  minutes: string
+  allowRetake: boolean
+  questions: StarterQuestion[]
+  aiGenerated: boolean
 }
 
 export function StarterComposer({
@@ -61,7 +88,61 @@ export function StarterComposer({
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState<null | "draft" | "assign">(null)
   const [errors, setErrors] = useState<string[]>([])
+  const [reuseOpen, setReuseOpen] = useState(false)
+  const [reused, setReused] = useState<{ from: string; snapshot: ComposerSnapshot } | null>(null)
   const aiPrompt = useAiUpgradePrompt()
+
+  // Once a class has answered a starter its questions are frozen, so reuse is
+  // offered while it is still new or a draft.
+  const canReuse = initial?.status !== "assigned"
+
+  function snapshot(): ComposerSnapshot {
+    return { title, topic, language, difficulty, yearGroup, objective, minutes, allowRetake, questions, aiGenerated }
+  }
+
+  function restore(s: ComposerSnapshot) {
+    setTitle(s.title)
+    setTopic(s.topic)
+    setLanguage(s.language)
+    setDifficulty(s.difficulty)
+    setYearGroup(s.yearGroup)
+    setObjective(s.objective)
+    setMinutes(s.minutes)
+    setAllowRetake(s.allowRetake)
+    setQuestions(s.questions)
+    setAiGenerated(s.aiGenerated)
+  }
+
+  /**
+   * Copy another starter's questions and settings in. Nothing is written until
+   * the teacher saves, and the date stays as they set it: a reused starter is
+   * for the lesson they are planning, not the one it came from.
+   */
+  async function applyReuse(item: ReuseItem) {
+    const source = await getStarterForReuse(item.id)
+    const previous = snapshot()
+    restore({
+      title: source.title,
+      topic: source.topic,
+      language: source.language,
+      difficulty: source.difficulty,
+      yearGroup: source.yearGroup,
+      objective: source.objective,
+      minutes: String(Math.round(source.timeLimitSeconds / 60)),
+      allowRetake: source.allowRetake,
+      questions: source.questions,
+      aiGenerated: source.aiGenerated,
+    })
+    setErrors([])
+    setReused({ from: item.title, snapshot: previous })
+    toast.success("Questions copied. Review them, then save.")
+  }
+
+  function undoReuse() {
+    if (!reused) return
+    restore(reused.snapshot)
+    setReused(null)
+  }
 
   async function generate() {
     if (!topic.trim() && !objective.trim()) {
@@ -88,6 +169,7 @@ export function StarterComposer({
       setQuestions(data.questions)
       setAiGenerated(true)
       setErrors([])
+      setReused(null)
       if (!title.trim()) setTitle(`${topic || "Lesson"} starter`)
       toast.success("Draft ready. Review each question before assigning.")
     } catch (e) {
@@ -170,6 +252,27 @@ export function StarterComposer({
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <aside className="flex shrink-0 flex-col gap-4 overflow-y-auto border-b border-border bg-muted/30 p-5 md:w-80 md:border-b-0 md:border-r">
+            {canReuse && (
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start bg-background"
+                  onClick={() => setReuseOpen(true)}
+                >
+                  <Copy className="mr-1.5 h-4 w-4" aria-hidden />
+                  Reuse a starter
+                </Button>
+                <p className="text-xs text-pretty text-muted-foreground">
+                  Copy the questions from a starter you have already set for another class.
+                </p>
+                <div className="flex items-center gap-3 pt-1" aria-hidden>
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-xs tracking-wide text-muted-foreground uppercase">or</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold">Generate with AI</h3>
@@ -246,6 +349,23 @@ export function StarterComposer({
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5">
+              {reused && (
+                <div className="mb-5 flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-pretty">
+                    Copied from <span className="font-medium">{reused.from}</span>. Nothing is saved
+                    until you choose Save draft or Save &amp; assign.
+                  </p>
+                  <div className="flex shrink-0 flex-wrap gap-1.5">
+                    <Button size="sm" variant="ghost" onClick={undoReuse}>
+                      <Undo2 className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Undo
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setReused(null)}>
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {errors.length > 0 && (
                 <div role="alert" className="mb-5 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
                   <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
@@ -284,9 +404,38 @@ export function StarterComposer({
             </div>
           </div>
         </div>
-        {/* Nested inside the composer so it stacks above it and the starter
+        {/* Nested inside the composer so they stack above it and the starter
             being written stays mounted underneath. */}
         <AiUpgradePrompt open={aiPrompt.open} onOpenChange={aiPrompt.setOpen} />
+        <ReusePicker
+          open={reuseOpen}
+          onOpenChange={setReuseOpen}
+          title="Reuse a starter"
+          description="Starters you have already written, grouped by programming language. Choosing one copies its questions into this starter."
+          searchPlaceholder="Search by title, topic or class"
+          preferredLanguage={language}
+          emptyTitle="No starters to reuse yet"
+          emptyHint="Once you have written a Daily Starter for one class, it will appear here ready to set for another."
+          load={async () => {
+            const starters = await listReusableStarters()
+            return starters
+              .filter((s) => s.id !== initial?.id)
+              .map<ReuseItem>((s) => ({
+                id: s.id,
+                language: s.language,
+                title: s.title,
+                preview: s.topic || undefined,
+                facts: [
+                  s.className,
+                  formatStarterDate(s.starterDate),
+                  `${s.questionCount} ${s.questionCount === 1 ? "question" : "questions"}`,
+                  s.difficulty,
+                ].filter(Boolean),
+                tags: s.status === "assigned" ? ["Assigned"] : ["Draft"],
+              }))
+          }}
+          onPick={applyReuse}
+        />
       </DialogContent>
     </Dialog>
     </>

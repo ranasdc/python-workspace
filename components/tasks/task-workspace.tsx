@@ -7,8 +7,10 @@ import { toast } from "sonner"
 import {
   AlertTriangle,
   ClipboardList,
+  Copy,
   Eye,
   EyeOff,
+  Library,
   Lightbulb,
   Loader2,
   Lock,
@@ -41,11 +43,14 @@ import { AiUpgradePrompt, useAiUpgradePrompt } from "@/components/ai-upgrade-pro
 import { SolutionMarkdown } from "@/components/tasks/solution-markdown"
 import {
   getLibraryTask,
+  getTaskForReuse,
+  listReusableTasks,
   saveLibraryTask,
   deleteLibraryTask,
   type LibraryTask,
   type SolutionSource,
 } from "@/app/actions/tasks"
+import { ReusePicker, type ReuseItem } from "@/components/reuse-picker"
 import { getLanguage, type LanguageId } from "@/lib/ide/languages"
 import { isSolutionStale, taskFingerprint } from "@/lib/tasks/solution-freshness"
 import { cn } from "@/lib/utils"
@@ -79,6 +84,19 @@ const SOURCE_LABEL: Record<SolutionSource, string> = {
 
 type Draft = { title: string; instructions: string }
 type Refinement = Draft & { summary: string }
+
+/** The whole form, as it stood before a reuse replaced it. */
+type TaskSnapshot = Draft & {
+  topic: string
+  difficulty: string
+  yearGroup: string
+  learningObjective: string
+  origin: "manual" | "ai"
+  aiRefined: boolean
+  solution: string | null
+  solutionSource: SolutionSource | null
+  solutionFingerprint: string | null
+}
 
 export function TaskWorkspace({
   file,
@@ -117,7 +135,15 @@ export function TaskWorkspace({
     null,
   )
   const [refinement, setRefinement] = useState<Refinement | null>(null)
-  const [generatedNotice, setGeneratedNotice] = useState<{ previous: Draft | null } | null>(null)
+  // `from` names the task this was copied from; absent means AI wrote it. The
+  // AI path only replaces the wording, so it snapshots the draft alone.
+  const [generatedNotice, setGeneratedNotice] = useState<
+    { previous: Draft | null; from?: string } | null
+  >(null)
+  const [reuseOpen, setReuseOpen] = useState(false)
+  // A reuse overwrites the details and the solution as well as the wording, so
+  // putting the teacher's own draft back takes a snapshot of all of it.
+  const [reuseUndo, setReuseUndo] = useState<TaskSnapshot | null>(null)
 
   // The upgrade prompt is rendered inside this dialog, so it stacks above it as
   // a nested dialog and the task form underneath is never unmounted.
@@ -260,6 +286,72 @@ export function TaskWorkspace({
     setTitle(previous.title)
     setInstructions(previous.instructions)
     setOrigin(existing?.origin === "ai" ? "ai" : "manual")
+    setGeneratedNotice(null)
+  }
+
+  /**
+   * Copy one of the teacher's existing tasks onto this file. Nothing is written
+   * until Save & attach, and anything they had already typed is kept so the
+   * notice can put it back.
+   */
+  async function applyReuse(item: ReuseItem) {
+    const source = await getTaskForReuse(item.id)
+    const hadDraft = Boolean(title.trim() || instructions.trim())
+    setReuseUndo({
+      title,
+      instructions,
+      topic,
+      difficulty,
+      yearGroup,
+      learningObjective,
+      origin,
+      aiRefined,
+      solution,
+      solutionSource,
+      solutionFingerprint,
+    })
+
+    setTitle(source.title)
+    setInstructions(source.instructions)
+    setTopic(source.topic ?? "")
+    setDifficulty(source.difficulty ?? "")
+    setYearGroup(source.yearGroup ?? "")
+    setLearningObjective(source.learningObjective ?? "")
+    setOrigin(source.origin === "ai" ? "ai" : "manual")
+    setAiRefined(source.aiRefined)
+    setRefinement(null)
+    setAiError(null)
+
+    // A model solution is code written for one IDE, so it only travels with the
+    // task when the file it lands on runs the same language. Otherwise it is
+    // dropped rather than left describing a task that is no longer here.
+    const carried =
+      source.solution?.trim() && source.language === language ? source.solution : null
+    setSolution(carried)
+    setSolutionSource(carried ? ((source.solutionSource as SolutionSource | null) ?? "teacher") : null)
+    setSolutionFingerprint(carried ? taskFingerprint(source.title, source.instructions) : null)
+    setSolutionView("closed")
+
+    setGeneratedNotice({ previous: hadDraft ? { title, instructions } : null, from: item.title })
+    track("task_reused", { language, withSolution: Boolean(carried) })
+  }
+
+  /** Put the teacher's own draft, details and solution back after a reuse. */
+  function restoreReuse() {
+    if (!reuseUndo) return
+    setTitle(reuseUndo.title)
+    setInstructions(reuseUndo.instructions)
+    setTopic(reuseUndo.topic)
+    setDifficulty(reuseUndo.difficulty)
+    setYearGroup(reuseUndo.yearGroup)
+    setLearningObjective(reuseUndo.learningObjective)
+    setOrigin(reuseUndo.origin)
+    setAiRefined(reuseUndo.aiRefined)
+    setSolution(reuseUndo.solution)
+    setSolutionSource(reuseUndo.solutionSource)
+    setSolutionFingerprint(reuseUndo.solutionFingerprint)
+    setSolutionView("closed")
+    setReuseUndo(null)
     setGeneratedNotice(null)
   }
 
@@ -416,9 +508,23 @@ export function TaskWorkspace({
               className="flex min-w-0 flex-1 flex-col gap-4 lg:overflow-y-auto lg:pr-1"
             >
               {generatedNotice && !refinement && (
-                <div className="flex flex-col gap-2 rounded-lg border border-chart-4/30 bg-chart-4/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-foreground">
-                    AI drafted this task. Review it before saving.
+                <div
+                  className={cn(
+                    "flex flex-col gap-2 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between",
+                    generatedNotice.from
+                      ? "border-primary/30 bg-primary/5"
+                      : "border-chart-4/30 bg-chart-4/10",
+                  )}
+                >
+                  <p className="text-pretty text-foreground">
+                    {generatedNotice.from ? (
+                      <>
+                        Copied from <span className="font-medium">{generatedNotice.from}</span>.
+                        Edit it for this class before saving.
+                      </>
+                    ) : (
+                      "AI drafted this task. Review it before saving."
+                    )}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     <Button size="sm" variant="ghost" onClick={editManually}>
@@ -428,7 +534,11 @@ export function TaskWorkspace({
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Refine
                     </Button>
                     {generatedNotice.previous && (
-                      <Button size="sm" variant="ghost" onClick={restorePrevious}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={generatedNotice.from && reuseUndo ? restoreReuse : restorePrevious}
+                      >
                         <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Restore my draft
                       </Button>
                     )}
@@ -551,6 +661,25 @@ export function TaskWorkspace({
               aria-label="AI tools and solution"
               className="flex shrink-0 flex-col gap-4 lg:w-[420px] lg:overflow-y-auto xl:w-[460px]"
             >
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                  <Library className="h-4 w-4 text-primary" aria-hidden />
+                  Reuse a task
+                </div>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Start from a task you have already written for another class, then edit it here.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start bg-background"
+                  onClick={() => setReuseOpen(true)}
+                  disabled={busy}
+                >
+                  <Copy className="mr-1.5 h-4 w-4" aria-hidden />
+                  Browse my tasks
+                </Button>
+              </div>
+
               <div className="rounded-lg border border-border bg-muted/40 p-4">
                 <div className="mb-1 flex items-center gap-2 text-sm font-medium">
                   <Sparkles className="h-4 w-4 text-chart-4" aria-hidden />
@@ -731,6 +860,36 @@ export function TaskWorkspace({
         </DialogFooter>
 
         <AiUpgradePrompt open={aiPrompt.open} onOpenChange={aiPrompt.setOpen} />
+        {/* Nested, so the task being written stays mounted underneath. */}
+        <ReusePicker
+          open={reuseOpen}
+          onOpenChange={setReuseOpen}
+          title="Reuse a task"
+          description="Tasks you have already written, grouped by programming language. Choosing one copies it onto this file."
+          searchPlaceholder="Search by title, topic or file"
+          preferredLanguage={language}
+          emptyTitle="No tasks to reuse yet"
+          emptyHint="Every task you attach to a file joins this list, ready to set for another class."
+          load={async () => {
+            const tasks = await listReusableTasks()
+            return tasks
+              .filter((t) => t.libraryFileId !== file.id)
+              .map<ReuseItem>((t) => ({
+                id: t.id,
+                language: t.language,
+                title: t.title,
+                preview: t.preview,
+                facts: [
+                  t.folderName ? `${t.folderName}/${t.fileName}` : t.fileName,
+                  t.topic ?? "",
+                  t.yearGroup ?? "",
+                  t.difficulty ?? "",
+                ].filter(Boolean),
+                tags: t.hasSolution ? ["Solution"] : [],
+              }))
+          }}
+          onPick={applyReuse}
+        />
       </DialogContent>
     </Dialog>
   )
