@@ -503,3 +503,71 @@ export const stripeEvents = pgTable("stripe_event", {
   type: text("type").notNull(),
   processedAt: timestamp("processedAt").notNull().defaultNow(),
 })
+
+// Right-to-erasure requests (UK GDPR Article 17).
+//
+// Deletion itself is carried out by hand — there is no self-service delete in
+// the product — so this table is the record that a request was made, who was
+// satisfied that the requester was entitled to make it, what was decided and
+// when it was finished. Without it the operator cannot show the request was
+// handled inside the statutory month.
+export const erasureRequests = pgTable("erasure_request", {
+  id: serial("id").primaryKey(),
+  // Short reference the requester can quote when chasing.
+  reference: text("reference").notNull().unique(),
+  // Who the request is about. Intentionally a plain column with no foreign
+  // key: the whole purpose of the row is to outlive the account it documents,
+  // and a cascade would destroy the evidence that the erasure was performed.
+  subjectUserId: text("subjectUserId").notNull(),
+  // Name and email as they stood when the request arrived, so a completed
+  // request is still identifiable after the user row has gone. This is itself
+  // personal data kept for accountability, and is covered by its own retention
+  // fact in lib/legal.ts rather than kept indefinitely by default.
+  subjectLabel: text("subjectLabel").notNull(),
+  // Snapshot of the role, because the plan depends on it and the live role
+  // disappears with the account.
+  subjectRole: text("subjectRole").notNull(),
+  // The controller school at the time of the request, null for an individual.
+  schoolId: integer("schoolId"),
+  requestedBy: text("requestedBy").notNull(),
+  // self | parent_guardian | school | teacher
+  requesterBasis: text("requesterBasis").notNull().default("self"),
+  detail: text("detail").notNull().default(""),
+  // received | verifying_identity | awaiting_school | in_progress | completed |
+  // refused | withdrawn
+  status: text("status").notNull().default("received"),
+  // Article 12(3): one month from receipt. Stored rather than computed so the
+  // deadline a request was actually held to stays visible if the rule changes.
+  dueBy: timestamp("dueBy").notNull(),
+  // Verification is recorded as separate facts because identity (is this the
+  // account holder?) and authority (may this person ask on their behalf?) are
+  // different questions with different evidence.
+  identityVerifiedAt: timestamp("identityVerifiedAt"),
+  identityVerifiedBy: text("identityVerifiedBy"),
+  identityMethod: text("identityMethod"),
+  authorityConfirmedAt: timestamp("authorityConfirmedAt"),
+  authorityConfirmedBy: text("authorityConfirmedBy"),
+  // fulfilled | partially_fulfilled | refused
+  decision: text("decision"),
+  decisionRationale: text("decisionRationale"),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Append-only trail for each request. Separate from the request row so a
+// status can never be changed without leaving a record of who changed it.
+export const erasureRequestEvents = pgTable("erasure_request_event", {
+  id: serial("id").primaryKey(),
+  requestId: integer("requestId")
+    .notNull()
+    .references(() => erasureRequests.id, { onDelete: "cascade" }),
+  // Null where the actor's own account has since been deleted.
+  actorId: text("actorId"),
+  actorLabel: text("actorLabel").notNull(),
+  // submitted | status_changed | identity_verified | authority_confirmed |
+  // note | decided | completed
+  kind: text("kind").notNull(),
+  note: text("note").notNull().default(""),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
