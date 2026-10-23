@@ -160,6 +160,12 @@ function RequestRow({ request }: { request: ErasureRequestSummary }) {
   const [note, setNote] = useState("")
   const [nextStatus, setNextStatus] = useState<string>("in_progress")
 
+  // Controlled, so a saved check or status change closes its own dialog. Left
+  // uncontrolled the dialog stays open over a field that has already been
+  // submitted, which invites recording the same check twice.
+  const [checkOpen, setCheckOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+
   function verify(kind: "identity" | "authority") {
     startTransition(async () => {
       const result = await confirmErasureVerification(request.id, kind, method)
@@ -168,6 +174,7 @@ function RequestRow({ request }: { request: ErasureRequestSummary }) {
         return
       }
       setMethod("")
+      setCheckOpen(false)
       toast.success(kind === "identity" ? "Identity recorded." : "Authority recorded.")
       router.refresh()
     })
@@ -181,6 +188,7 @@ function RequestRow({ request }: { request: ErasureRequestSummary }) {
         return
       }
       setNote("")
+      setStatusOpen(false)
       toast.success(`Request ${request.reference} updated.`)
       router.refresh()
     })
@@ -233,7 +241,7 @@ function RequestRow({ request }: { request: ErasureRequestSummary }) {
 
       {!closed && (
         <div className="flex flex-wrap gap-2 pt-1">
-          <Dialog>
+          <Dialog open={checkOpen} onOpenChange={setCheckOpen}>
               <DialogTrigger render={<Button variant="outline" size="sm" />}>
                 <ShieldCheck data-icon="inline-start" />
                 Record a check
@@ -283,7 +291,7 @@ function RequestRow({ request }: { request: ErasureRequestSummary }) {
             </DialogContent>
           </Dialog>
 
-          <Dialog>
+          <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
               <DialogTrigger render={<Button variant="outline" size="sm" />}>
                 Update status
               </DialogTrigger>

@@ -133,6 +133,28 @@ export function responseDeadline(receivedAt: Date): Date {
   return due
 }
 
+/**
+ * What must be established before a request is acted on, per role.
+ *
+ * Verification is deliberately proportionate: confirming control of the
+ * account email is enough for an ordinary account, and demanding identity
+ * documents for a routine request would itself be excessive. Where a school is
+ * the controller, its instruction is needed as well as the requester's
+ * identity — the two are separate checks and the queue records them separately.
+ */
+const ERASURE_AUTHORITY: Record<ErasureRole, string> = {
+  individual_student:
+    "Proof that the requester controls the account's email address. Where the account holder is a child, a parent or guardian may request on their behalf once that relationship has been established.",
+  school_student:
+    "Confirmation from the school, plus proportionate identity verification. A request made by a pupil is passed to their school rather than actioned directly.",
+  independent_teacher:
+    "Proof of control of the account email. Where classes are still running, a named replacement teacher or a confirmed closure date for each class is needed before the account can be removed.",
+  school_teacher:
+    "Proof of control of the account email, and the school's instruction covering the classes, pupil work and lesson material it owns.",
+  school_admin:
+    "Proof of control of the account email, and the agreement of another administrator of the school who will take over anything this account owns.",
+}
+
 /** Records the database removes by itself, verified against the live schema. */
 const CASCADING_STEPS: ErasureStep[] = [
   {
@@ -194,20 +216,31 @@ export function planErasure(subject: ErasureSubject): ErasurePlan {
   }
 
   // ---- Teachers: the classroom stays, the teacher's identifiers go
-  if (role === "independent_teacher" || role === "school_teacher") {
-    const schoolOwned = role === "school_teacher"
+  //
+  // Keyed on the teacher flag rather than the role, because a school
+  // administrator is usually a teacher as well. Keying on the role would
+  // short-circuit at "school_admin" and hand them a plan with no classes,
+  // no feedback and no lesson material in it — understating, in the one
+  // document they are shown, everything that actually has to happen.
+  if (subject.isTeacher) {
+    const schoolOwned = Boolean(subject.schoolName)
     if (subject.ownedClassCount > 0) {
       blockers.push(
         `${subject.ownedClassCount} class${subject.ownedClassCount === 1 ? "" : "es"} are owned by this account and contain other people's pupils and their work. class.teacherId has no foreign key, so deleting the user would orphan them rather than remove them. Each class must be transferred or closed first.`,
       )
     }
+    // With no classes there is genuinely nothing to transfer, and saying
+    // otherwise would describe a step that will not happen.
+    const hasClasses = subject.ownedClassCount > 0
     steps.push({
       label: "Classes and enrolled pupils",
       records: "class.teacherId, enrollment, student_folder, code_file",
-      disposition: schoolOwned ? "retain" : "reassign",
-      reason: schoolOwned
-        ? "School-owned classes and the pupil work inside them are the school's record. They are transferred to another teacher on the school's instruction, never deleted because a teacher left."
-        : "The work inside belongs to the pupils, not the teacher. Classes are transferred to a named replacement, or closed with an export offered to each pupil, before the account is removed.",
+      disposition: !hasClasses ? "delete" : schoolOwned ? "retain" : "reassign",
+      reason: !hasClasses
+        ? "This account owns no classes other than its own personal workspace, so there is no pupil work to transfer. The personal workspace is deleted with the account."
+        : schoolOwned
+          ? "School-owned classes and the pupil work inside them are the school's record. They are transferred to another teacher on the school's instruction, never deleted because a teacher left."
+          : "The work inside belongs to the pupils, not the teacher. Classes are transferred to a named replacement, or closed with an export offered to each pupil, before the account is removed.",
       automatic: false,
     })
     steps.push({
@@ -318,12 +351,7 @@ export function planErasure(subject: ErasureSubject): ErasurePlan {
       controller === "school"
         ? `${subject.schoolName ?? "The school"} is the controller for this account. MyCodePad processes on its instruction, so the school has to authorise the erasure and decide what happens to work produced for it.`
         : "MyCodePad is the controller for this account and decides the request directly.",
-    authority:
-      role === "school_student"
-        ? "Confirmation from the school, plus proportionate identity verification. A request made by a pupil is passed to their school rather than actioned directly."
-        : role === "individual_student"
-          ? "Proof that the requester controls the account's email address. Where the account holder is a child, a parent or guardian may request on their behalf once that relationship is established."
-          : "Proof of control of the account email, and for a school account the school's agreement to the transfer of anything it owns.",
+    authority: ERASURE_AUTHORITY[role],
     blockers,
     steps,
   }
