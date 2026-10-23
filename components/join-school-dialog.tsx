@@ -1,9 +1,12 @@
 "use client"
 
 import { useState, type ReactElement } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Loader2, School } from "lucide-react"
 import { toast } from "sonner"
+
+import { PrivacyNotice } from "@/components/legal/legal-links"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -78,6 +81,22 @@ export function JoinSchoolDialog({
             className="font-mono uppercase"
             required
           />
+          {/* Joining is the moment a personal account becomes visible to an
+              organisation, which is the one consequence a teacher cannot
+              reverse on their own. It is stated before the button, not after. */}
+          <PrivacyNotice className="mt-1">
+            Joining links your account to the school. Its administrators will see your name,
+            email and class activity, and can remove your access. Your school becomes
+            responsible for that data under the{" "}
+            <Link
+              href="/data-processing-agreement"
+              className="font-medium text-foreground hover:underline"
+            >
+              School DPA
+            </Link>
+            .
+          </PrivacyNotice>
+
           <DialogFooter className="mt-2">
             <Button type="submit" disabled={pending}>
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

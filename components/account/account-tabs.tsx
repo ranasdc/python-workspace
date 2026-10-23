@@ -5,12 +5,14 @@ import { usePathname, useRouter } from "next/navigation"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { AccountProfile } from "@/lib/account"
+import type { ErasureContext } from "@/lib/erasure-requests"
 import { ProfilePanel } from "@/components/account/profile-panel"
 import { SecurityPanel } from "@/components/account/security-panel"
 import { SubscriptionPanel } from "@/components/account/subscription-panel"
 import { MembershipPanel } from "@/components/account/membership-panel"
+import { DataRightsPanel } from "@/components/account/data-rights-panel"
 
-export type AccountTab = "profile" | "security" | "subscription" | "membership"
+export type AccountTab = "profile" | "security" | "subscription" | "membership" | "data"
 
 /**
  * The account area's four views.
@@ -23,9 +25,11 @@ export type AccountTab = "profile" | "security" | "subscription" | "membership"
  */
 export function AccountTabs({
   profile,
+  erasure,
   initialTab,
 }: {
   profile: AccountProfile
+  erasure: ErasureContext
   initialTab: AccountTab
 }) {
   const router = useRouter()
@@ -50,6 +54,7 @@ export function AccountTabs({
         <TabsTrigger value="security">Security</TabsTrigger>
         <TabsTrigger value="subscription">Subscription</TabsTrigger>
         <TabsTrigger value="membership">Membership</TabsTrigger>
+        <TabsTrigger value="data">Your data</TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -63,6 +68,9 @@ export function AccountTabs({
       </TabsContent>
       <TabsContent value="membership">
         <MembershipPanel profile={profile} />
+      </TabsContent>
+      <TabsContent value="data">
+        <DataRightsPanel context={erasure} />
       </TabsContent>
     </Tabs>
   )

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { GraduationCap, BookOpen, Loader2, CheckCircle2 } from "lucide-react"
 import { PasswordInput } from "@/components/auth/password-input"
+import { LegalLinkRow, PrivacyNotice } from "@/components/legal/legal-links"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
@@ -189,6 +190,26 @@ export function AuthForm({
           </p>
         )}
 
+        {mode === "sign-up" && (
+          /* The notice sits above the button, where it is read before the
+             account exists rather than after. It is information, not a consent
+             gate: nothing here relies on consent as its lawful basis, so a tick
+             box would imply a choice the user does not actually have. */
+          <PrivacyNotice>
+            We only need your name, email and password to create the account. By continuing you
+            agree to our{" "}
+            <Link href="/terms" className="font-medium text-foreground hover:underline">
+              Terms of Service
+            </Link>
+            , and the{" "}
+            <Link href="/privacy" className="font-medium text-foreground hover:underline">
+              Privacy Policy
+            </Link>{" "}
+            explains what we do with it. If your school set up your account, read your
+            school&apos;s privacy notice too.
+          </PrivacyNotice>
+        )}
+
         <Button type="submit" disabled={loading} className="mt-2">
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {mode === "sign-up" ? "Create account" : "Sign in"}
@@ -227,6 +248,8 @@ export function AuthForm({
           </>
         )}
       </p>
+
+      <LegalLinkRow className="mt-6 justify-center text-xs" />
     </div>
   )
 }
