@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react"
 import { getSessionUser } from "@/lib/session"
 import { getAccountProfile } from "@/lib/account"
 import { AccountTabs, type AccountTab } from "@/components/account/account-tabs"
+import { LegalLinkRow, PrivacyNotice } from "@/components/legal/legal-links"
 
 export const metadata = {
   title: "Account",
@@ -45,6 +46,21 @@ export default async function AccountPage({
       </p>
 
       <AccountTabs profile={profile} initialTab={initialTab} />
+
+      {/* The account area is where someone goes looking for their data, so the
+          rights notice belongs here rather than only in the public footer that
+          a signed-in user never sees. */}
+      <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6">
+        <PrivacyNotice>
+          You can see and correct your profile above. To request a copy of your data or ask us
+          to delete your account, use the contact details in the{" "}
+          <Link href="/privacy" className="font-medium text-foreground hover:underline">
+            Privacy Policy
+          </Link>
+          . If your school created your account, ask your school first — they control it.
+        </PrivacyNotice>
+        <LegalLinkRow className="text-xs" />
+      </div>
     </main>
   )
 }

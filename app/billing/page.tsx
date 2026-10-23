@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ManageBillingButton } from "@/components/manage-billing-button"
+import { LegalLinkRow, PrivacyNotice } from "@/components/legal/legal-links"
 
 export const metadata = {
   title: "Billing",
@@ -199,6 +200,20 @@ export default async function BillingPage() {
           </CardFooter>
         )}
       </Card>
+
+      {/* Cancellation and refund terms live in the Terms of Service, so the
+          page where money is actually managed links straight to them. */}
+      <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6">
+        <PrivacyNotice>
+          Card details are handled by Stripe and never reach our servers. Cancellation and
+          refund terms are in the{" "}
+          <Link href="/terms" className="font-medium text-foreground hover:underline">
+            Terms of Service
+          </Link>
+          .
+        </PrivacyNotice>
+        <LegalLinkRow className="text-xs" />
+      </div>
     </main>
   )
 }
