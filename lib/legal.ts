@@ -53,12 +53,14 @@ export const LEGAL_FACTS = {
   operatorLegalForm: {
     label: "legal form (e.g. private limited company, sole trader)",
     why: "Determines what else must be published, including whether a company number and registered office exist at all.",
-    value: null,
+    value: "Sole trader",
   },
   companyNumber: {
     label: "Companies House registration number",
     why: "Required on the website of a UK registered company. Not applicable to a sole trader.",
-    value: null,
+    // Settled by the legal form rather than separately supplied: a sole trader
+    // has no Companies House registration to quote.
+    value: "Not applicable — MyCodePad is operated by a sole trader, who has no Companies House registration",
   },
   registeredAddress: {
     label: "registered or trading postal address",
@@ -105,7 +107,9 @@ export const LEGAL_FACTS = {
   minimumAge: {
     label: "minimum age for a self-registered individual account",
     why: "There is no age gate in the product today. The threshold is a policy decision with direct Children's Code and lawful-basis consequences.",
-    value: null,
+    // Stated as policy. Nothing in the product enforces it, which is recorded
+    // as a technical gap rather than quietly resolved by writing it down here.
+    value: "13. A child under 13 must be given an account by their school rather than registering themselves",
   },
   consumerCancellation: {
     label: "statutory cancellation / cooling-off position for individual subscriptions",
@@ -136,7 +140,17 @@ export const LEGAL_FACTS = {
   // ----- Retention -----
   retentionAfterAccountClosure: {
     label: "retention period for account and work data after an account is closed",
-    why: "No account deletion exists in the product yet, so there is no implemented period to describe. See the technical gaps list.",
+    why: "Erasure is now requested through the account area and carried out by hand against a recorded plan, so there is a process — but no decision has been taken on how long anything is kept before that plan runs, or whether a grace period applies in which a request can be reversed.",
+    value: null,
+  },
+  erasureRecordRetention: {
+    label: "retention period for the erasure request record itself",
+    why: "Each request stores the subject's name and email so the record still means something after the account is deleted, which is what lets MyCodePad show a regulator the request was handled. That record is itself personal data and cannot be kept forever without a stated period.",
+    value: null,
+  },
+  parentalAuthorityVerification: {
+    label: "how a parent or guardian's authority to act for a child is established",
+    why: "The request form accepts a parent or guardian as the requester, and the product holds nothing that links a parent to a pupil. The check is therefore a documented human procedure, and acting on an unverified claim would disclose or destroy a child's data on a stranger's say-so.",
     value: null,
   },
   retentionBackups: {
@@ -194,7 +208,8 @@ export const LEGAL_FACTS = {
   securityCertifications: {
     label: "security certifications held, if any (e.g. Cyber Essentials, ISO 27001)",
     why: "Schools routinely ask. Claiming a certification that is not held is a misrepresentation.",
-    value: null,
+    value:
+      "None held. MyCodePad does not hold Cyber Essentials, ISO 27001 or any other security certification, and does not claim to",
   },
   subprocessorNoticePeriod: {
     label: "notice period before a new subprocessor is added",
@@ -579,9 +594,15 @@ export const SECURITY_MEASURES: SecurityMeasure[] = [
 export const TECHNICAL_GAPS: { gap: string; impact: string; area: string }[] = [
   {
     area: "Right to erasure",
-    gap: "There is no account deletion anywhere in the product. The account area can change a display name, an avatar and a password, and nothing else.",
+    gap: "Erasure can now be requested from the account area and is tracked to a decision with a statutory deadline, but the deletion itself is still carried out by hand. No code deletes an account.",
     impact:
-      "An Article 17 erasure request cannot be fulfilled through the product and would have to be carried out by hand against the database. The Privacy Policy cannot describe a self-service deletion route until one exists.",
+      "An Article 17 request is answerable within the one month allowed, and the plan that governs it is published to the account holder. The Privacy Policy must still say that fulfilment is manual, and must not describe a self-service delete button, because there is none.",
+  },
+  {
+    area: "Rights request notification",
+    gap: "A new erasure request appears in the school's queue and in the account area, but nobody is emailed. A school administrator only learns of a request by visiting the school page.",
+    impact:
+      "The one month deadline starts when the request is received, not when an administrator happens to notice it. Until the queue sends a notification, meeting the deadline depends on someone checking the page.",
   },
   {
     area: "Right to data portability",
@@ -615,9 +636,9 @@ export const TECHNICAL_GAPS: { gap: string; impact: string; area: string }[] = [
   },
   {
     area: "Age assurance",
-    gap: "Sign-up collects a name, an email address and a role. There is no date of birth, no age band and no age gate.",
+    gap: "A minimum age of 13 is now stated as policy, but sign-up still collects only a name, an email address and a role. There is no date of birth, no age band and nothing that enforces the threshold.",
     impact:
-      "The operator cannot currently tell whether a self-registering user is a child, which affects the lawful basis for individual accounts and the Children's Code risk assessment.",
+      "The policy can be stated but not relied on. A child under 13 can still self-register, so the lawful basis for individual accounts and the Children's Code risk assessment both have to assume they have.",
   },
   {
     area: "Email verification",

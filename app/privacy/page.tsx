@@ -544,7 +544,15 @@ const sections: LegalSection[] = [
             </>,
             <>
               <strong className="text-foreground">Erasure</strong> — deletion of your data, where
-              no overriding reason to keep it applies.
+              no overriding reason to keep it applies. You can ask for this from the{" "}
+              <a
+                href="/account?tab=data"
+                className="text-foreground underline underline-offset-4"
+              >
+                Your data
+              </a>{" "}
+              tab of your account, which also shows exactly what would happen to each kind of
+              record before you ask.
             </>,
             <>
               <strong className="text-foreground">Restriction</strong> — a pause on processing
@@ -574,10 +582,11 @@ const sections: LegalSection[] = [
           it; if you send it to us, we will tell you and pass it on.
         </P>
         <Callout tone="warning" title="What we can and cannot do today">
-          There is no self-service account deletion in the product, and no single export covering
-          your account, classes, feedback and results. Requests under the rights above are
-          currently fulfilled manually. Building both is the first item on our remediation list,
-          and this section will be rewritten when it is done.
+          An erasure request can be made in the product and is tracked to a decision against the
+          one month deadline, but the deletion itself is carried out by hand — there is no
+          self-service delete button, and we are not going to describe one. There is also no
+          single export covering your account, classes, feedback and results, so a portability
+          request is fulfilled manually. This section will be rewritten when that changes.
         </Callout>
       </>
     ),
@@ -592,22 +601,93 @@ const sections: LegalSection[] = [
           zip archive.
         </Lead>
         <P>
-          To close an account, or to have your data deleted, contact <Tbc id="privacyEmail" />.
-          Once an account is closed, data is retained for{" "}
+          To ask for your account to be erased, use the{" "}
+          <a href="/account?tab=data" className="text-foreground underline underline-offset-4">
+            Your data
+          </a>{" "}
+          tab in your account, or write to <Tbc id="privacyEmail" />. Either way we record the
+          request, give it a reference, and respond within one month. The account area shows you
+          the reference, the date a response is due, and whether we have verified your identity
+          yet.
+        </P>
+
+        <H3>What erasure actually means depends on what your account is</H3>
+        <P>
+          Deleting an account is not one action, because a single account can hold other
+          people&apos;s personal data. A teacher&apos;s account points at classes full of pupil
+          work; a school administrator&apos;s account may be the one the school itself was
+          created under. We therefore treat the following as different things, and the account
+          area shows you which one applies to you before you ask:
+        </P>
+        <InfoTable
+          caption="How an erasure request is handled for each kind of account"
+          headers={["Account", "Who decides", "What happens to the work"]}
+          rows={[
+            [
+              "Individual learner",
+              "MyCodePad",
+              "Your files, folders and personal workspace are deleted with the account.",
+            ],
+            [
+              "School-managed pupil",
+              "Your school",
+              "Work produced for school is the school's record as well as your personal data, so the school decides whether it is exported or deleted. We pass your request to them and do not delete it on our own initiative.",
+            ],
+            [
+              "Independent teacher or tutor",
+              "MyCodePad",
+              "Classes are transferred to a named replacement, or closed with an export offered to each pupil, before the account is removed. Feedback you left on pupils' work is kept but has your name stripped from it.",
+            ],
+            [
+              "School teacher",
+              "Your school",
+              "Classes, pupil work and lesson material belong to the school and are transferred on its instruction. A teacher leaving never deletes a classroom.",
+            ],
+            [
+              "School administrator",
+              "Your school",
+              "If your account is the one the school was created under, school ownership must be transferred to another administrator first, because otherwise removing you would delete the school, its members and its invite codes with you.",
+            ],
+          ]}
+        />
+        <P>
+          Across all of them, any public share links you have published are revoked first, before
+          anything else happens, because that is the only step that stops your data continuing to
+          leave the platform while the rest of the request is worked through.
+        </P>
+
+        <H3>What we check before acting</H3>
+        <P>
+          We ask you to confirm your identity, proportionately to what is being asked — we will
+          not demand identity documents where confirming control of your account email is enough.
+          Where somebody asks on a child&apos;s behalf, we separately establish that they are
+          entitled to: the product holds nothing linking a parent to a pupil, so that check is{" "}
+          <Tbc id="parentalAuthorityVerification" />.
+        </P>
+        <Callout tone="warning" title="Honest limits">
+          Fulfilment is manual. No code in MyCodePad deletes an account, and most of our tables
+          reference users by a plain identifier with no database-level link, so an automated
+          delete would leave data behind rather than remove it. That is why each request is worked
+          through against a written plan and recorded step by step, and why we will not promise
+          an instant deletion.
+        </Callout>
+        <P>
+          Once an account is erased, data is retained for{" "}
           <Tbc id="retentionAfterAccountClosure" />, except for records we must keep by law — see{" "}
           <a href="#retention" className="text-foreground underline underline-offset-4">
             section 13
           </a>
-          .
+          . Billing and tax records are the main example: we cannot delete an invoice on request.
+          We also keep a record of the request itself, including your name and email so the
+          record still means something after the account has gone, for{" "}
+          <Tbc id="erasureRecordRetention" />.
         </P>
         <P>
           Cancelling a paid subscription is separate from closing an account: a cancelled
           subscription leaves the account in place on the free tier. Cancellation is handled
-          through the Stripe billing portal linked from your billing page.
-        </P>
-        <P>
-          Where your account was created through a school, the school may ask us to remove it. The
-          school&apos;s own retention policy governs how long it keeps pupil work.
+          through the Stripe billing portal linked from your billing page. Being removed from a
+          school is separate again — it marks your membership as removed and leaves your account
+          and your work in place.
         </P>
       </>
     ),
@@ -636,9 +716,10 @@ const sections: LegalSection[] = [
         <Bullets
           items={[
             <>
-              <strong className="text-foreground">Age assurance.</strong> No age is collected, so
-              we cannot yet identify which of our users are children. The minimum age for an
-              independent account is <Tbc id="minimumAge" />.
+              <strong className="text-foreground">Age assurance.</strong> The minimum age for an
+              independent account is <Tbc id="minimumAge" />. That is our policy, but nothing in
+              the product enforces it: we collect no date of birth and no age band, so we cannot
+              currently identify which of our users are children, and we assume some are.
             </>,
             <>
               <strong className="text-foreground">A child-facing privacy notice.</strong> This

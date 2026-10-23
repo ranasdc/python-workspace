@@ -2,11 +2,13 @@ import { redirect } from "next/navigation"
 
 import { getSessionUser } from "@/lib/session"
 import { getSchoolOverview } from "@/app/actions/schools"
+import { getSchoolErasureQueue } from "@/app/actions/erasure"
 import { getHeaderIdentity } from "@/lib/account"
 import { AppHeader } from "@/components/app-header"
 import { LegalLinkRow, PrivacyNotice } from "@/components/legal/legal-links"
 import { SchoolOnboarding } from "@/components/school-onboarding"
 import { SchoolDashboard } from "@/components/school-dashboard"
+import { ErasureQueue } from "@/components/school/erasure-queue"
 
 export const metadata = {
   title: "School",
@@ -27,9 +29,10 @@ export default async function SchoolPage({
   const preselectedInterval =
     interval === "month" || interval === "year" ? interval : undefined
 
-  const [overview, identity] = await Promise.all([
+  const [overview, identity, erasureQueue] = await Promise.all([
     getSchoolOverview(),
     getHeaderIdentity(sessionUser.id),
+    getSchoolErasureQueue(),
   ])
 
   return (
@@ -49,6 +52,17 @@ export default async function SchoolPage({
           <SchoolDashboard overview={overview} preselectedInterval={preselectedInterval} />
         ) : (
           <SchoolOnboarding />
+        )}
+
+        {/* Only an administrator of a school sees this, and only their own
+            school's requests, because the queue names the pupils concerned. */}
+        {erasureQueue && (
+          <div className="mt-8">
+            <ErasureQueue
+              schoolName={erasureQueue.schoolName}
+              requests={erasureQueue.requests}
+            />
+          </div>
         )}
 
         {/* A school administrator is the person who has to answer for pupil data,

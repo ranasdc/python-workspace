@@ -334,13 +334,40 @@ const sections: LegalSection[] = [
           unless the School instructs it to. It will tell the School without undue delay and pass
           the request on.
         </P>
+
+        <H3>How an erasure request from a School-managed account is handled</H3>
+        <P>
+          This is implemented rather than merely promised. When a pupil or member of staff whose
+          account belongs to the School asks to be erased, the platform records the request,
+          gives it a reference, sets the response deadline at one month from receipt, and places
+          it in the School&apos;s own queue on its school dashboard rather than acting on it.
+          MyCodePad does not delete work produced for the School without the School&apos;s
+          instruction.
+        </P>
+        <P>
+          From that queue, an administrator of the School — and only of that School — can record
+          that the requester&apos;s identity has been verified, record separately that their
+          authority to ask has been established, and mark the request completed or refused. A
+          completion must say what was deleted, transferred or retained, and a refusal must state
+          its grounds, because the School has to give those grounds to the requester. Every one of
+          those steps is written to an audit trail with the administrator&apos;s name and the time.
+        </P>
+        <P>
+          The plan that governs what happens to each kind of record is published to the account
+          holder before they ask, and distinguishes a teacher from a pupil from an administrator.
+          A teacher leaving does not delete their classes: their identifiers are removed from the
+          feedback they left, and the classes and pupil work transfer to the School. An
+          administrator who created the School cannot be removed until School ownership has been
+          transferred, because the database would otherwise delete the School with them.
+        </P>
+
         <Callout tone="warning" title="What this assistance currently looks like">
-          Schools should know exactly what they are relying on. Today, access, portability and
-          erasure requests are fulfilled by MyCodePad manually against the database. There is no
-          self-service account deletion and no single export covering an individual&apos;s
-          account, classes, feedback and starter results. Building both is MyCodePad&apos;s first
-          remediation priority; until then, the practical turnaround for a bulk request should be
-          agreed with the School rather than assumed from this clause.
+          Schools should know exactly what they are relying on. Requests are now tracked to a
+          decision with a visible deadline, but fulfilment is still manual: no code in MyCodePad
+          deletes an account, and there is no single export covering an individual&apos;s account,
+          classes, feedback and starter results. The queue also sends no notification, so the
+          School should nominate someone to check it. The practical turnaround for a bulk request
+          should be agreed with the School rather than assumed from this clause.
         </Callout>
         <P>
           The platform does let a teacher or administrator correct a pupil&apos;s name and remove
@@ -627,9 +654,19 @@ const sections: LegalSection[] = [
               "Implemented — but not erasure",
             ],
             [
+              "Erasure requests",
+              "Recorded with a reference, a one month deadline, verification checks and an audit trail, and routed to the School for decision.",
+              "Implemented — tracking only, not deletion",
+            ],
+            [
               "Account and work data after closure",
               <Tbc key="closure" id="retentionAfterAccountClosure" />,
-              "Not implemented — no deletion routine exists",
+              "Requestable and tracked; fulfilment is manual",
+            ],
+            [
+              "The erasure request record itself",
+              <Tbc key="erasurelog" id="erasureRecordRetention" />,
+              "Holds the subject's name and email so the record survives the account",
             ],
             ["Backups", <Tbc key="backups" id="retentionBackups" />, "To be confirmed with provider"],
             [
@@ -640,7 +677,7 @@ const sections: LegalSection[] = [
             [
               "End of school contract",
               <Tbc key="eoc" id="retentionSchoolEndOfContract" />,
-              "Depends on the deletion routine above",
+              "Depends on a deletion routine that does not exist yet",
             ],
           ]}
         />

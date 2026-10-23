@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { getSessionUser } from "@/lib/session"
 import { getAccountProfile } from "@/lib/account"
+import { getErasureContext } from "@/lib/erasure-requests"
 import { AccountTabs, type AccountTab } from "@/components/account/account-tabs"
 import { LegalLinkRow, PrivacyNotice } from "@/components/legal/legal-links"
 
@@ -12,7 +13,7 @@ export const metadata = {
   description: "Your mycodepad profile, security, subscription and membership.",
 }
 
-const TABS: AccountTab[] = ["profile", "security", "subscription", "membership"]
+const TABS: AccountTab[] = ["profile", "security", "subscription", "membership", "data"]
 
 export default async function AccountPage({
   searchParams,
@@ -22,7 +23,10 @@ export default async function AccountPage({
   const me = await getSessionUser()
   if (!me) redirect("/sign-in?next=/account")
 
-  const profile = await getAccountProfile(me.id)
+  const [profile, erasure] = await Promise.all([
+    getAccountProfile(me.id),
+    getErasureContext(me.id),
+  ])
   if (!profile) redirect("/sign-in")
 
   const { tab } = await searchParams
@@ -45,19 +49,26 @@ export default async function AccountPage({
         Your profile, sign-in details, plan and memberships.
       </p>
 
-      <AccountTabs profile={profile} initialTab={initialTab} />
+      <AccountTabs profile={profile} erasure={erasure} initialTab={initialTab} />
 
       {/* The account area is where someone goes looking for their data, so the
           rights notice belongs here rather than only in the public footer that
           a signed-in user never sees. */}
       <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6">
         <PrivacyNotice>
-          You can see and correct your profile above. To request a copy of your data or ask us
-          to delete your account, use the contact details in the{" "}
+          You can see and correct your profile above, and the{" "}
+          <Link
+            href="/account?tab=data"
+            className="font-medium text-foreground hover:underline"
+          >
+            Your data
+          </Link>{" "}
+          tab shows exactly what deleting this account would involve and lets you ask for it.
+          For a copy of your data, use the contact details in the{" "}
           <Link href="/privacy" className="font-medium text-foreground hover:underline">
             Privacy Policy
           </Link>
-          . If your school created your account, ask your school first — they control it.
+          .
         </PrivacyNotice>
         <LegalLinkRow className="text-xs" />
       </div>
