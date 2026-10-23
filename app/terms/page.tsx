@@ -347,9 +347,9 @@ const sections: LegalSection[] = [
         <P>
           A school plan covers every teacher and pupil who is an active member of that school, up
           to the seat allowances above. Teacher Pro bought by an individual teacher covers up to{" "}
-          {PLANS.teacher_pro.studentSeatLimit?.toLocaleString("en-GB")} distinct pupils counted
-          across all of that teacher&apos;s classes — not per class — and every pupil they teach
-          is lifted onto Pro at no extra cost.
+          {`${PLANS.teacher_pro.studentSeatLimit?.toLocaleString("en-GB")} distinct pupils`}{" "}
+          counted across all of that teacher&apos;s classes — not per class — and every pupil
+          they teach is lifted onto Pro at no extra cost.
         </P>
         {SALE.active && (
           <>

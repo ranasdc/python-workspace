@@ -258,7 +258,11 @@ function PublicationChecklist() {
   if (outstanding.length === 0) return null
 
   return (
-    <section aria-labelledby="publication-checklist" className="flex flex-col gap-4">
+    <section
+      id="checklist"
+      aria-labelledby="publication-checklist"
+      className="flex scroll-mt-24 flex-col gap-4"
+    >
       <div className="flex items-center gap-2">
         <FileWarning className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
         <h2 id="publication-checklist" className="text-xl font-semibold tracking-tight">
