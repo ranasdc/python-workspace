@@ -214,7 +214,17 @@ export function StudentWorkspace({
   const [seenTick, setSeenTick] = useState(0)
   const resizeState = useRef<{ startX: number; startW: number } | null>(null)
 
-  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = usePyodide({
+  const {
+    status,
+    loadError,
+    loadErrorDetail,
+    awaitingInput,
+    interactive,
+    run,
+    submitInput,
+    stop,
+    retry,
+  } = usePyodide({
     // Python is a multi-megabyte download, so only an IDE that actually runs
     // code in it pays for it.
     enabled: runModelFor(language) === "console",
@@ -756,20 +766,15 @@ export function StudentWorkspace({
               <>
                 <div className="min-h-0 flex-1">
                   <PythonConsole
-                    lines={
-                      loadError
-                        ? [
-                            {
-                              text: `Failed to load Python runtime: ${loadError}`,
-                              kind: "err",
-                            },
-                          ]
-                        : consoleLines
-                    }
+                    lines={consoleLines}
                     running={status === "running"}
                     awaitingInput={awaitingInput}
                     interactive={interactive}
                     onSubmitInput={handleSubmitInput}
+                    runtimeStatus={status}
+                    runtimeError={loadError}
+                    runtimeErrorDetail={loadErrorDetail}
+                    onRetryRuntime={retry}
                   />
                 </div>
                 {showErrorHelper && (

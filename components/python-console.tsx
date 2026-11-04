@@ -1,7 +1,9 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
+import type { RunStatus } from "@/hooks/use-pyodide"
 import { cn } from "@/lib/utils"
-import { Terminal } from "lucide-react"
+import { AlertTriangle, Loader2, RefreshCw, Terminal } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 export type ConsoleLine = { text: string; kind: "out" | "err" | "info" | "in" }
@@ -12,12 +14,23 @@ export function PythonConsole({
   awaitingInput = false,
   interactive = false,
   onSubmitInput,
+  runtimeStatus,
+  runtimeError = null,
+  runtimeErrorDetail = null,
+  onRetryRuntime,
 }: {
   lines: ConsoleLine[]
   running?: boolean
   awaitingInput?: boolean
   interactive?: boolean
   onSubmitInput?: (text: string) => void
+  /** Drives the header indicator, so Python's state is always visible. */
+  runtimeStatus?: RunStatus
+  /** Student-facing reason the runtime could not start. */
+  runtimeError?: string | null
+  /** Underlying exception, shown only if the student opens the details. */
+  runtimeErrorDetail?: string | null
+  onRetryRuntime?: () => void
 }) {
   const [value, setValue] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
@@ -46,13 +59,42 @@ export function PythonConsole({
       <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
         <Terminal className="h-3.5 w-3.5" />
         Output
-        {showPrompt && (
+        {showPrompt ? (
           <span className="ml-auto flex items-center gap-1.5 text-primary">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             Waiting for input
           </span>
+        ) : (
+          <RuntimeIndicator status={runtimeStatus} />
         )}
       </div>
+      {runtimeError ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6">
+          <div role="alert" className="flex max-w-sm flex-col items-center gap-3 text-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <h3 className="text-sm font-semibold text-foreground">Python runtime unavailable</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">{runtimeError}</p>
+            {onRetryRuntime && (
+              <Button size="sm" variant="secondary" onClick={onRetryRuntime} className="mt-1">
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Retry Python Runtime
+              </Button>
+            )}
+            {runtimeErrorDetail && (
+              <details className="w-full text-left">
+                <summary className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
+                  Technical details
+                </summary>
+                <p className="mt-1.5 break-words rounded-md bg-muted p-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                  {runtimeErrorDetail}
+                </p>
+              </details>
+            )}
+          </div>
+        </div>
+      ) : (
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 cursor-text overflow-auto p-3 font-mono text-sm leading-6"
@@ -103,6 +145,40 @@ export function PythonConsole({
           </pre>
         )}
       </div>
+      )}
     </div>
+  )
+}
+
+/**
+ * Standing answer to "is Python ready yet?", so a student never has to guess
+ * whether the IDE is still downloading the runtime or waiting on them.
+ */
+function RuntimeIndicator({ status }: { status?: RunStatus }) {
+  if (!status || status === "error") return null
+
+  if (status === "loading") {
+    return (
+      <span className="ml-auto flex items-center gap-1.5">
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+        Loading Python
+      </span>
+    )
+  }
+
+  if (status === "running") {
+    return (
+      <span className="ml-auto flex items-center gap-1.5 text-primary">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        Running
+      </span>
+    )
+  }
+
+  return (
+    <span className="ml-auto flex items-center gap-1.5">
+      <span className="h-1.5 w-1.5 rounded-full bg-chart-3" aria-hidden="true" />
+      Python ready
+    </span>
   )
 }

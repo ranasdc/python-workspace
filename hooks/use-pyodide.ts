@@ -2,8 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
-const PYODIDE_VERSION = "0.26.4"
-const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`
+import {
+  PYODIDE_BLOCKED_MESSAGE,
+  PYODIDE_LOADER_TIMEOUT_MS,
+  PYODIDE_OFFLINE_MESSAGE,
+  PYODIDE_RUNTIME_TIMEOUT_MS,
+  PYODIDE_TIMEOUT_MESSAGE,
+  getPyodideIndexURL,
+} from "@/lib/ide/pyodide-runtime"
 
 const CONTROL_LEN = 2 // Int32Array: [0]=state, [1]=byte length
 const DATA_BYTES = 1 << 16 // 64 KB input buffer
@@ -146,7 +152,11 @@ declare global {
  */
 export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
   const [status, setStatus] = useState<RunStatus>("loading")
+  // The sentence shown to the student, kept separate from the underlying
+  // exception so the console can offer the technical detail without leading
+  // with it.
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorDetail, setLoadErrorDetail] = useState<string | null>(null)
   const [awaitingInput, setAwaitingInput] = useState(false)
   const [interactive, setInteractive] = useState(false)
   const [shouldLoad, setShouldLoad] = useState(enabled)
@@ -174,6 +184,32 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
   const mainInputRejectRef = useRef<((err: Error) => void) | null>(null)
   const mainStoppedRef = useRef(false)
 
+  // Load-watchdog timers, cleared whenever an attempt ends for any reason so a
+  // retry never inherits a pending timeout from the attempt before it.
+  const loadTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const clearLoadTimers = useCallback(() => {
+    for (const timer of loadTimersRef.current) clearTimeout(timer)
+    loadTimersRef.current = []
+  }, [])
+
+  /**
+   * End the current attempt with a message aimed at the person reading it.
+   *
+   * An offline device is reported as such rather than as a blocked network,
+   * because telling a student to contact IT when their wifi dropped sends them
+   * to the wrong place.
+   */
+  const failLoad = useCallback(
+    (message: string, detail?: string | null) => {
+      clearLoadTimers()
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false
+      setLoadError(offline ? PYODIDE_OFFLINE_MESSAGE : message)
+      setLoadErrorDetail(detail ?? null)
+      setStatus("error")
+    },
+    [clearLoadTimers],
+  )
+
   const finishRun = useCallback((stopped: boolean) => {
     if (hardStopTimerRef.current) {
       clearTimeout(hardStopTimerRef.current)
@@ -195,6 +231,37 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
       window.crossOriginIsolated === true
 
     let cancelled = false
+    let loaderArrived = false
+
+    // Every attempt, including a retry, starts from a clean state.
+    clearLoadTimers()
+    setStatus("loading")
+    setLoadError(null)
+    setLoadErrorDetail(null)
+
+    // pyodide.js is ~15 KB and nothing else can load without it, so if it has
+    // not arrived in this window the runtime is being blocked rather than
+    // merely arriving slowly. This is the case that used to hang forever: a
+    // filtering proxy that drops the request without ever answering it never
+    // fires an error event for a handler to catch.
+    loadTimersRef.current.push(
+      setTimeout(() => {
+        if (!cancelled && !loaderArrived) failLoad(PYODIDE_BLOCKED_MESSAGE)
+      }, PYODIDE_LOADER_TIMEOUT_MS),
+    )
+
+    // Once the loader is through, the remaining ~13.7 MB gets a much longer
+    // budget so a slow connection is not mistaken for a blocked one.
+    const armRuntimeTimeout = () => {
+      loaderArrived = true
+      loadTimersRef.current.push(
+        setTimeout(() => {
+          if (!cancelled) failLoad(PYODIDE_TIMEOUT_MESSAGE)
+        }, PYODIDE_RUNTIME_TIMEOUT_MS),
+      )
+    }
+
+    const indexURL = getPyodideIndexURL()
 
     if (canSAB) {
       setInteractive(true)
@@ -211,7 +278,11 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
       worker.onmessage = (e: MessageEvent) => {
         const m = e.data
         switch (m.type) {
+          case "stage":
+            if (m.stage === "loader") armRuntimeTimeout()
+            break
           case "ready":
+            clearLoadTimers()
             setStatus("ready")
             break
           case "stdout":
@@ -228,14 +299,21 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
             finishRun(Boolean(m.stopped))
             break
           case "fatal":
-            setLoadError(m.error || "Failed to load Python runtime")
-            setStatus("error")
+            failLoad(PYODIDE_BLOCKED_MESSAGE, m.error || null)
             break
         }
       }
 
+      // Fires when the worker script itself cannot start. Without this a
+      // failure before the worker installs its own handler is never reported.
+      worker.onerror = (event) => {
+        if (cancelled) return
+        failLoad(PYODIDE_BLOCKED_MESSAGE, event.message || null)
+      }
+
       worker.postMessage({
         type: "init",
+        indexURL,
         control: controlSAB,
         data: dataSAB,
         interrupt: interruptSAB,
@@ -243,6 +321,7 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
 
       return () => {
         cancelled = true
+        clearLoadTimers()
         worker.terminate()
       }
     }
@@ -255,14 +334,15 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
         if (!window.loadPyodide) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script")
-            script.src = `${PYODIDE_URL}pyodide.js`
+            script.src = `${indexURL}pyodide.js`
             script.onload = () => resolve()
-            script.onerror = () => reject(new Error("Failed to load Pyodide script"))
+            script.onerror = () => reject(new Error(`Could not fetch ${indexURL}pyodide.js`))
             document.head.appendChild(script)
           })
         }
         if (cancelled) return
-        const pyodide = await window.loadPyodide!({ indexURL: PYODIDE_URL })
+        armRuntimeTimeout()
+        const pyodide = await window.loadPyodide!({ indexURL })
         if (cancelled) return
         pyodideRef.current = pyodide
 
@@ -279,18 +359,19 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
         )
         await pyodide.runPythonAsync(MAIN_THREAD_BOOTSTRAP)
         if (cancelled) return
+        clearLoadTimers()
         setStatus("ready")
       } catch (err) {
         if (cancelled) return
-        setLoadError(err instanceof Error ? err.message : "Failed to load Python runtime")
-        setStatus("error")
+        failLoad(PYODIDE_BLOCKED_MESSAGE, err instanceof Error ? err.message : String(err))
       }
     }
     loadMainThread()
     return () => {
       cancelled = true
+      clearLoadTimers()
     }
-  }, [shouldLoad, reloadToken])
+  }, [shouldLoad, reloadToken, clearLoadTimers, failLoad])
 
   const run = useCallback(
     (code: string, onOutput: OutputFn): Promise<void> => {
@@ -410,12 +491,52 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
     reject?.(new Error("KeyboardInterrupt"))
   }, [finishRun])
 
+  /**
+   * Start a completely fresh attempt after a failure.
+   *
+   * The half-initialised worker is torn down rather than reused, so a retry
+   * cannot race the attempt that just failed or inherit its partial state.
+   * Bumping reloadToken re-runs the loading effect, which re-arms the
+   * watchdogs and clears the error, so a second failure is reported just as
+   * clearly as the first.
+   */
+  const retry = useCallback(() => {
+    clearLoadTimers()
+    if (hardStopTimerRef.current) {
+      clearTimeout(hardStopTimerRef.current)
+      hardStopTimerRef.current = null
+    }
+    workerRef.current?.terminate()
+    workerRef.current = null
+    pyodideRef.current = null
+    runningRef.current = false
+    resolveRef.current?.()
+    resolveRef.current = null
+    setAwaitingInput(false)
+    setLoadError(null)
+    setLoadErrorDetail(null)
+    setStatus("loading")
+    setShouldLoad(true)
+    setReloadToken((t) => t + 1)
+  }, [clearLoadTimers])
+
   useEffect(
     () => () => {
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current)
+      for (const timer of loadTimersRef.current) clearTimeout(timer)
     },
     [],
   )
 
-  return { status, loadError, awaitingInput, interactive, run, submitInput, stop }
+  return {
+    status,
+    loadError,
+    loadErrorDetail,
+    awaitingInput,
+    interactive,
+    run,
+    submitInput,
+    stop,
+    retry,
+  }
 }

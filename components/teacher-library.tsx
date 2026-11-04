@@ -124,8 +124,17 @@ export function TeacherLibrary({
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
   const [previewDoc, setPreviewDoc] = useState<PreviewBuild | null>(null)
   const [runId, setRunId] = useState(0)
-  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } =
-    usePyodide({ enabled: runModelFor(language) === "console" })
+  const {
+    status,
+    loadError,
+    loadErrorDetail,
+    awaitingInput,
+    interactive,
+    run,
+    submitInput,
+    stop,
+    retry,
+  } = usePyodide({ enabled: runModelFor(language) === "console" })
 
   const allFiles = data ? [...data.rootFiles, ...data.folders.flatMap((f) => f.files)] : []
   const selected = allFiles.find((f) => f.id === selectedId) ?? null
@@ -345,22 +354,17 @@ export function TeacherLibrary({
                   <HtmlPreview build={previewDoc} runId={runId} />
                 ) : (
                   <div className="min-h-0 flex-1">
-                    <PythonConsole
-                      lines={
-                        loadError
-                          ? [
-                              {
-                                text: `Failed to load Python runtime: ${loadError}`,
-                                kind: "err",
-                              },
-                            ]
-                          : consoleLines
-                      }
-                      running={status === "running"}
-                      awaitingInput={awaitingInput}
-                      interactive={interactive}
-                      onSubmitInput={handleSubmitInput}
-                    />
+                  <PythonConsole
+                    lines={consoleLines}
+                    running={status === "running"}
+                    awaitingInput={awaitingInput}
+                    interactive={interactive}
+                    onSubmitInput={handleSubmitInput}
+                    runtimeStatus={status}
+                    runtimeError={loadError}
+                    runtimeErrorDetail={loadErrorDetail}
+                    onRetryRuntime={retry}
+                  />
                   </div>
                 )}
               </div>

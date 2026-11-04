@@ -122,7 +122,17 @@ function DocumentShare({ fileName, bundle }: PaneProps) {
 function ConsoleShare({ fileName, bundle }: PaneProps) {
   const [openName, setOpenName] = useState(fileName)
   const [lines, setLines] = useState<ConsoleLine[]>([])
-  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = usePyodide()
+  const {
+    status,
+    loadError,
+    loadErrorDetail,
+    awaitingInput,
+    interactive,
+    run,
+    submitInput,
+    stop,
+    retry,
+  } = usePyodide()
 
   const open = bundle.find((f) => f.name === openName) ?? bundle[0]
 
@@ -170,17 +180,17 @@ function ConsoleShare({ fileName, bundle }: PaneProps) {
         </Pane>
 
         <Pane className="h-[32vh] lg:h-auto">
-          <PythonConsole
-            lines={
-              loadError
-                ? [{ text: `Failed to load Python runtime: ${loadError}`, kind: "err" }]
-                : lines
-            }
-            running={status === "running"}
-            awaitingInput={awaitingInput}
-            interactive={interactive}
-            onSubmitInput={handleSubmitInput}
-          />
+        <PythonConsole
+          lines={lines}
+          running={status === "running"}
+          awaitingInput={awaitingInput}
+          interactive={interactive}
+          onSubmitInput={handleSubmitInput}
+          runtimeStatus={status}
+          runtimeError={loadError}
+          runtimeErrorDetail={loadErrorDetail}
+          onRetryRuntime={retry}
+        />
         </Pane>
       </div>
     </div>
