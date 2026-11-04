@@ -262,7 +262,6 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
     }
 
     const indexURL = getPyodideIndexURL()
-    console.log("[v0] pyodide indexURL:", indexURL)
 
     if (canSAB) {
       setInteractive(true)
@@ -278,9 +277,6 @@ export function usePyodide({ enabled = true }: { enabled?: boolean } = {}) {
 
       worker.onmessage = (e: MessageEvent) => {
         const m = e.data
-        if (m.type !== "stdout" && m.type !== "stderr") {
-          console.log("[v0] worker message:", m.type, m.stage ?? m.error ?? "")
-        }
         switch (m.type) {
           case "stage":
             if (m.stage === "loader") armRuntimeTimeout()
