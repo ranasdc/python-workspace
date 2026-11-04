@@ -681,32 +681,41 @@ function ClassDetail({
           label={`${cls.name} student work`}
           widthClassName="lg:w-80"
         >
-          <div className="p-3">
-          <div className="mb-3">
+          {/* The IDE switcher and class name are pinned, and only the roster
+              beneath them scrolls. Switching language is how a teacher moves
+              between a class's Python and HTML work, so that control has to
+              stay reachable no matter how far down the register they are. */}
+          <div className="shrink-0 border-b border-border px-3 pb-3 pt-3">
             <IdeSwitcher value={language} onChange={setLanguage} />
           </div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <FolderTree className="h-3.5 w-3.5" />
-            {cls.name}
+          <div className="flex shrink-0 items-center gap-2 px-3 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <FolderTree className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{cls.name}</span>
           </div>
-          {data === undefined ? (
-            <p className="px-2 text-sm text-muted-foreground">Loading tree...</p>
-          ) : data.students.length === 0 ? (
-            <p className="px-2 text-sm text-muted-foreground">
-              No students have joined yet. Share the join code.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-0.5">
-              {data.students.map((s) => (
-                <StudentNode
-                  key={s.id}
-                  student={s}
-                  selectedFileId={selected?.file.id ?? null}
-                  onSelectFile={(file) => setSelected({ student: s, file })}
-                />
-              ))}
-            </ul>
-          )}
+          {/* A register has no upper bound and every pupil starts expanded, so
+              this list routinely outgrows the panel. min-h-0 is what lets it:
+              a flex child defaults to min-height:auto, which refuses to shrink
+              below its content and pushes the overflow past the panel's
+              clipping edge instead of scrolling it. */}
+          <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">
+            {data === undefined ? (
+              <p className="px-2 text-sm text-muted-foreground">Loading tree...</p>
+            ) : data.students.length === 0 ? (
+              <p className="px-2 text-sm text-muted-foreground">
+                No students have joined yet. Share the join code.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-0.5">
+                {data.students.map((s) => (
+                  <StudentNode
+                    key={s.id}
+                    student={s}
+                    selectedFileId={selected?.file.id ?? null}
+                    onSelectFile={(file) => setSelected({ student: s, file })}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         </CollapsiblePanel>
 
