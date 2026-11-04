@@ -447,7 +447,17 @@ function ClassDetail({
   const isWeb = runModelFor(language) === "document"
   const editing = draft !== null
 
-  const { status, loadError, awaitingInput, interactive, run, submitInput, stop } = pyodide
+  const {
+    status,
+    loadError,
+    loadErrorDetail,
+    awaitingInput,
+    interactive,
+    run,
+    submitInput,
+    stop,
+    retry,
+  } = pyodide
 
   // Always read the freshest copy of the selected file from the polled tree so
   // status changes and edits stay in sync.
@@ -871,22 +881,17 @@ function ClassDetail({
                     {isWeb ? (
                       <HtmlPreview build={previewDoc} runId={runId} />
                     ) : (
-                      <PythonConsole
-                        lines={
-                          loadError
-                            ? [
-                                {
-                                  text: `Failed to load Python runtime: ${loadError}`,
-                                  kind: "err",
-                                },
-                              ]
-                            : consoleLines
-                        }
-                        running={status === "running"}
-                        awaitingInput={awaitingInput}
-                        interactive={interactive}
-                        onSubmitInput={handleSubmitInput}
-                      />
+                  <PythonConsole
+                    lines={consoleLines}
+                    running={status === "running"}
+                    awaitingInput={awaitingInput}
+                    interactive={interactive}
+                    onSubmitInput={handleSubmitInput}
+                    runtimeStatus={status}
+                    runtimeError={loadError}
+                    runtimeErrorDetail={loadErrorDetail}
+                    onRetryRuntime={retry}
+                  />
                     )}
                   </div>
                 </div>

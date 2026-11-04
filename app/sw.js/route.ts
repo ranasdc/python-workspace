@@ -1,3 +1,4 @@
+import { PYODIDE_VERSION } from "@/lib/ide/pyodide-runtime"
 import { LOGO_SVG } from "@/lib/site"
 
 export const dynamic = "force-static"
@@ -42,6 +43,11 @@ const SOURCE = `/* MyCodePad service worker */
 const VERSION = ${JSON.stringify(VERSION)};
 const STATIC_CACHE = "mcp-static-" + VERSION;
 const ASSET_CACHE = "mcp-assets-" + VERSION;
+// Keyed by Pyodide's version rather than the deploy, so a self-hosted runtime
+// survives every deploy and is only re-downloaded when Python itself is
+// upgraded. Naming it after the version also means the activate cleanup below
+// evicts the previous runtime automatically.
+const RUNTIME_CACHE = "mcp-pyodide-${PYODIDE_VERSION}";
 const PRECACHE = ["/icon.svg", "/pwa-icon/192", "/pwa-icon/512"];
 const OFFLINE_HTML = ${JSON.stringify(OFFLINE_HTML)};
 
@@ -60,7 +66,13 @@ self.addEventListener("activate", (event) => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter((key) => key.startsWith("mcp-") && key !== STATIC_CACHE && key !== ASSET_CACHE)
+        .filter(
+          (key) =>
+            key.startsWith("mcp-") &&
+            key !== STATIC_CACHE &&
+            key !== ASSET_CACHE &&
+            key !== RUNTIME_CACHE
+        )
         .map((key) => caches.delete(key))
     );
     if (self.registration.navigationPreload) {
@@ -132,6 +144,14 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(handleNavigation(event));
+    return;
+  }
+  // A self-hosted Python runtime is ~14 MB on a version-pinned path, so it is
+  // cached permanently: the second visit starts Python with no network at all.
+  // Only same-origin hosting gets this, which is a good reason to serve the
+  // runtime from this domain rather than a separate asset host.
+  if (url.pathname.startsWith("/pyodide/")) {
+    event.respondWith(cacheFirst(request, RUNTIME_CACHE));
     return;
   }
   // Build output is content-hashed and identical for every user.

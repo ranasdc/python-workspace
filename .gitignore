@@ -17,3 +17,9 @@ node_modules
 # Full-size avatar artwork. scripts/optimise-avatars.mjs turns these into the
 # committed WebP files in public/avatars/, which are the only ones shipped.
 .avatar-src/
+
+# Mirrored Pyodide runtime (~14 MB of binaries) produced by
+# scripts/fetch-pyodide-runtime.mjs. Ignored so the repository does not carry
+# the WebAssembly blob; remove this line to ship the runtime from our own
+# domain, or run the script in a prebuild step instead.
+public/pyodide/

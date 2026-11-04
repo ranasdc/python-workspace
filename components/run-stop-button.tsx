@@ -30,6 +30,9 @@ export function RunStopButton({
 }) {
   const running = !isWeb && status === "running"
   const loading = !isWeb && status === "loading"
+  // Without a runtime, Run has nothing to execute and would silently do
+  // nothing. The console offers Retry Python Runtime instead.
+  const unavailable = !isWeb && status === "error"
 
   if (running) {
     return (
@@ -50,8 +53,14 @@ export function RunStopButton({
       size="sm"
       variant={variant}
       onClick={onRun}
-      disabled={disabled || loading}
-      title={isWeb ? "Render your page" : "Run your code"}
+      disabled={disabled || loading || unavailable}
+      title={
+        unavailable
+          ? "Python is unavailable — retry the runtime from the output panel"
+          : isWeb
+            ? "Render your page"
+            : "Run your code"
+      }
       className={cn("min-w-24", className)}
     >
       {loading ? (
