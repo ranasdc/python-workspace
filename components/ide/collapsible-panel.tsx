@@ -320,7 +320,24 @@ export function CollapsiblePanel({
           className,
         )}
       >
-        <div className={cn("flex min-h-0 w-full flex-1 flex-col", widthClassName)}>{children}</div>
+        {/* The aside above clips, so any content taller than the panel would
+            simply be unreachable — a register that silently stops at whoever
+            fits on screen. Scrolling here is the backstop that makes the last
+            pupil reachable even if a panel's own content forgets to scroll
+            itself, so a new IDE's tree cannot reintroduce that. Panels that do
+            manage their own scrolling (an `overflow-auto` child under
+            `flex-1`) are unaffected: their content never exceeds this box, so
+            this scroller stays dormant. Only the vertical axis opens up —
+            overflow-x stays clipped to keep long file names from turning into
+            a sideways scrollbar, as they were before. */}
+        <div
+          className={cn(
+            "flex min-h-0 w-full flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain",
+            widthClassName,
+          )}
+        >
+          {children}
+        </div>
       </aside>
 
       {/* The whole gutter is the control, not a tab floating on one. Folding a
