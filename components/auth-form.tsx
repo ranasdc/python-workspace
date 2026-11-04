@@ -12,11 +12,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { GraduationCap, BookOpen, Loader2, CheckCircle2 } from "lucide-react"
 import { PasswordInput } from "@/components/auth/password-input"
+import { PasswordRequirements } from "@/components/auth/password-requirements"
 import { LegalLinkRow, PrivacyNotice } from "@/components/legal/legal-links"
 import { LogoIcon, LogoWordmark } from "@/components/logo"
 import { cn } from "@/lib/utils"
+import {
+  NAME_MAX_LENGTH,
+  composeDisplayName,
+  normalizeName,
+  validateName,
+  validatePassword,
+} from "@/lib/validation/account"
 
 type Mode = "sign-in" | "sign-up"
+
+/**
+ * Enough to catch a typo like a missing "@" or domain, without pretending to
+ * know which addresses exist. Anything stricter starts rejecting valid ones.
+ */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * Only same-origin paths are followed, so a crafted `?next=` cannot bounce a
@@ -42,9 +56,40 @@ export function AuthForm({
   const [role, setRole] = useState<"student" | "teacher">(
     destination === "/school" ? "teacher" : "student",
   )
-  const [name, setName] = useState("")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+
+  // A field's problem is only shown once the user has left it, so the form
+  // does not open covered in complaints about fields nobody has filled in yet.
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const blur = (field: string) => () => setTouched((t) => ({ ...t, [field]: true }))
+
+  const isSignUp = mode === "sign-up"
+
+  // The same functions the server runs, so the button is enabled exactly when
+  // the request would be accepted.
+  const problems = {
+    firstName: isSignUp ? validateName(firstName, "first") : null,
+    lastName: isSignUp ? validateName(lastName, "last") : null,
+    email: !email.trim()
+      ? "Please enter your email address."
+      : EMAIL_SHAPE.test(email.trim())
+        ? null
+        : "Please enter a valid email address.",
+    password: isSignUp ? validatePassword(password) : null,
+    confirm: isSignUp && confirm !== password ? "Both passwords must match." : null,
+  }
+  const incomplete = isSignUp
+    ? Object.values(problems).some(Boolean) || !confirm
+    : !email.trim() || !password
+
+  /** Shows a field's problem only once it has been visited. */
+  function problemFor(field: keyof typeof problems) {
+    return touched[field] ? problems[field] : null
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -63,8 +108,12 @@ export function AuthForm({
         const { error } = await authClient.signUp.email({
           email,
           password,
-          name,
-          // custom field registered in lib/auth.ts
+          // Sent for Better Auth's own required field; the server recomputes it
+          // from the two parts below rather than trusting this value.
+          name: composeDisplayName(firstName, lastName),
+          // custom fields registered in lib/auth.ts
+          firstName: normalizeName(firstName),
+          lastName: normalizeName(lastName),
           role,
         } as Parameters<typeof authClient.signUp.email>[0])
         if (error) {
@@ -146,30 +195,51 @@ export function AuthForm({
         )}
 
         {mode === "sign-up" && (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Full name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ada Lovelace"
-              required
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="first-name"
+              maxLength={NAME_MAX_LENGTH}
+              label="First name"
+              value={firstName}
+              onChange={setFirstName}
+              /* Tidied on the way out of the field rather than on every
+                 keystroke, which would fight the cursor mid-word. */
+              onBlur={() => {
+                setFirstName(normalizeName(firstName))
+                blur("firstName")()
+              }}
+              problem={problemFor("firstName")}
+              autoComplete="given-name"
+              placeholder="Ada"
+            />
+            <TextField
+              id="last-name"
+              maxLength={NAME_MAX_LENGTH}
+              label="Last name"
+              value={lastName}
+              onChange={setLastName}
+              onBlur={() => {
+                setLastName(normalizeName(lastName))
+                blur("lastName")()
+              }}
+              problem={problemFor("lastName")}
+              autoComplete="family-name"
+              placeholder="Lovelace"
             />
           </div>
         )}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@school.edu"
-            required
-          />
-        </div>
+        <TextField
+          id="email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          onBlur={blur("email")}
+          problem={mode === "sign-up" ? problemFor("email") : null}
+          autoComplete="email"
+          placeholder="you@school.edu"
+        />
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="password">Password</Label>
@@ -178,11 +248,38 @@ export function AuthForm({
             autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onBlur={blur("password")}
             placeholder="••••••••"
-            minLength={8}
+            aria-describedby={mode === "sign-up" ? "password-requirements" : undefined}
+            aria-invalid={mode === "sign-up" && Boolean(problemFor("password"))}
+            /* No minLength in sign-in: an existing account's password is only
+               ever being checked here, never re-chosen. */
+            minLength={mode === "sign-up" ? 8 : undefined}
             required
           />
+          {mode === "sign-up" && (
+            <PasswordRequirements id="password-requirements" password={password} />
+          )}
         </div>
+
+        {mode === "sign-up" && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="confirm-password">Confirm password</Label>
+            <PasswordInput
+              id="confirm-password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              onBlur={blur("confirm")}
+              placeholder="Type it again"
+              aria-invalid={Boolean(problemFor("confirm"))}
+              required
+            />
+            {problemFor("confirm") && (
+              <p className="text-xs text-destructive">{problemFor("confirm")}</p>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
@@ -210,7 +307,7 @@ export function AuthForm({
           </PrivacyNotice>
         )}
 
-        <Button type="submit" disabled={loading} className="mt-2">
+        <Button type="submit" disabled={loading || incomplete} className="mt-2">
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {mode === "sign-up" ? "Create account" : "Sign in"}
         </Button>
@@ -250,6 +347,62 @@ export function AuthForm({
       </p>
 
       <LegalLinkRow className="mt-6 justify-center text-xs" />
+    </div>
+  )
+}
+
+/**
+ * A labelled input whose error sits directly beneath it.
+ *
+ * The message is tied to the input with aria-describedby and the input is
+ * marked aria-invalid, so a screen reader reaches the explanation from the
+ * field itself instead of hunting for a banner at the top of the form.
+ */
+function TextField({
+  id,
+  label,
+  value,
+  onChange,
+  onBlur,
+  problem,
+  type = "text",
+  autoComplete,
+  placeholder,
+  maxLength,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  onBlur: () => void
+  problem: string | null
+  type?: string
+  autoComplete?: string
+  placeholder?: string
+  maxLength?: number
+}) {
+  const errorId = `${id}-error`
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        autoComplete={autoComplete}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        aria-invalid={Boolean(problem)}
+        aria-describedby={problem ? errorId : undefined}
+        required
+      />
+      {problem && (
+        <p id={errorId} className="text-xs text-destructive">
+          {problem}
+        </p>
+      )}
     </div>
   )
 }

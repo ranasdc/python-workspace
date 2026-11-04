@@ -1,6 +1,8 @@
 import { cache } from "react"
 import { and, count, eq, inArray } from "drizzle-orm"
 
+import { splitDisplayName } from "@/lib/validation/account"
+
 import { db } from "@/lib/db"
 import {
   account as authAccount,
@@ -202,6 +204,14 @@ export type AccountProfile = {
   user: {
     id: string
     name: string
+    /**
+     * The two parts behind the display name. Accounts created before they were
+     * collected separately have no stored split, so these fall back to a
+     * best-effort reading of the display name — enough to fill the profile
+     * form, which is the only thing that uses them.
+     */
+    firstName: string
+    lastName: string
     email: string
     image: string | null
     /** Key into the avatar catalogue, or null when never chosen. */
@@ -232,6 +242,8 @@ export async function getAccountProfile(userId: string): Promise<AccountProfile 
     .select({
       id: user.id,
       name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       image: user.image,
       avatarId: user.avatarId,
@@ -241,6 +253,10 @@ export async function getAccountProfile(userId: string): Promise<AccountProfile 
     .where(eq(user.id, userId))
     .limit(1)
   if (!record) return null
+
+  // Only ever used to populate the profile form. The stored display name is
+  // left exactly as it is until the user saves a change themselves.
+  const derived = splitDisplayName(record.name)
 
   const [entitlement, membership, credential] = await Promise.all([
     getEntitlement(userId),
@@ -271,7 +287,11 @@ export async function getAccountProfile(userId: string): Promise<AccountProfile 
   const studentClasses = entitlement.isTeacher ? [] : await readStudentClasses(userId)
 
   return {
-    user: record,
+    user: {
+      ...record,
+      firstName: record.firstName ?? derived.firstName,
+      lastName: record.lastName ?? derived.lastName,
+    },
     entitlement,
     membership,
     plan: describePlan(entitlement, membership?.schoolName ?? null),

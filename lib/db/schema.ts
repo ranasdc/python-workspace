@@ -12,7 +12,14 @@ import {
 // ---------- Better Auth tables ----------
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
+  // The display name shown everywhere in the product, kept as the composition
+  // of the two parts below. It stays the single source for rendering so that
+  // every existing query, email and avatar initial keeps working unchanged.
   name: text("name").notNull(),
+  // Collected separately at sign-up and nullable only because accounts created
+  // before that change have nothing to split beyond a best-effort backfill.
+  firstName: text("firstName"),
+  lastName: text("lastName"),
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),

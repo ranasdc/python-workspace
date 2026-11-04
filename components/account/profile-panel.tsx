@@ -22,6 +22,12 @@ import { AvatarPicker } from "@/components/account/avatar-picker"
 import { UserAvatar } from "@/components/user-avatar"
 import { resolveAvatar } from "@/lib/avatars"
 import type { AccountProfile } from "@/lib/account"
+import {
+  NAME_MAX_LENGTH,
+  composeDisplayName,
+  normalizeName,
+  validateName,
+} from "@/lib/validation/account"
 
 function formatDate(value: Date) {
   return new Date(value).toLocaleDateString("en-GB", {
@@ -34,29 +40,42 @@ function formatDate(value: Date) {
 /**
  * Name, email, role and school.
  *
- * Only the display name is editable. Email is the sign-in identity, and role
+ * Only the name is editable. Email is the sign-in identity, and role
  * and school are granted by the school that owns them — presenting those as
  * read-only facts is deliberate, so nobody expects to promote themselves by
  * typing in a box.
  */
 export function ProfilePanel({ profile }: { profile: AccountProfile }) {
   const router = useRouter()
-  const [name, setName] = useState(profile.user.name)
+  const [firstName, setFirstName] = useState(profile.user.firstName)
+  const [lastName, setLastName] = useState(profile.user.lastName)
   const [saving, setSaving] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
 
   const avatar = resolveAvatar(profile.user.id, profile.user.avatarId)
 
-  const dirty = name.trim() !== profile.user.name.trim()
+  // The same checks the action runs, so Save is enabled exactly when a save
+  // would succeed.
+  const firstProblem = validateName(firstName, "first")
+  const lastProblem = validateName(lastName, "last")
+  const dirty =
+    normalizeName(firstName) !== normalizeName(profile.user.firstName) ||
+    normalizeName(lastName) !== normalizeName(profile.user.lastName)
+
+  function reset() {
+    setFirstName(profile.user.firstName)
+    setLastName(profile.user.lastName)
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!dirty) return
+    if (!dirty || firstProblem || lastProblem) return
 
     setSaving(true)
     try {
       const data = new FormData()
-      data.set("name", name)
+      data.set("firstName", firstName)
+      data.set("lastName", lastName)
       const result = await updateDisplayName(data)
       if (!result.ok) {
         toast.error(result.message)
@@ -124,18 +143,61 @@ export function ProfilePanel({ profile }: { profile: AccountProfile }) {
         <form onSubmit={handleSubmit}>
           <CardContent>
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="account-name">Display name</FieldLabel>
-                <Input
-                  id="account-name"
-                  name="name"
-                  value={name}
-                  maxLength={80}
-                  autoComplete="name"
-                  onChange={(event) => setName(event.target.value)}
-                />
-                <FieldDescription>Between 2 and 80 characters.</FieldDescription>
-              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field data-invalid={Boolean(firstProblem) || undefined}>
+                  <FieldLabel htmlFor="account-first-name">First name</FieldLabel>
+                  <Input
+                    id="account-first-name"
+                    name="firstName"
+                    value={firstName}
+                    maxLength={NAME_MAX_LENGTH}
+                    autoComplete="given-name"
+                    aria-invalid={Boolean(firstProblem)}
+                    aria-describedby={firstProblem ? "account-first-name-error" : undefined}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    onBlur={() => setFirstName(normalizeName(firstName))}
+                  />
+                  {firstProblem && (
+                    <FieldDescription
+                      id="account-first-name-error"
+                      className="text-destructive"
+                    >
+                      {firstProblem}
+                    </FieldDescription>
+                  )}
+                </Field>
+
+                <Field data-invalid={Boolean(lastProblem) || undefined}>
+                  <FieldLabel htmlFor="account-last-name">Last name</FieldLabel>
+                  <Input
+                    id="account-last-name"
+                    name="lastName"
+                    value={lastName}
+                    maxLength={NAME_MAX_LENGTH}
+                    autoComplete="family-name"
+                    aria-invalid={Boolean(lastProblem)}
+                    aria-describedby={lastProblem ? "account-last-name-error" : undefined}
+                    onChange={(event) => setLastName(event.target.value)}
+                    onBlur={() => setLastName(normalizeName(lastName))}
+                  />
+                  {lastProblem && (
+                    <FieldDescription id="account-last-name-error" className="text-destructive">
+                      {lastProblem}
+                    </FieldDescription>
+                  )}
+                </Field>
+              </div>
+
+              <FieldDescription>
+                {/* Accounts that pre-date the split may have only a first name
+                    stored, so the last name can legitimately start out empty
+                    and is asked for the first time a name is saved. */}
+                Shown across MyCodePad as{" "}
+                <span className="font-medium text-foreground">
+                  {composeDisplayName(firstName, lastName) || "your name"}
+                </span>
+                .
+              </FieldDescription>
 
               <Field>
                 <FieldLabel htmlFor="account-email">Email</FieldLabel>
@@ -154,16 +216,14 @@ export function ProfilePanel({ profile }: { profile: AccountProfile }) {
           </CardContent>
           <CardFooter className="justify-end gap-2">
             {dirty && (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={saving}
-                onClick={() => setName(profile.user.name)}
-              >
+              <Button type="button" variant="ghost" disabled={saving} onClick={reset}>
                 Cancel
               </Button>
             )}
-            <Button type="submit" disabled={!dirty || saving}>
+            <Button
+              type="submit"
+              disabled={!dirty || saving || Boolean(firstProblem) || Boolean(lastProblem)}
+            >
               {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
               Save changes
             </Button>
