@@ -18,8 +18,11 @@ node_modules
 # committed WebP files in public/avatars/, which are the only ones shipped.
 .avatar-src/
 
-# Mirrored Pyodide runtime (~14 MB of binaries) produced by
-# scripts/fetch-pyodide-runtime.mjs. Ignored so the repository does not carry
-# the WebAssembly blob; remove this line to ship the runtime from our own
-# domain, or run the script in a prebuild step instead.
-public/pyodide/
+# public/pyodide/ is deliberately NOT ignored. Schools whose filters block
+# cdn.jsdelivr.net cannot start Python at all, so the ~14 MB runtime is
+# committed and served from our own domain instead. Keeping the bytes in the
+# repository rather than fetching them during the build means deploys are
+# reproducible and never depend on the CDN we are routing around.
+# Regenerate with scripts/fetch-pyodide-runtime.mjs when PYODIDE_VERSION
+# changes in lib/ide/pyodide-runtime.ts, and update
+# NEXT_PUBLIC_PYODIDE_INDEX_URL to the new version directory.
