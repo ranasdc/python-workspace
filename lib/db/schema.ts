@@ -233,6 +233,8 @@ export const studentFolders = pgTable("student_folder", {
   id: serial("id").primaryKey(),
   classId: integer("classId").notNull(),
   studentId: text("studentId").notNull(),
+  // The folder this one sits inside. Null = top level of the class.
+  parentId: integer("parentId"),
   name: text("name").notNull(),
   // Which IDE this folder belongs to. Defaulting to "python" backfills every
   // pre-existing row, so the Python IDE sees exactly what it saw before.
@@ -303,6 +305,8 @@ export const codeFiles = pgTable("code_file", {
 export const libraryFolders = pgTable("library_folder", {
   id: serial("id").primaryKey(),
   teacherId: text("teacherId").notNull(),
+  // The folder this one sits inside. Null = top level of the library.
+  parentId: integer("parentId"),
   name: text("name").notNull(),
   // Mirrors student storage so a distributed folder keeps its IDE.
   language: text("language").notNull().default("python"),
