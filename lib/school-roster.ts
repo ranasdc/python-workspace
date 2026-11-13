@@ -226,6 +226,27 @@ export function buildSchoolRoster(input: {
   }
 }
 
+export type AffectedClass = { id: number; name: string; studentCount: number }
+
+/**
+ * The school classes a person teaches, for the removal confirmation.
+ *
+ * Removing a teacher from the school leaves these classes exactly as they are,
+ * so the administrator is shown which ones before agreeing.
+ */
+export function classesTaughtBy(roster: SchoolRoster, userId: string): AffectedClass[] {
+  return roster.classes
+    .filter((cls) => cls.teacher?.id === userId)
+    .map((cls) => ({ id: cls.id, name: cls.name, studentCount: cls.students.length }))
+}
+
+/** The school classes a student is enrolled in, for the removal confirmation. */
+export function classesAttendedBy(roster: SchoolRoster, userId: string): AffectedClass[] {
+  return roster.classes
+    .filter((cls) => cls.students.some((student) => student.id === userId))
+    .map((cls) => ({ id: cls.id, name: cls.name, studentCount: cls.students.length }))
+}
+
 /** Case-insensitive match on any part of a person's name or email. */
 export function matchesPerson(person: RosterPerson, query: string): boolean {
   const needle = query.trim().toLowerCase()

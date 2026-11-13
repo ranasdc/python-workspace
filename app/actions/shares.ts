@@ -39,7 +39,9 @@ async function ownsFile(kind: ShareSourceKind, fileId: number, userId: string) {
   const [row] = await db
     .select({ id: codeFiles.id })
     .from(codeFiles)
-    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, userId)))
+    .where(
+      and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, userId), isNull(codeFiles.withdrawnAt)),
+    )
     .limit(1)
   return Boolean(row)
 }

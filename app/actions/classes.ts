@@ -175,7 +175,8 @@ export async function getClassDeletionSummary(classId: number) {
   const { rows } = await pool.query(
     `SELECT
        (SELECT COUNT(*)::int FROM "enrollment" WHERE "classId" = $1) AS students,
-       (SELECT COUNT(*)::int FROM "code_file" WHERE "classId" = $1) AS files,
+       (SELECT COUNT(*)::int FROM "code_file"
+          WHERE "classId" = $1 AND "withdrawnAt" IS NULL) AS files,
        (SELECT COUNT(*)::int FROM "daily_starter" WHERE "classId" = $1) AS starters`,
     [classId],
   )

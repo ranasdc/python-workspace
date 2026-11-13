@@ -42,6 +42,9 @@ import {
   createStudentFolder,
   deleteStudentFolder,
 } from "@/app/actions/files"
+import { renameStudentFile, renameStudentFolder } from "@/app/actions/file-management"
+import { ItemActionsMenu, RenameDialog } from "@/components/ide/file-actions"
+import type { RenameOutcome } from "@/lib/ide/file-management"
 import { JoinClassDialog } from "@/components/join-class-dialog"
 import { subscriptionInfoKey } from "@/lib/swr-keys"
 import { FileComments } from "@/components/file-comments"
@@ -474,6 +477,21 @@ export function StudentWorkspace({
     }
   }
 
+  // Renaming is ordinary file management, so nothing here looks at the plan:
+  // a free student renames their own work exactly as a Pro student does. The
+  // server decides whether the item is theirs to rename.
+  async function handleRenameFile(fileId: number, name: string): Promise<RenameOutcome> {
+    const result = await renameStudentFile(fileId, name)
+    if (result.ok) await mutate(filesKey)
+    return result
+  }
+
+  async function handleRenameFolder(folderId: number, name: string): Promise<RenameOutcome> {
+    const result = await renameStudentFolder(folderId, name)
+    if (result.ok) await mutate(filesKey)
+    return result
+  }
+
   async function handleDeleteFile(fileId: number) {
     await deleteFile(fileId)
     await Promise.all([mutate(filesKey), mutate(subscriptionInfoKey(language))])
@@ -597,6 +615,8 @@ export function StudentWorkspace({
                   language={language}
                   activeFileId={activeFileId}
                   onSelectFile={setActiveFileId}
+                  onRenameFile={handleRenameFile}
+                  onRenameFolder={handleRenameFolder}
                   onDeleteFile={handleDeleteFile}
                   onDeleteFolder={handleDeleteFolder}
                   onCreateFile={handleCreateFile}
@@ -607,8 +627,10 @@ export function StudentWorkspace({
                 <FileRow
                   key={f.id}
                   file={f}
+                  language={language}
                   active={f.id === activeFileId}
                   onSelect={() => setActiveFileId(f.id)}
+                  onRename={(name) => handleRenameFile(f.id, name)}
                   onDelete={() => handleDeleteFile(f.id)}
                 />
               ))}
@@ -874,15 +896,21 @@ export function StudentWorkspace({
 
 function FileRow({
   file,
+  language,
   active,
   onSelect,
+  onRename,
   onDelete,
 }: {
   file: FileItem
+  language: LanguageId
   active: boolean
   onSelect: () => void
+  onRename: (name: string) => Promise<RenameOutcome>
   onDelete: () => void
 }) {
+  const [renaming, setRenaming] = useState(false)
+
   return (
     <div
       className={cn(
@@ -903,6 +931,21 @@ function FileRow({
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-chart-3" aria-label="Marked done" />
         )}
       </button>
+      {/* Only the student's own files get the menu. A file their teacher shared
+          is the teacher's to name, so no Rename is offered for it. */}
+      {!file.assignedByTeacher && (
+        <>
+          <ItemActionsMenu itemName={file.name} onRename={() => setRenaming(true)} />
+          <RenameDialog
+            open={renaming}
+            onOpenChange={setRenaming}
+            kind="file"
+            currentName={file.name}
+            language={language}
+            onRename={onRename}
+          />
+        </>
+      )}
       {!file.assignedByTeacher && (
         <ConfirmDialog
           title="Delete file?"
@@ -928,6 +971,8 @@ function StudentFolderRow({
   language,
   activeFileId,
   onSelectFile,
+  onRenameFile,
+  onRenameFolder,
   onDeleteFile,
   onDeleteFolder,
   onCreateFile,
@@ -938,12 +983,15 @@ function StudentFolderRow({
   language: LanguageId
   activeFileId: number | null
   onSelectFile: (id: number) => void
+  onRenameFile: (id: number, name: string) => Promise<RenameOutcome>
+  onRenameFolder: (id: number, name: string) => Promise<RenameOutcome>
   onDeleteFile: (id: number) => void
   onDeleteFolder: (id: number) => void
   onCreateFile: (name: string, folderId: number) => Promise<void>
   onCreateFolder: (name: string, parentId: number) => Promise<void>
 }) {
   const [open, setOpen] = useState(true)
+  const [renaming, setRenaming] = useState(false)
   const { icon: folderIconColor } = getFolderColors(folderIndex)
   const isEmpty = folder.files.length === 0 && folder.folders.length === 0
 
@@ -1003,6 +1051,21 @@ function StudentFolderRow({
             }
           />
           {!folder.assignedByTeacher && (
+            <>
+              <ItemActionsMenu
+                itemName={`folder ${folder.name}`}
+                onRename={() => setRenaming(true)}
+              />
+              <RenameDialog
+                open={renaming}
+                onOpenChange={setRenaming}
+                kind="folder"
+                currentName={folder.name}
+                onRename={(name) => onRenameFolder(folder.id, name)}
+              />
+            </>
+          )}
+          {!folder.assignedByTeacher && (
             <ConfirmDialog
               title="Delete folder?"
               description={`"${folder.name}" and everything inside it, including any folders it contains, will be permanently deleted. This can't be undone.`}
@@ -1032,6 +1095,8 @@ function StudentFolderRow({
                   language={language}
                   activeFileId={activeFileId}
                   onSelectFile={onSelectFile}
+                  onRenameFile={onRenameFile}
+                  onRenameFolder={onRenameFolder}
                   onDeleteFile={onDeleteFile}
                   onDeleteFolder={onDeleteFolder}
                   onCreateFile={onCreateFile}
@@ -1042,8 +1107,10 @@ function StudentFolderRow({
                 <FileRow
                   key={f.id}
                   file={f}
+                  language={language}
                   active={f.id === activeFileId}
                   onSelect={() => onSelectFile(f.id)}
+                  onRename={(name) => onRenameFile(f.id, name)}
                   onDelete={() => onDeleteFile(f.id)}
                 />
               ))}

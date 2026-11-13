@@ -127,7 +127,7 @@ export function SchoolDashboard({
       {/* Who is in the school comes before how it is billed: School Teachers
           first, then Classes and Students directly beneath. Only the prompt to
           choose a plan sits above them, and only while there is no plan. */}
-      {isAdmin && roster && <SchoolPeople schoolId={school.id} roster={roster} />}
+      {isAdmin && roster && <SchoolPeople schoolId={school.id} schoolName={school.name} roster={roster} />}
 
       {planActive && plan && (
         <section className="rounded-lg border border-border bg-card p-6">

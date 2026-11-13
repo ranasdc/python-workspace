@@ -43,12 +43,21 @@ import {
   createLibraryFolder,
   createLibraryFile,
   saveLibraryFile,
+} from "@/app/actions/library"
+import {
   deleteLibraryFile,
   deleteLibraryFolder,
-} from "@/app/actions/library"
+  getLibraryItemReach,
+  renameLibraryFile,
+  renameLibraryFolder,
+} from "@/app/actions/file-management"
 import { distributeFile, distributeFolder } from "@/app/actions/distribution"
 import { cn } from "@/lib/utils"
-import { ConfirmDialog } from "@/components/confirm-dialog"
+import {
+  DeleteResourceDialog,
+  ItemActionsMenu,
+  RenameDialog,
+} from "@/components/ide/file-actions"
 import { DistributeDialog, type DistributeClassOption } from "@/components/distribute-dialog"
 import { IdeSplit } from "@/components/ide/ide-split"
 import { TaskWorkspace } from "@/components/tasks/task-workspace"
@@ -60,7 +69,6 @@ import {
   FolderPlus,
   ChevronRight,
   ChevronDown,
-  Trash2,
   Loader2,
   Check,
   Send,
@@ -174,6 +182,9 @@ export function TeacherLibrary({
   }
 
   async function refresh() {
+    // A rename or delete here also changes what students hold, so any class
+    // view already loaded is re-read rather than left showing the old names.
+    void mutate((key) => Array.isArray(key) && key[0] === "class-tree")
     await mutate(libraryKey)
   }
 
@@ -273,6 +284,7 @@ export function TeacherLibrary({
                 <FileRow
                   key={file.id}
                   file={file}
+                  language={language}
                   classes={classes}
                   selected={selectedId === file.id}
                   onSelect={() => setSelectedId(file.id)}
@@ -416,16 +428,22 @@ function FolderNode({
   onChanged: () => Promise<void>
 }) {
   const [open, setOpen] = useState(true)
+  const [renaming, setRenaming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const isEmpty = folder.files.length === 0 && folder.folders.length === 0
 
+  async function rename(name: string) {
+    const result = await renameLibraryFolder(folder.id, name)
+    if (result.ok) await onChanged()
+    return result
+  }
+
   async function remove() {
-    try {
-      await deleteLibraryFolder(folder.id)
-      await onChanged()
-      toast.success("Folder deleted")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete folder")
-    }
+    const result = await deleteLibraryFolder(folder.id)
+    if (!result.ok) return result.message
+    await onChanged()
+    toast.success(withdrawnMessage("Folder deleted", result.studentsAffected))
+    return null
   }
 
   return (
@@ -478,18 +496,27 @@ function FolderNode({
           }
           onConfirm={(classId, recipients) => distributeFolder(folder.id, classId, recipients)}
         />
-        <ConfirmDialog
-          title="Delete folder?"
-          description={`"${folder.name}" and everything inside it, including any folders it contains, will be permanently deleted. This can't be undone.`}
-          onConfirm={remove}
-          trigger={
-            <button
-              className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-              aria-label={`Delete folder ${folder.name}`}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          }
+        <ItemActionsMenu
+          itemName={`folder ${folder.name}`}
+          onRename={() => setRenaming(true)}
+          onDelete={() => setDeleting(true)}
+        />
+        <RenameDialog
+          open={renaming}
+          onOpenChange={setRenaming}
+          kind="folder"
+          currentName={folder.name}
+          note="Students who received this folder will see the new name."
+          onRename={rename}
+        />
+        <DeleteResourceDialog
+          open={deleting}
+          onOpenChange={setDeleting}
+          kind="folder"
+          name={folder.name}
+          reachKey={`folder-${folder.id}`}
+          loadReach={() => getLibraryItemReach("folder", folder.id)}
+          onDelete={remove}
         />
       </div>
       {open && (
@@ -513,6 +540,7 @@ function FolderNode({
                 <FileRow
                   key={file.id}
                   file={file}
+                  language={language}
                   classes={classes}
                   selected={selectedId === file.id}
                   onSelect={() => onSelect(file.id)}
@@ -527,27 +555,42 @@ function FolderNode({
   )
 }
 
+/** Says how many students lost the resource, when any did. */
+function withdrawnMessage(done: string, studentsAffected: number) {
+  if (studentsAffected === 0) return done
+  return `${done} and withdrawn from ${studentsAffected} ${studentsAffected === 1 ? "student" : "students"}`
+}
+
 function FileRow({
   file,
+  language,
   classes,
   selected,
   onSelect,
   onChanged,
 }: {
   file: LibFile
+  language: LanguageId
   classes: ClassOption[]
   selected: boolean
   onSelect: () => void
   onChanged: () => Promise<void>
 }) {
+  const [renaming, setRenaming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function rename(name: string) {
+    const result = await renameLibraryFile(file.id, name)
+    if (result.ok) await onChanged()
+    return result
+  }
+
   async function remove() {
-    try {
-      await deleteLibraryFile(file.id)
-      await onChanged()
-      toast.success("File deleted")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete file")
-    }
+    const result = await deleteLibraryFile(file.id)
+    if (!result.ok) return result.message
+    await onChanged()
+    toast.success(withdrawnMessage("File deleted", result.studentsAffected))
+    return null
   }
 
   return (
@@ -581,18 +624,28 @@ function FileRow({
         }
         onConfirm={(classId, recipients) => distributeFile(file.id, classId, recipients)}
       />
-      <ConfirmDialog
-        title="Delete file?"
-        description={`"${file.name}" will be permanently deleted. This can't be undone.`}
-        onConfirm={remove}
-        trigger={
-          <button
-            className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-            aria-label={`Delete ${file.name}`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        }
+      <ItemActionsMenu
+        itemName={file.name}
+        onRename={() => setRenaming(true)}
+        onDelete={() => setDeleting(true)}
+      />
+      <RenameDialog
+        open={renaming}
+        onOpenChange={setRenaming}
+        kind="file"
+        currentName={file.name}
+        language={language}
+        note="Students who received this file will see the new name."
+        onRename={rename}
+      />
+      <DeleteResourceDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        kind="file"
+        name={file.name}
+        reachKey={`file-${file.id}`}
+        loadReach={() => getLibraryItemReach("file", file.id)}
+        onDelete={remove}
       />
     </li>
   )
