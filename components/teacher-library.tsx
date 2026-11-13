@@ -10,6 +10,7 @@ import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { IdeSwitcher } from "@/components/ide/ide-switcher"
 import { ShareMenu } from "@/components/ide/share-menu"
+import { CodeScreenshotButton } from "@/components/ide/screenshot-button"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useLeftSideCascade } from "@/components/teacher-class-nav"
 import { TEACHER_PRO_STUDENT_SEATS } from "@/lib/plans"
@@ -313,6 +314,7 @@ export function TeacherLibrary({
               <div className="flex items-center gap-2 text-sm">
                 <FileCode className="h-4 w-4 text-primary" />
                 <span className="font-medium">{selected.name}</span>
+                <CodeScreenshotButton fileName={selected.name} code={draft} />
                 {saveState === "saving" && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" /> Saving
@@ -380,10 +382,11 @@ export function TeacherLibrary({
               }
               output={
                 isWeb ? (
-                  <HtmlPreview build={previewDoc} runId={runId} />
+                  <HtmlPreview build={previewDoc} runId={runId} fileName={selected.name} />
                 ) : (
                   <div className="min-h-0 flex-1">
                     <PythonConsole
+                      fileName={selected.name}
                       lines={consoleLines}
                       running={status === "running"}
                       awaitingInput={awaitingInput}

@@ -10,10 +10,26 @@ import {
 } from "lucide-react"
 
 import { IdeOutputControls } from "@/components/ide/ide-split"
+import { ScreenshotButton } from "@/components/ide/screenshot-button"
 import { cn } from "@/lib/utils"
 import type { PreviewBuild } from "@/lib/ide/html-document"
+import {
+  pageImage,
+  parsePageSnapshot,
+  screenshotFileName,
+  type PageSnapshot,
+} from "@/lib/ide/screenshot"
 
 type Device = "desktop" | "mobile"
+
+type PendingCapture = {
+  id: string
+  resolve: (snapshot: PageSnapshot) => void
+  reject: (error: Error) => void
+}
+
+/** Longer than the frame's own allowance for inlining pictures. */
+const CAPTURE_TIMEOUT_MS = 8000
 
 /**
  * Renders the assembled student page.
@@ -28,9 +44,12 @@ export function HtmlPreview({
   build,
   /** Bumped by the workspace on each Run so the frame reloads from scratch. */
   runId,
+  fileName,
 }: {
   build: PreviewBuild | null
   runId: number
+  /** The open file, which a screenshot of the page is named after. */
+  fileName?: string
 }) {
   const srcDoc = build?.document ?? null
   const [errors, setErrors] = useState<string[]>([])
@@ -39,6 +58,7 @@ export function HtmlPreview({
   const frameRef = useRef<HTMLIFrameElement>(null)
   const expandRef = useRef<HTMLButtonElement>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
+  const pendingCapture = useRef<PendingCapture | null>(null)
 
   // Errors belong to a single run; a fresh run starts with a clean slate.
   useEffect(() => {
@@ -52,6 +72,19 @@ export function HtmlPreview({
       if (event.source !== frameRef.current?.contentWindow) return
       if (event.data?.source !== "mycodepad-preview") return
 
+      if (event.data.type === "capture") {
+        const pending = pendingCapture.current
+        // Only the answer to the request in flight is acted on: the page's own
+        // scripts share this channel and could post a reply nobody asked for.
+        if (!pending || pending.id !== event.data.id) return
+        pendingCapture.current = null
+
+        const snapshot = event.data.error ? null : parsePageSnapshot(event.data)
+        if (snapshot) pending.resolve(snapshot)
+        else pending.reject(new Error("The page could not be captured."))
+        return
+      }
+
       const message = String(event.data.message ?? "")
       setErrors((prev) => (prev.includes(message) ? prev : [...prev, message]))
     }
@@ -59,6 +92,37 @@ export function HtmlPreview({
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
   }, [])
+
+  // The frame is sandboxed to its own origin, so the page cannot be read from
+  // here. It is asked to describe itself, and the reply is drawn as an image.
+  async function capturePage() {
+    const frame = frameRef.current?.contentWindow
+    if (!frame) throw new Error("There is no page to capture yet.")
+
+    const snapshot = await new Promise<PageSnapshot>((resolve, reject) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const timer = window.setTimeout(() => {
+        if (pendingCapture.current?.id === id) pendingCapture.current = null
+        reject(new Error("The page did not respond. Run it again and retry."))
+      }, CAPTURE_TIMEOUT_MS)
+
+      pendingCapture.current = {
+        id,
+        resolve: (value) => {
+          window.clearTimeout(timer)
+          resolve(value)
+        },
+        reject: (error) => {
+          window.clearTimeout(timer)
+          reject(error)
+        },
+      }
+      // The frame's origin is opaque, so there is no origin to address it by.
+      frame.postMessage({ source: "mycodepad-host", type: "capture", id }, "*")
+    })
+
+    return pageImage(snapshot)
+  }
 
   // Losing the page while expanded would leave a full-screen panel with nothing
   // in it, so drop back to the split view instead.
@@ -118,9 +182,18 @@ export function HtmlPreview({
       )}
     >
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1.5">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Preview
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Preview
+          </span>
+          <ScreenshotButton
+            size="sm"
+            label="Download a screenshot of the whole page"
+            fileName={screenshotFileName(fileName, "preview")}
+            capture={capturePage}
+            disabled={!srcDoc}
+          />
+        </div>
 
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-0.5" role="group" aria-label="Preview width">

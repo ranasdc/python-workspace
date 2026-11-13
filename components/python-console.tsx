@@ -1,8 +1,10 @@
 "use client"
 
 import { IdeOutputControls } from "@/components/ide/ide-split"
+import { ScreenshotButton } from "@/components/ide/screenshot-button"
 import { Button } from "@/components/ui/button"
 import type { RunStatus } from "@/hooks/use-pyodide"
+import { consoleImage, screenshotFileName } from "@/lib/ide/screenshot"
 import { cn } from "@/lib/utils"
 import { AlertTriangle, Loader2, RefreshCw, Terminal } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
@@ -19,7 +21,10 @@ export function PythonConsole({
   runtimeError = null,
   runtimeErrorDetail = null,
   onRetryRuntime,
+  fileName,
 }: {
+  /** The file that was run, which a screenshot of its output is named after. */
+  fileName?: string
   lines: ConsoleLine[]
   running?: boolean
   awaitingInput?: boolean
@@ -36,6 +41,15 @@ export function PythonConsole({
   const [value, setValue] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const surfaceRef = useRef<HTMLDivElement>(null)
+  const transcriptRef = useRef<HTMLPreElement>(null)
+
+  async function captureOutput() {
+    const transcript = transcriptRef.current
+    const surface = surfaceRef.current
+    if (!transcript || !surface) throw new Error("There is no output to capture yet.")
+    return consoleImage(transcript, surface)
+  }
 
   // Focus the console input as soon as the program asks for it.
   useEffect(() => {
@@ -56,10 +70,20 @@ export function PythonConsole({
   const isEmpty = lines.length === 0
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[color-mix(in_oklch,var(--card),var(--foreground)_4%)]">
+    <div
+      ref={surfaceRef}
+      className="flex h-full min-h-0 flex-col bg-[color-mix(in_oklch,var(--card),var(--foreground)_4%)]"
+    >
       <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs font-medium text-muted-foreground">
         <Terminal className="h-3.5 w-3.5" />
         Output
+        <ScreenshotButton
+          size="sm"
+          label="Download a screenshot of the output"
+          fileName={screenshotFileName(fileName, "output")}
+          capture={captureOutput}
+          disabled={isEmpty || Boolean(runtimeError)}
+        />
         <div className="ml-auto flex items-center gap-2">
           {showPrompt ? (
             <span className="flex items-center gap-1.5 text-primary">
@@ -111,7 +135,7 @@ export function PythonConsole({
             {running ? "Running..." : "Run your code to see the output here."}
           </p>
         ) : (
-          <pre className="whitespace-pre-wrap break-words">
+          <pre ref={transcriptRef} className="whitespace-pre-wrap break-words">
             {lines.map((line, i) => (
               <span
                 key={i}

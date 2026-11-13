@@ -172,11 +172,20 @@ function inlineScripts(html: string, files: PreviewFile[], missing: string[]) {
 }
 
 /**
+ * The frame's line back to the app around it.
+ *
  * Forwards runtime errors to the parent so the preview can surface them.
  * Without this a syntax error in student JS fails silently inside the iframe
  * and the page just looks broken for no visible reason.
+ *
+ * It also answers the parent's request for a screenshot. The frame is sandboxed
+ * to an origin of its own, so the parent cannot look inside it; the page has to
+ * describe itself. It replies with its current DOM — after any scripts have
+ * changed it — with the scripts themselves removed, canvases frozen to images
+ * and, where the host allows it, pictures inlined, since the renderer on the
+ * other side fetches nothing.
  */
-const ERROR_BRIDGE = `<script>
+const PREVIEW_BRIDGE = `<script>
 (function () {
   function post(message) {
     try {
@@ -188,6 +197,106 @@ const ERROR_BRIDGE = `<script>
   });
   window.addEventListener("unhandledrejection", function (e) {
     post("Unhandled promise rejection: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+
+  function solid(element) {
+    if (!element) return "";
+    var colour = getComputedStyle(element).backgroundColor;
+    return colour && colour !== "transparent" && colour !== "rgba(0, 0, 0, 0)" ? colour : "";
+  }
+
+  function inlinePicture(picture) {
+    var address = picture.src;
+    if (!/^https?:/i.test(address)) return null;
+    return fetch(address)
+      .then(function (response) {
+        if (!response.ok) throw new Error("unavailable");
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (blob.type.indexOf("image/") !== 0) return;
+        return new Promise(function (resolve) {
+          var reader = new FileReader();
+          reader.onloadend = function () {
+            if (typeof reader.result === "string") {
+              picture.removeAttribute("srcset");
+              picture.src = reader.result;
+            }
+            resolve();
+          };
+          reader.readAsDataURL(blob);
+        });
+      })
+      .catch(function () {});
+  }
+
+  window.addEventListener("message", function (e) {
+    var request = e.data;
+    if (e.source !== parent || !request || request.source !== "mycodepad-host" || request.type !== "capture") return;
+
+    function reply(payload) {
+      payload.source = "mycodepad-preview";
+      payload.type = "capture";
+      payload.id = request.id;
+      try {
+        parent.postMessage(payload, "*");
+      } catch (err) {}
+    }
+
+    try {
+      var root = document.documentElement;
+      var body = document.body;
+      var copy = root.cloneNode(true);
+      var i;
+
+      var live = root.querySelectorAll("canvas");
+      var drawn = copy.querySelectorAll("canvas");
+      for (i = 0; i < live.length; i++) {
+        try {
+          var still = document.createElement("img");
+          still.src = live[i].toDataURL();
+          still.width = live[i].width;
+          still.height = live[i].height;
+          if (live[i].id) still.id = live[i].id;
+          still.className = live[i].className;
+          still.style.cssText = live[i].style.cssText;
+          drawn[i].parentNode.replaceChild(still, drawn[i]);
+        } catch (err) {}
+      }
+
+      var inert = copy.querySelectorAll("script, noscript, iframe");
+      for (i = 0; i < inert.length; i++) inert[i].parentNode.removeChild(inert[i]);
+
+      var jobs = [];
+      var pictures = copy.querySelectorAll("img");
+      for (i = 0; i < pictures.length; i++) {
+        var job = inlinePicture(pictures[i]);
+        if (job) jobs.push(job);
+      }
+
+      var sent = false;
+      var send = function () {
+        if (sent) return;
+        sent = true;
+        try {
+          reply({
+            markup: new XMLSerializer().serializeToString(copy),
+            width: Math.max(root.scrollWidth, root.clientWidth),
+            height: Math.max(root.scrollHeight, body ? body.scrollHeight : 0),
+            viewportHeight: window.innerHeight,
+            background: solid(root) || solid(body) || "#ffffff"
+          });
+        } catch (err) {
+          reply({ error: String(err && err.message ? err.message : err) });
+        }
+      };
+
+      Promise.all(jobs).then(send, send);
+      // A picture on a slow host must not hold the screenshot up indefinitely.
+      setTimeout(send, 4000);
+    } catch (err) {
+      reply({ error: String(err && err.message ? err.message : err) });
+    }
   });
 })();
 </script>`
@@ -219,9 +328,9 @@ export function buildPreviewDocument(
 
   // Inject the bridge first so it catches errors thrown by student scripts.
   if (/<head\b[^>]*>/i.test(html)) {
-    html = html.replace(/<head\b[^>]*>/i, (m) => `${m}\n${ERROR_BRIDGE}`)
+    html = html.replace(/<head\b[^>]*>/i, (m) => `${m}\n${PREVIEW_BRIDGE}`)
   } else {
-    html = `${ERROR_BRIDGE}\n${html}`
+    html = `${PREVIEW_BRIDGE}\n${html}`
   }
 
   return { document: html, missing: [...new Set(missing)] }

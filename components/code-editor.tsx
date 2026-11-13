@@ -24,7 +24,8 @@ const AUTO_PAIRS: Record<string, string> = {
   "{": "}",
 }
 
-function highlight(code: string, mode: EditorMode) {
+/** The editor's syntax-highlighted markup, also used to draw its screenshots. */
+export function highlightCode(code: string, mode: EditorMode) {
   // Prism collapses a trailing newline; append one so the final line aligns
   // with the textarea's rendered empty line.
   const src = code.endsWith("\n") ? code + " " : code
@@ -60,7 +61,7 @@ export function CodeEditor({
   const marksRef = useRef<HTMLDivElement>(null)
 
   const lineCount = useMemo(() => Math.max(value.split("\n").length, 1), [value])
-  const html = useMemo(() => highlight(value, mode), [value, mode])
+  const html = useMemo(() => highlightCode(value, mode), [value, mode])
   const marked = useMemo(() => new Set(markedLines ?? []), [markedLines])
 
   const syncScroll = useCallback(() => {
