@@ -46,6 +46,7 @@ import { subscriptionInfoKey } from "@/lib/swr-keys"
 import { FileComments } from "@/components/file-comments"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { getFolderColors } from "@/lib/folder-colors"
+import { canHoldSubfolder, filesInTree } from "@/lib/ide/folder-tree"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -109,10 +110,14 @@ type FolderItem = {
   id: number
   classId: number
   studentId: string
+  parentId: number | null
   name: string
   language: string
   assignedByTeacher: boolean
   createdAt: Date
+  /** 1 for a top-level folder. */
+  depth: number
+  folders: FolderItem[]
   files: FileItem[]
 }
 
@@ -244,10 +249,8 @@ export function StudentWorkspace({
     },
   )
 
-  // Flatten every file (root + inside folders) for selection lookups.
-  const allFiles: FileItem[] = tree
-    ? [...tree.rootFiles, ...tree.folders.flatMap((f) => f.files)]
-    : []
+  // Flatten every file (root + inside folders at any depth) for selection lookups.
+  const allFiles: FileItem[] = tree ? [...tree.rootFiles, ...filesInTree(tree.folders)] : []
   const hasAnyFiles = allFiles.length > 0
 
   const activeFile = allFiles.find((f) => f.id === activeFileId) ?? null
@@ -446,7 +449,7 @@ export function StudentWorkspace({
     }
   }
 
-  async function handleCreateFolder(name: string) {
+  async function handleCreateFolder(name: string, parentId: number | null = null) {
     if (!activeClassId) return
     
     // Check free tier limit
@@ -456,7 +459,7 @@ export function StudentWorkspace({
     }
     
     try {
-      const created = await createStudentFolder(activeClassId, name, language)
+      const created = await createStudentFolder(activeClassId, name, language, parentId)
       await Promise.all([mutate(filesKey), mutate(subscriptionInfoKey(language))])
       toast.success(`Created folder ${created.name}`)
     } catch (e) {
@@ -569,7 +572,7 @@ export function StudentWorkspace({
         <div className="flex items-center justify-between px-3 py-2">
           <Label className="text-xs uppercase tracking-wide text-muted-foreground">Files</Label>
           <div className="flex items-center gap-0.5">
-            <NewFolderDialog onCreate={handleCreateFolder} />
+            <NewFolderDialog onCreate={(name) => handleCreateFolder(name)} />
             <NewFileDialog
               language={language}
               onCreate={(name) => handleCreateFile(name, null)}
@@ -595,7 +598,8 @@ export function StudentWorkspace({
                   onSelectFile={setActiveFileId}
                   onDeleteFile={handleDeleteFile}
                   onDeleteFolder={handleDeleteFolder}
-                  onCreateFile={(name) => handleCreateFile(name, folder.id)}
+                  onCreateFile={handleCreateFile}
+                  onCreateFolder={handleCreateFolder}
                 />
               ))}
               {tree.rootFiles.map((f) => (
@@ -862,19 +866,16 @@ function FileRow({
   active,
   onSelect,
   onDelete,
-  nested,
 }: {
   file: FileItem
   active: boolean
   onSelect: () => void
   onDelete: () => void
-  nested?: boolean
 }) {
   return (
     <div
       className={cn(
         "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-        nested && "ml-4",
         active ? "bg-muted font-medium" : "hover:bg-muted/60",
       )}
     >
@@ -919,6 +920,7 @@ function StudentFolderRow({
   onDeleteFile,
   onDeleteFolder,
   onCreateFile,
+  onCreateFolder,
 }: {
   folder: FolderItem
   folderIndex: number
@@ -927,10 +929,12 @@ function StudentFolderRow({
   onSelectFile: (id: number) => void
   onDeleteFile: (id: number) => void
   onDeleteFolder: (id: number) => void
-  onCreateFile: (name: string) => Promise<void>
+  onCreateFile: (name: string, folderId: number) => Promise<void>
+  onCreateFolder: (name: string, parentId: number) => Promise<void>
 }) {
   const [open, setOpen] = useState(true)
   const { icon: folderIconColor } = getFolderColors(folderIndex)
+  const isEmpty = folder.files.length === 0 && folder.folders.length === 0
 
   return (
     <div className="mb-0.5">
@@ -955,11 +959,34 @@ function StudentFolderRow({
           )}
         </button>
         <div className="flex items-center gap-0.5">
+          {canHoldSubfolder(folder.depth) && (
+            <NewFolderDialog
+              parentName={folder.name}
+              onCreate={(name) => onCreateFolder(name, folder.id)}
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  title="New folder inside this one"
+                  aria-label={`New folder inside ${folder.name}`}
+                >
+                  <FolderPlus className="h-3.5 w-3.5" />
+                </Button>
+              }
+            />
+          )}
           <NewFileDialog
             language={language}
-            onCreate={onCreateFile}
+            onCreate={(name) => onCreateFile(name, folder.id)}
             trigger={
-              <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="New file in folder">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                title="New file in this folder"
+                aria-label={`New file in ${folder.name}`}
+              >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             }
@@ -967,7 +994,7 @@ function StudentFolderRow({
           {!folder.assignedByTeacher && (
             <ConfirmDialog
               title="Delete folder?"
-              description={`"${folder.name}" and every file inside it will be permanently deleted. This can't be undone.`}
+              description={`"${folder.name}" and everything inside it, including any folders it contains, will be permanently deleted. This can't be undone.`}
               onConfirm={() => onDeleteFolder(folder.id)}
               trigger={
                 <button aria-label={`Delete folder ${folder.name}`}>
@@ -978,21 +1005,41 @@ function StudentFolderRow({
           )}
         </div>
       </div>
-      {open &&
-        (folder.files.length === 0 ? (
-          <p className="ml-8 px-2 py-1 text-xs text-muted-foreground">Empty folder</p>
-        ) : (
-          folder.files.map((f) => (
-            <FileRow
-              key={f.id}
-              file={f}
-              active={f.id === activeFileId}
-              onSelect={() => onSelectFile(f.id)}
-              onDelete={() => onDeleteFile(f.id)}
-              nested
-            />
-          ))
-        ))}
+      {open && (
+        <div className="ml-4">
+          {isEmpty ? (
+            <p className="ml-4 px-2 py-1 text-xs text-muted-foreground">Empty folder</p>
+          ) : (
+            <>
+              {folder.folders.map((child, index) => (
+                <StudentFolderRow
+                  key={child.id}
+                  folder={child}
+                  // Offset from the parent so a folder and the first folder
+                  // inside it never share a colour.
+                  folderIndex={folderIndex + index + 1}
+                  language={language}
+                  activeFileId={activeFileId}
+                  onSelectFile={onSelectFile}
+                  onDeleteFile={onDeleteFile}
+                  onDeleteFolder={onDeleteFolder}
+                  onCreateFile={onCreateFile}
+                  onCreateFolder={onCreateFolder}
+                />
+              ))}
+              {folder.files.map((f) => (
+                <FileRow
+                  key={f.id}
+                  file={f}
+                  active={f.id === activeFileId}
+                  onSelect={() => onSelectFile(f.id)}
+                  onDelete={() => onDeleteFile(f.id)}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1085,7 +1132,16 @@ function NewFileDialog({
   )
 }
 
-function NewFolderDialog({ onCreate }: { onCreate: (name: string) => Promise<void> }) {
+function NewFolderDialog({
+  onCreate,
+  trigger,
+  parentName,
+}: {
+  onCreate: (name: string) => Promise<void>
+  trigger?: React.ReactNode
+  /** Set when the new folder goes inside another one. */
+  parentName?: string
+}) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
@@ -1106,14 +1162,18 @@ function NewFolderDialog({ onCreate }: { onCreate: (name: string) => Promise<voi
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New folder" />}
-      >
-        <FolderPlus className="h-4 w-4" />
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger render={trigger as React.ReactElement} />
+      ) : (
+        <DialogTrigger
+          render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New folder" />}
+        >
+          <FolderPlus className="h-4 w-4" />
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New folder</DialogTitle>
+          <DialogTitle>{parentName ? `New folder in ${parentName}` : "New folder"}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="foldername">Folder name</Label>
@@ -1128,7 +1188,9 @@ function NewFolderDialog({ onCreate }: { onCreate: (name: string) => Promise<voi
             autoFocus
           />
           <p className="text-xs text-muted-foreground">
-            Organize your own work into folders.
+            {parentName
+              ? `This folder will sit inside "${parentName}".`
+              : "Organize your own work into folders."}
           </p>
         </div>
         <DialogFooter>

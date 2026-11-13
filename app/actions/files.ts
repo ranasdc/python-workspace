@@ -25,6 +25,13 @@ import {
   toLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
+import {
+  buildFolderTree,
+  canHoldSubfolder,
+  folderDepth,
+  FOLDER_DEPTH_MESSAGE,
+  subtreeFolderIds,
+} from "@/lib/ide/folder-tree"
 import { changedLineNumbers } from "@/lib/ide/line-diff"
 import { isCommentReaction } from "@/lib/ide/comment-reactions"
 
@@ -99,14 +106,8 @@ export async function getStudentFiles(classId: number, languageInput: LanguageId
     }
   }
 
-  return {
-    folders: folders.map((folder) => ({
-      ...folder,
-      files: files.filter((f) => f.folderId === folder.id).map(decorate),
-    })),
-    // Files not inside any folder live at the class root.
-    rootFiles: files.filter((f) => f.folderId === null).map(decorate),
-  }
+  // Files not inside any folder come back as `rootFiles`, at the class root.
+  return buildFolderTree(folders, files.map(decorate))
 }
 
 export async function createFile(
@@ -168,26 +169,52 @@ export async function createStudentFolder(
   classId: number,
   name: string,
   languageInput: LanguageId = "python",
+  parentId: number | null = null,
 ) {
   const student = await requireUser()
   const language = toLanguageId(languageInput)
   await assertEnrolled(student.id, classId)
 
+  // A subfolder is a folder like any other, so it counts towards the same
+  // allowance. Otherwise nesting would be a way around the free-plan limit.
   await assertCanCreateFolder(student.id, language)
 
   const clean = name.trim()
   if (!clean) throw new Error("Enter a folder name")
 
+  if (parentId !== null) {
+    // Scoped to this student, class and IDE, so a parent that belongs to
+    // anyone or anything else is simply not in the set.
+    const siblings = await db
+      .select({
+        id: studentFolders.id,
+        parentId: studentFolders.parentId,
+        name: studentFolders.name,
+      })
+      .from(studentFolders)
+      .where(
+        and(
+          eq(studentFolders.classId, classId),
+          eq(studentFolders.studentId, student.id),
+          eq(studentFolders.language, language),
+        ),
+      )
+    const depth = folderDepth(siblings, parentId)
+    if (depth === 0) throw new Error("Folder not found")
+    if (!canHoldSubfolder(depth)) throw new Error(FOLDER_DEPTH_MESSAGE)
+  }
+
   const [created] = await db
     .insert(studentFolders)
-    .values({ classId, studentId: student.id, name: clean, language })
+    .values({ classId, studentId: student.id, parentId, name: clean, language })
     .returning()
 
   revalidatePath("/student")
   return created
 }
 
-// Delete a folder and every file inside it (scoped to this student).
+// Delete a folder with everything inside it: its files, its subfolders and
+// their files (scoped to this student).
 export async function deleteStudentFolder(folderId: number) {
   const student = await requireUser()
 
@@ -203,12 +230,34 @@ export async function deleteStudentFolder(folderId: number) {
     throw new Error("This folder was assigned by your teacher and can't be deleted.")
   }
 
-  await db
-    .delete(codeFiles)
-    .where(and(eq(codeFiles.folderId, folderId), eq(codeFiles.studentId, student.id)))
-  await db
-    .delete(studentFolders)
-    .where(and(eq(studentFolders.id, folderId), eq(studentFolders.studentId, student.id)))
+  const owned = await db
+    .select({
+      id: studentFolders.id,
+      parentId: studentFolders.parentId,
+      name: studentFolders.name,
+      assignedByTeacher: studentFolders.assignedByTeacher,
+    })
+    .from(studentFolders)
+    .where(
+      and(
+        eq(studentFolders.studentId, student.id),
+        eq(studentFolders.classId, folder.classId),
+        eq(studentFolders.language, folder.language),
+      ),
+    )
+  const doomed = subtreeFolderIds(owned, folderId)
+  if (owned.some((f) => f.assignedByTeacher && doomed.includes(f.id))) {
+    throw new Error("This folder holds work assigned by your teacher and can't be deleted.")
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(codeFiles)
+      .where(and(inArray(codeFiles.folderId, doomed), eq(codeFiles.studentId, student.id)))
+    await tx
+      .delete(studentFolders)
+      .where(and(inArray(studentFolders.id, doomed), eq(studentFolders.studentId, student.id)))
+  })
   revalidatePath("/student")
   return { ok: true }
 }
@@ -314,15 +363,14 @@ export async function getClassTree(classId: number, languageInput: LanguageId = 
     students: students
       .map((s) => {
         const studentFiles = files.filter((f) => f.studentId === s.id)
+        const tree = buildFolderTree(
+          folders.filter((folder) => folder.studentId === s.id),
+          studentFiles,
+        )
         return {
           ...s,
-          folders: folders
-            .filter((folder) => folder.studentId === s.id)
-            .map((folder) => ({
-              ...folder,
-              files: studentFiles.filter((f) => f.folderId === folder.id),
-            })),
-          rootFiles: studentFiles.filter((f) => f.folderId === null),
+          folders: tree.folders,
+          rootFiles: tree.rootFiles,
           files: studentFiles,
         }
       })

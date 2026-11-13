@@ -62,6 +62,7 @@ import {
   runModelFor,
 } from "@/lib/ide/languages"
 import { getFolderColors } from "@/lib/folder-colors"
+import { countFilesDeep } from "@/lib/ide/folder-tree"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -116,6 +117,9 @@ type TreeFolder = {
   id: number
   name: string
   assignedByTeacher: boolean
+  /** 1 for a top-level folder. */
+  depth: number
+  folders: TreeFolder[]
   files: TreeFile[]
 }
 
@@ -993,12 +997,10 @@ function TreeFileRow({
   file,
   selected,
   onSelect,
-  nested,
 }: {
   file: TreeFile
   selected: boolean
   onSelect: () => void
-  nested?: boolean
 }) {
   return (
     <li>
@@ -1006,7 +1008,6 @@ function TreeFileRow({
         onClick={onSelect}
         className={cn(
           "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
-          nested && "pl-6",
           selected ? "bg-muted font-medium" : "hover:bg-muted/60",
         )}
       >
@@ -1047,21 +1048,31 @@ function TreeFolderRow({
         <Folder className={cn("h-3.5 w-3.5 shrink-0", folderIconColor)} />
         <span className="truncate font-medium">{folder.name}</span>
         <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
-          {folder.files.length}
+          {countFilesDeep(folder)}
         </Badge>
       </button>
       {open &&
-        (folder.files.length === 0 ? (
+        (folder.files.length === 0 && folder.folders.length === 0 ? (
           <p className="pl-8 text-xs text-muted-foreground">Empty</p>
         ) : (
-          <ul>
+          <ul className="pl-4">
+            {folder.folders.map((child, index) => (
+              <TreeFolderRow
+                key={child.id}
+                folder={child}
+                // Offset from the parent so a folder and the first folder
+                // inside it never share a colour.
+                folderIndex={folderIndex + index + 1}
+                selectedFileId={selectedFileId}
+                onSelectFile={onSelectFile}
+              />
+            ))}
             {folder.files.map((f) => (
               <TreeFileRow
                 key={f.id}
                 file={f}
                 selected={selectedFileId === f.id}
                 onSelect={() => onSelectFile(f)}
-                nested
               />
             ))}
           </ul>

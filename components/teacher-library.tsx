@@ -20,6 +20,12 @@ import {
   type LanguageId,
   runModelFor,
 } from "@/lib/ide/languages"
+import {
+  canHoldSubfolder,
+  countFilesDeep,
+  filesInTree,
+  folderPaths,
+} from "@/lib/ide/folder-tree"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -77,8 +83,12 @@ type LibFile = {
 type LibFolder = {
   id: number
   teacherId: string
+  parentId: number | null
   name: string
   createdAt: Date
+  /** 1 for a top-level folder. */
+  depth: number
+  folders: LibFolder[]
   files: LibFile[]
 }
 type LibraryData = { folders: LibFolder[]; rootFiles: LibFile[] }
@@ -136,7 +146,7 @@ export function TeacherLibrary({
     retry,
   } = usePyodide({ enabled: runModelFor(language) === "console" })
 
-  const allFiles = data ? [...data.rootFiles, ...data.folders.flatMap((f) => f.files)] : []
+  const allFiles = data ? [...data.rootFiles, ...filesInTree(data.folders)] : []
   const selected = allFiles.find((f) => f.id === selectedId) ?? null
 
   useEffect(() => {
@@ -255,6 +265,7 @@ export function TeacherLibrary({
                 <FolderNode
                   key={folder.id}
                   folder={folder}
+                  language={language}
                   classes={classes}
                   selectedId={selectedId}
                   onSelect={setSelectedId}
@@ -385,18 +396,21 @@ export function TeacherLibrary({
 
 function FolderNode({
   folder,
+  language,
   classes,
   selectedId,
   onSelect,
   onChanged,
 }: {
   folder: LibFolder
+  language: LanguageId
   classes: ClassOption[]
   selectedId: number | null
   onSelect: (id: number) => void
   onChanged: () => Promise<void>
 }) {
   const [open, setOpen] = useState(true)
+  const isEmpty = folder.files.length === 0 && folder.folders.length === 0
 
   async function remove() {
     try {
@@ -420,12 +434,33 @@ function FolderNode({
           <Folder className="h-4 w-4 shrink-0 text-chart-4" />
           <span className="truncate font-medium">{folder.name}</span>
           <Badge variant="secondary" className="ml-1 shrink-0 text-xs">
-            {folder.files.length}
+            {countFilesDeep(folder)}
           </Badge>
         </button>
+        {canHoldSubfolder(folder.depth) && (
+          <NewFolderButton
+            language={language}
+            parent={folder}
+            onDone={onChanged}
+            trigger={
+              <button
+                className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
+                title="New folder inside this one"
+                aria-label={`New folder inside ${folder.name}`}
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+              </button>
+            }
+          />
+        )}
         <DistributeDialog
           classes={classes}
           label={`Distribute folder "${folder.name}"`}
+          note={
+            folder.folders.length > 0
+              ? "The folders inside it are sent too, with their files, in the same structure."
+              : undefined
+          }
           trigger={
             <button
               className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
@@ -438,7 +473,7 @@ function FolderNode({
         />
         <ConfirmDialog
           title="Delete folder?"
-          description={`"${folder.name}" and every file inside it will be permanently deleted. This can't be undone.`}
+          description={`"${folder.name}" and everything inside it, including any folders it contains, will be permanently deleted. This can't be undone.`}
           onConfirm={remove}
           trigger={
             <button
@@ -452,19 +487,32 @@ function FolderNode({
       </div>
       {open && (
         <ul className="ml-4 border-l border-border pl-2">
-          {folder.files.length === 0 ? (
+          {isEmpty ? (
             <li className="px-2 py-1 text-xs text-muted-foreground">Empty folder</li>
           ) : (
-            folder.files.map((file) => (
-              <FileRow
-                key={file.id}
-                file={file}
-                classes={classes}
-                selected={selectedId === file.id}
-                onSelect={() => onSelect(file.id)}
-                onChanged={onChanged}
-              />
-            ))
+            <>
+              {folder.folders.map((child) => (
+                <FolderNode
+                  key={child.id}
+                  folder={child}
+                  language={language}
+                  classes={classes}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  onChanged={onChanged}
+                />
+              ))}
+              {folder.files.map((file) => (
+                <FileRow
+                  key={file.id}
+                  file={file}
+                  classes={classes}
+                  selected={selectedId === file.id}
+                  onSelect={() => onSelect(file.id)}
+                  onChanged={onChanged}
+                />
+              ))}
+            </>
           )}
         </ul>
       )}
@@ -551,9 +599,14 @@ function languageOfFile(name: string): LanguageId {
 function NewFolderButton({
   language,
   onDone,
+  parent,
+  trigger,
 }: {
   language: LanguageId
   onDone: () => Promise<void>
+  /** Set when the new folder goes inside another one. */
+  parent?: { id: number; name: string }
+  trigger?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
@@ -566,7 +619,7 @@ function NewFolderButton({
     if (!name.trim()) return
     setBusy(true)
     try {
-      const result = await createLibraryFolder(name, language)
+      const result = await createLibraryFolder(name, language, parent?.id ?? null)
       if (!result.ok) {
         if (result.code === "library_folder_limit") {
           setLimitReached(true)
@@ -594,11 +647,15 @@ function NewFolderButton({
         if (!next) setLimitReached(false)
       }}
     >
-      <DialogTrigger
-        render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New folder" />}
-      >
-        <FolderPlus className="h-4 w-4" />
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger render={trigger as React.ReactElement} />
+      ) : (
+        <DialogTrigger
+          render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New folder" />}
+        >
+          <FolderPlus className="h-4 w-4" />
+        </DialogTrigger>
+      )}
       <DialogContent>
         {limitReached ? (
           <LibraryLimitUpgrade
@@ -608,7 +665,7 @@ function NewFolderButton({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>New folder</DialogTitle>
+              <DialogTitle>{parent ? `New folder in ${parent.name}` : "New folder"}</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-2">
               <Label htmlFor="foldername">Folder name</Label>
@@ -622,6 +679,11 @@ function NewFolderButton({
                 }}
                 autoFocus
               />
+              {parent && (
+                <p className="text-xs text-muted-foreground">
+                  {`This folder will sit inside "${parent.name}" and is sent with it when you distribute.`}
+                </p>
+              )}
             </div>
             <DialogFooter>
               <Button onClick={submit} disabled={busy}>
@@ -737,9 +799,9 @@ function NewFileButton({
                   className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="root">Library root (no folder)</option>
-                  {folders.map((f) => (
+                  {folderPaths(folders).map((f) => (
                     <option key={f.id} value={String(f.id)}>
-                      {f.name}
+                      {f.path}
                     </option>
                   ))}
                 </select>
@@ -807,11 +869,14 @@ function LibraryLimitUpgrade({
 function DistributeDialog({
   classes,
   label,
+  note,
   trigger,
   onConfirm,
 }: {
   classes: ClassOption[]
   label: string
+  /** Extra detail about what is being sent, shown under the title. */
+  note?: string
   trigger?: React.ReactNode
   onConfirm: (classId: number, studentId: string | null) => Promise<{ delivered: number; recipients: number }>
 }) {
@@ -858,6 +923,7 @@ function DistributeDialog({
         <DialogHeader>
           <DialogTitle>{label}</DialogTitle>
         </DialogHeader>
+        {note && <p className="text-sm text-muted-foreground text-pretty">{note}</p>}
         {classes.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             You need at least one class before you can distribute files.

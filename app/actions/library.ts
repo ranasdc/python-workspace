@@ -26,6 +26,13 @@ import {
   toLanguageId,
   type LanguageId,
 } from "@/lib/ide/languages"
+import {
+  buildFolderTree,
+  canHoldSubfolder,
+  folderDepth,
+  FOLDER_DEPTH_MESSAGE,
+  subtreeFolderIds,
+} from "@/lib/ide/folder-tree"
 
 // Capability comes from the entitlement engine, not from the session's `role`
 // field: a school teacher who signed up as a student must still be able to
@@ -73,14 +80,8 @@ export async function getLibrary(languageInput: LanguageId = "python") {
   const withTask = new Set(taskRows.map((r) => r.libraryFileId))
   const decorate = (f: (typeof files)[number]) => ({ ...f, hasTask: withTask.has(f.id) })
 
-  return {
-    folders: folders.map((f) => ({
-      ...f,
-      files: files.filter((file) => file.folderId === f.id).map(decorate),
-    })),
-    // Files not inside any folder live at the library root.
-    rootFiles: files.filter((f) => f.folderId === null).map(decorate),
-  }
+  // Files not inside any folder come back as `rootFiles`, at the library root.
+  return buildFolderTree(folders, files.map(decorate))
 }
 
 // ---------- Folders ----------
@@ -97,10 +98,12 @@ export type CreateLibraryFolderResult =
 export async function createLibraryFolder(
   name: string,
   languageInput: LanguageId = "python",
+  parentId: number | null = null,
 ): Promise<CreateLibraryFolderResult> {
   const teacher = await requireTeacher()
   const language = toLanguageId(languageInput)
 
+  // A subfolder counts towards the same allowance as any other folder.
   try {
     await assertCanCreateLibraryFolder(teacher.id)
   } catch (error) {
@@ -115,9 +118,31 @@ export async function createLibraryFolder(
     return { ok: false, code: "forbidden", message: "Folder name is required" }
   }
 
+  if (parentId !== null) {
+    // Scoped to this teacher and IDE, so a parent that belongs to anyone or
+    // anything else is simply not in the set.
+    const owned = await db
+      .select({
+        id: libraryFolders.id,
+        parentId: libraryFolders.parentId,
+        name: libraryFolders.name,
+      })
+      .from(libraryFolders)
+      .where(
+        and(eq(libraryFolders.teacherId, teacher.id), eq(libraryFolders.language, language)),
+      )
+    const depth = folderDepth(owned, parentId)
+    if (depth === 0) {
+      return { ok: false, code: "forbidden", message: "Folder not found" }
+    }
+    if (!canHoldSubfolder(depth)) {
+      return { ok: false, code: "forbidden", message: FOLDER_DEPTH_MESSAGE }
+    }
+  }
+
   const [created] = await db
     .insert(libraryFolders)
-    .values({ teacherId: teacher.id, name: clean, language })
+    .values({ teacherId: teacher.id, parentId, name: clean, language })
     .returning()
 
   revalidatePath("/teacher")
@@ -126,13 +151,28 @@ export async function createLibraryFolder(
 
 export async function deleteLibraryFolder(folderId: number) {
   const teacher = await requireTeacher()
-  // Remove the folder and every file inside it (scoped to this teacher).
-  await db
-    .delete(libraryFiles)
-    .where(and(eq(libraryFiles.folderId, folderId), eq(libraryFiles.teacherId, teacher.id)))
-  await db
-    .delete(libraryFolders)
-    .where(and(eq(libraryFolders.id, folderId), eq(libraryFolders.teacherId, teacher.id)))
+
+  // Remove the folder with everything inside it: its files, its subfolders and
+  // their files. Only this teacher's rows are read, so the subtree can never
+  // reach into a colleague's library.
+  const owned = await db
+    .select({
+      id: libraryFolders.id,
+      parentId: libraryFolders.parentId,
+      name: libraryFolders.name,
+    })
+    .from(libraryFolders)
+    .where(eq(libraryFolders.teacherId, teacher.id))
+  const doomed = subtreeFolderIds(owned, folderId)
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(libraryFiles)
+      .where(and(inArray(libraryFiles.folderId, doomed), eq(libraryFiles.teacherId, teacher.id)))
+    await tx
+      .delete(libraryFolders)
+      .where(and(inArray(libraryFolders.id, doomed), eq(libraryFolders.teacherId, teacher.id)))
+  })
   revalidatePath("/teacher")
   return { ok: true }
 }
@@ -248,14 +288,15 @@ async function resolveRecipients(teacherId: string, classId: number, studentId: 
 
 // Copy a set of library files to each recipient. If a recipient already has a
 // file with the same name in the same location (folder or root), we skip it so
-// their work is never overwritten. `folderIdFor` maps a studentId to the folder
-// the files should land in (null = class root).
+// their work is never overwritten. `folderIdFor` says which of a student's
+// folders a file lands in, given the library folder it came from (null = class
+// root).
 async function copyFilesToStudents(
   fileIds: number[],
   teacherId: string,
   classId: number,
   recipientIds: string[],
-  folderIdFor?: (studentId: string) => number | null,
+  folderIdFor?: (studentId: string, sourceFolderId: number | null) => number | null,
 ) {
   if (fileIds.length === 0 || recipientIds.length === 0) return 0
 
@@ -287,8 +328,8 @@ async function copyFilesToStudents(
   }[] = []
 
   for (const student of recipientIds) {
-    const folderId = folderIdFor ? folderIdFor(student) : null
     for (const file of sourceFiles) {
+      const folderId = folderIdFor ? folderIdFor(student, file.folderId) : null
       if (taken.has(`${student}::${folderId ?? "root"}::${file.name}`)) continue
       rows.push({
         classId,
@@ -339,49 +380,101 @@ export async function distributeFolder(
     .where(and(eq(libraryFolders.id, folderId), eq(libraryFolders.teacherId, teacher.id)))
   if (!folder) throw new Error("Folder not found")
 
+  // The folder travels with everything beneath it. Subfolders always share
+  // their parent's IDE, so scoping by language loses nothing.
+  const owned = await db
+    .select()
+    .from(libraryFolders)
+    .where(
+      and(eq(libraryFolders.teacherId, teacher.id), eq(libraryFolders.language, folder.language)),
+    )
+  const ownedById = new Map(owned.map((f) => [f.id, f]))
+  // Parents come before their children, so a student's copy of a folder
+  // always exists by the time its subfolders are placed inside it.
+  const sourceFolders = subtreeFolderIds(owned, folderId).flatMap((id) => {
+    const source = ownedById.get(id)
+    return source ? [source] : []
+  })
+  const sourceFolderIds = sourceFolders.map((f) => f.id)
+
   const files = await db
     .select({ id: libraryFiles.id })
     .from(libraryFiles)
-    .where(and(eq(libraryFiles.folderId, folderId), eq(libraryFiles.teacherId, teacher.id)))
+    .where(
+      and(inArray(libraryFiles.folderId, sourceFolderIds), eq(libraryFiles.teacherId, teacher.id)),
+    )
   if (files.length === 0) throw new Error("This folder has no files to distribute")
 
   const recipients = await resolveRecipients(teacher.id, classId, studentId)
 
-  // Recreate the folder itself for each recipient so the whole folder is
-  // shared — reusing an existing teacher-assigned folder of the same name to
+  // Recreate the folders for each recipient so the whole structure is shared —
+  // reusing a teacher-assigned folder of the same name in the same place to
   // avoid duplicates on repeat distributions.
-  const existingFolders = await db
-    .select()
-    .from(studentFolders)
-    .where(
-      and(
-        eq(studentFolders.classId, classId),
-        eq(studentFolders.name, folder.name),
-        // Same-named folders in different IDEs are different folders.
-        eq(studentFolders.language, folder.language),
-      ),
-    )
+  const assigned =
+    recipients.length > 0
+      ? await db
+          .select()
+          .from(studentFolders)
+          .where(
+            and(
+              eq(studentFolders.classId, classId),
+              // Same-named folders in different IDEs are different folders.
+              eq(studentFolders.language, folder.language),
+              eq(studentFolders.assignedByTeacher, true),
+              inArray(studentFolders.studentId, recipients),
+            ),
+          )
+      : []
 
-  const folderByStudent = new Map<string, number>()
-  for (const ef of existingFolders) {
-    if (ef.assignedByTeacher) folderByStudent.set(ef.studentId, ef.id)
+  // Where a folder sits is part of its identity: "Week 1" inside "Unit 2" is
+  // not the "Week 1" at the top of the class.
+  const placeKey = (student: string, parentId: number | null, name: string) =>
+    `${student}::${parentId ?? "root"}::${name}`
+  const assignedAt = new Map<string, number>()
+  for (const f of assigned) {
+    const key = placeKey(f.studentId, f.parentId, f.name)
+    if (!assignedAt.has(key)) assignedAt.set(key, f.id)
   }
 
-  const toCreate = recipients.filter((s) => !folderByStudent.has(s))
-  if (toCreate.length > 0) {
-    const created = await db
-      .insert(studentFolders)
-      .values(
-        toCreate.map((s) => ({
-          classId,
-          studentId: s,
-          name: folder.name,
-          language: folder.language,
-          assignedByTeacher: true,
-        })),
-      )
-      .returning()
-    for (const c of created) folderByStudent.set(c.studentId, c.id)
+  // Library folder id -> student id -> that student's copy of the folder.
+  const copyOf = new Map<number, Map<string, number>>()
+  for (const source of sourceFolders) {
+    const copies = new Map<string, number>()
+    const missing: { studentId: string; parentId: number | null }[] = []
+
+    for (const student of recipients) {
+      // The folder being distributed lands at the top of the class, wherever
+      // it sat in the library. Everything below it keeps its place.
+      const parentCopy =
+        source.id === folderId || source.parentId === null
+          ? null
+          : (copyOf.get(source.parentId)?.get(student) ?? null)
+      const existing = assignedAt.get(placeKey(student, parentCopy, source.name))
+      if (existing !== undefined) copies.set(student, existing)
+      else missing.push({ studentId: student, parentId: parentCopy })
+    }
+
+    if (missing.length > 0) {
+      const created = await db
+        .insert(studentFolders)
+        .values(
+          missing.map((m) => ({
+            classId,
+            studentId: m.studentId,
+            parentId: m.parentId,
+            name: source.name,
+            language: source.language,
+            assignedByTeacher: true,
+          })),
+        )
+        .returning()
+      for (const c of created) {
+        copies.set(c.studentId, c.id)
+        assignedAt.set(placeKey(c.studentId, c.parentId, c.name), c.id)
+      }
+    }
+
+    copyOf.set(source.id, copies)
   }
 
   const count = await copyFilesToStudents(
@@ -389,7 +482,8 @@ export async function distributeFolder(
     teacher.id,
     classId,
     recipients,
-    (student) => folderByStudent.get(student) ?? null,
+    (student, sourceFolderId) =>
+      sourceFolderId === null ? null : (copyOf.get(sourceFolderId)?.get(student) ?? null),
   )
   revalidatePath("/teacher")
   revalidatePath("/student")
