@@ -56,6 +56,7 @@ import { IdeSplit } from "@/components/ide/ide-split"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import { ShareMenu } from "@/components/ide/share-menu"
+import { CodeScreenshotButton } from "@/components/ide/screenshot-button"
 import {
   DEFAULT_LANGUAGE,
   editorModeFor,
@@ -766,6 +767,10 @@ function ClassDetail({
                 <div className="flex items-center gap-2 text-sm">
                   <FileCode className="h-4 w-4 text-primary" />
                   <span className="font-medium">{currentFile.name}</span>
+                  <CodeScreenshotButton
+                    fileName={currentFile.name}
+                    code={draft ?? currentFile.content}
+                  />
                   <span className="text-muted-foreground">— {selected.student.name}</span>
                   {currentFile.status === "done" ? (
                     <Badge className="gap-1 bg-chart-3/15 text-chart-3 hover:bg-chart-3/15">
@@ -924,9 +929,10 @@ function ClassDetail({
                   }
                   output={
                     isWeb ? (
-                      <HtmlPreview build={previewDoc} runId={runId} />
+                      <HtmlPreview build={previewDoc} runId={runId} fileName={currentFile.name} />
                     ) : (
                       <PythonConsole
+                        fileName={currentFile.name}
                         lines={consoleLines}
                         running={status === "running"}
                         awaitingInput={awaitingInput}

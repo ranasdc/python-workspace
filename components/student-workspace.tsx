@@ -7,6 +7,7 @@ import { usePyodide } from "@/hooks/use-pyodide"
 import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { ShareMenu } from "@/components/ide/share-menu"
+import { CodeScreenshotButton } from "@/components/ide/screenshot-button"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useFullscreen } from "@/components/ide/fullscreen"
 import { IdeSplit } from "@/components/ide/ide-split"
@@ -704,6 +705,7 @@ export function StudentWorkspace({
               <>
                 <FileCode className="h-4 w-4 shrink-0 text-primary" />
                 <span className="truncate text-sm font-medium">{activeFile.name}</span>
+                <CodeScreenshotButton fileName={activeFile.name} code={draft} />
                 {/* The marking and correction badges are status, not tools, so
                     they stand down in focus mode. The file name stays: with the
                     library hidden it is the only thing naming what is on screen. */}
@@ -818,11 +820,12 @@ export function StudentWorkspace({
           }
           output={
             isWeb ? (
-              <HtmlPreview build={previewDoc} runId={runId} />
+              <HtmlPreview build={previewDoc} runId={runId} fileName={activeFile?.name} />
             ) : (
               <>
                 <div className="min-h-0 flex-1">
                   <PythonConsole
+                    fileName={activeFile?.name}
                     lines={consoleLines}
                     running={status === "running"}
                     awaitingInput={awaitingInput}

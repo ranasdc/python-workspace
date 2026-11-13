@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { IdeSplit } from "@/components/ide/ide-split"
+import { CodeScreenshotButton } from "@/components/ide/screenshot-button"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { Button } from "@/components/ui/button"
@@ -96,13 +97,20 @@ function DocumentShare({ fileName, bundle }: PaneProps) {
           <span />
         )}
 
-        <DownloadButton fileName={fileName} bundle={bundle} />
+        <div className="flex items-center gap-2">
+          {/* The preview carries its own camera, so this one appears only while
+              the code is what is on screen. */}
+          {!(mode === "preview" && renderable) && (
+            <CodeScreenshot bundle={bundle} openName={openName} />
+          )}
+          <DownloadButton fileName={fileName} bundle={bundle} />
+        </div>
       </div>
 
       {mode === "preview" && renderable ? (
         <div className="h-[70vh] min-h-[22rem] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           {/* runId is fixed: nothing on this page can trigger a re-run. */}
-          <HtmlPreview build={build} runId={0} />
+          <HtmlPreview build={build} runId={0} fileName={fileName} />
         </div>
       ) : (
         <Pane className="h-[70vh] min-h-[22rem]">
@@ -163,7 +171,10 @@ function ConsoleShare({ fileName, bundle }: PaneProps) {
           <p className="text-sm text-muted-foreground">Runs in your browser — nothing to install.</p>
         </div>
 
-        <DownloadButton fileName={fileName} bundle={bundle} />
+        <div className="flex items-center gap-2">
+          <CodeScreenshot bundle={bundle} openName={openName} />
+          <DownloadButton fileName={fileName} bundle={bundle} />
+        </div>
       </div>
 
       <IdeSplit
@@ -194,6 +205,7 @@ function ConsoleShare({ fileName, bundle }: PaneProps) {
         output={
           <Pane className="h-full">
             <PythonConsole
+              fileName={open.name}
               lines={lines}
               running={status === "running"}
               awaitingInput={awaitingInput}
@@ -239,6 +251,12 @@ function EditorPane({ bundle, openName }: { bundle: PreviewFile[]; openName: str
       />
     </div>
   )
+}
+
+/** Camera for whichever file of the share is open in the editor. */
+function CodeScreenshot({ bundle, openName }: { bundle: PreviewFile[]; openName: string }) {
+  const open = bundle.find((f) => f.name === openName) ?? bundle[0]
+  return <CodeScreenshotButton fileName={open.name} code={open.content} />
 }
 
 function FileTabs({
