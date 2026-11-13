@@ -9,6 +9,7 @@ import {
   Smartphone,
 } from "lucide-react"
 
+import { IdeOutputControls } from "@/components/ide/ide-split"
 import { cn } from "@/lib/utils"
 import type { PreviewBuild } from "@/lib/ide/html-document"
 
@@ -169,6 +170,9 @@ export function HtmlPreview({
               {expanded ? "Exit full screen preview" : "Open preview full screen"}
             </span>
           </button>
+          {/* Collapsing belongs to the split view, so the control stands down
+              while the preview is covering it. */}
+          {!expanded && <IdeOutputControls />}
         </div>
       </div>
 

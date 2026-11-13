@@ -299,6 +299,42 @@ export async function deleteClass(classId: number) {
   return { ok: true as const, name: cls.name }
 }
 
+/**
+ * Take one student out of one class.
+ *
+ * The only row touched is the enrolment that links the two. The student's
+ * account, sign-in, personal workspace, school membership and other classes
+ * are different rows in different tables and are not read, let alone changed.
+ *
+ * Nothing the student did in the class is deleted either: their files,
+ * folders, starter answers and the teacher's comments and corrections all
+ * stay where they are. Every student-facing read of a class checks for the
+ * enrolment first, so removing it is what ends their access, and rejoining
+ * with the class code restores the work exactly as they left it.
+ *
+ * Only the teacher who owns the class may do this — `findOwnedClass` refuses a
+ * colleague's class, even inside the same school. Removing someone who is
+ * already gone succeeds quietly, so a double-click or a retried request is
+ * harmless.
+ */
+export async function removeStudentFromClass(classId: number, studentId: string) {
+  const teacher = await requireUser()
+  const cls = await findOwnedClass(teacher.id, classId)
+
+  if (typeof studentId !== "string" || studentId.length === 0) {
+    throw new EntitlementError("forbidden", "Student not found")
+  }
+
+  const removed = await db
+    .delete(enrollments)
+    .where(and(eq(enrollments.classId, cls.id), eq(enrollments.studentId, studentId)))
+    .returning({ id: enrollments.id })
+
+  revalidatePath("/teacher")
+  revalidatePath("/student")
+  return { ok: true as const, removed: removed.length > 0, className: cls.name }
+}
+
 // ---------- Student ----------
 
 // Deliberately identical for "no such code", "disabled", "expired" and

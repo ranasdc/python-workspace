@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { TEACHER_PRO_STUDENT_SEATS } from "@/lib/plans"
 import { DeleteClassDialog } from "@/components/delete-class-dialog"
+import { RemoveStudentDialog } from "@/components/remove-student-dialog"
 import { createClass, getTeacherClasses } from "@/app/actions/classes"
 import {
   getClassTree,
@@ -51,6 +52,7 @@ import {
   useLeftSideCascade,
 } from "@/components/teacher-class-nav"
 import { useFullscreen } from "@/components/ide/fullscreen"
+import { IdeSplit } from "@/components/ide/ide-split"
 import { HtmlPreview } from "@/components/ide/html-preview"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import { ShareMenu } from "@/components/ide/share-menu"
@@ -86,6 +88,7 @@ import {
   Trash2,
   PencilLine,
   Undo2,
+  UserMinus,
   X,
 } from "lucide-react"
 
@@ -429,6 +432,8 @@ function ClassDetail({
   }, [fullscreen, collapse, expand])
   const [tab, setTab] = useState<"work" | "starters">("work")
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null)
+  const [removeOpen, setRemoveOpen] = useState(false)
   // Teachers review one IDE at a time, mirroring how pupils work in it.
   const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
   const treeKey = ["class-tree", cls.id, language]
@@ -644,6 +649,24 @@ function ClassDetail({
           onOpenChange={setDeleteOpen}
           onDeleted={onDeleted}
         />
+        <RemoveStudentDialog
+          classId={cls.id}
+          className={cls.name}
+          student={removeTarget}
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+          onRemoved={async (studentId) => {
+            // Their work is no longer this teacher's to review, so it must not
+            // stay open in the viewer after they have gone.
+            if (selected?.student.id === studentId) {
+              setSelected(null)
+              setDraft(null)
+            }
+            // The register here and the student counts in the class rail and
+            // the distribute dialog all read from these two.
+            await Promise.all([mutate(treeKey), mutate("teacher-classes")])
+          }}
+        />
         <div role="tablist" aria-label="Class sections" className="-mb-4 mt-3 flex gap-5">
           {(
             [
@@ -716,6 +739,10 @@ function ClassDetail({
                     student={s}
                     selectedFileId={selected?.file.id ?? null}
                     onSelectFile={(file) => setSelected({ student: s, file })}
+                    onRemove={(student) => {
+                      setRemoveTarget({ id: student.id, name: student.name })
+                      setRemoveOpen(true)
+                    }}
                   />
                 ))}
               </ul>
@@ -868,18 +895,23 @@ function ClassDetail({
                   room focus mode buys should go to the thread as well, rather
                   than being taken from it. */}
               <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_minmax(260px,320px)]">
-                <div className="grid min-h-0 grid-rows-2 border-b border-border lg:border-b-0 lg:border-r">
-                  <div
-                    className={cn(
-                      // Stacked panes would otherwise be squeezed to nothing on a
-                      // phone, so each keeps a usable height there and only gives
-                      // it up at lg, where the panes split the viewport instead.
-                      "min-h-[18rem] border-b border-border lg:min-h-0",
-                      // A ring is the only cue that changes while correcting, so
-                      // the editor gains no chrome and loses no height.
-                      editing && "ring-1 ring-inset ring-chart-2/50",
-                    )}
-                  >
+                <IdeSplit
+                  // The output stays under the code here: the width beside it
+                  // belongs to the feedback thread.
+                  direction="stacked"
+                  // Below lg the whole class view scrolls as one page, so the
+                  // split has no height to divide unless it is given one. From
+                  // lg up it fills the viewport instead.
+                  className="h-[32rem] border-b border-border lg:h-auto lg:border-b-0 lg:border-r"
+                  userId={userId}
+                  scope="teacher-class"
+                  outputLabel={isWeb ? "Preview" : "Output"}
+                  allowMaximize={!isWeb}
+                  revealOn={isWeb ? runId : status === "running"}
+                  // A ring is the only cue that changes while correcting, so
+                  // the editor gains no chrome and loses no height.
+                  editorClassName={editing ? "ring-1 ring-inset ring-chart-2/50" : undefined}
+                  editor={
                     <CodeEditor
                       value={draft ?? currentFile.content}
                       onChange={editing ? setDraft : undefined}
@@ -889,25 +921,25 @@ function ClassDetail({
                       // highlight left on the old lines would point at the wrong code.
                       markedLines={editing ? undefined : markedLines}
                     />
-                  </div>
-                  <div className="min-h-[14rem] lg:min-h-0">
-                    {isWeb ? (
+                  }
+                  output={
+                    isWeb ? (
                       <HtmlPreview build={previewDoc} runId={runId} />
                     ) : (
-                  <PythonConsole
-                    lines={consoleLines}
-                    running={status === "running"}
-                    awaitingInput={awaitingInput}
-                    interactive={interactive}
-                    onSubmitInput={handleSubmitInput}
-                    runtimeStatus={status}
-                    runtimeError={loadError}
-                    runtimeErrorDetail={loadErrorDetail}
-                    onRetryRuntime={retry}
-                  />
-                    )}
-                  </div>
-                </div>
+                      <PythonConsole
+                        lines={consoleLines}
+                        running={status === "running"}
+                        awaitingInput={awaitingInput}
+                        interactive={interactive}
+                        onSubmitInput={handleSubmitInput}
+                        runtimeStatus={status}
+                        runtimeError={loadError}
+                        runtimeErrorDetail={loadErrorDetail}
+                        onRetryRuntime={retry}
+                      />
+                    )
+                  }
+                />
                 {/* Feedback thread for this student's file */}
                 <div className="min-h-[240px] lg:min-h-0">
                   <FileComments fileId={currentFile.id} canComment />
@@ -934,34 +966,65 @@ function StudentNode({
   student,
   selectedFileId,
   onSelectFile,
+  onRemove,
 }: {
   student: TreeStudent
   selectedFileId: number | null
   onSelectFile: (f: TreeFile) => void
+  /** Opens the confirmation for taking this student out of the class. */
+  onRemove: (student: TreeStudent) => void
 }) {
   const [open, setOpen] = useState(true)
   return (
     <li>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-      >
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <UserAvatar
-          userId={student.id}
-          name={student.name}
-          avatarId={student.avatarId}
-          size="sm"
-        />
-        <span className="truncate font-medium">{student.name}</span>
-        <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
-          {student.files.length}
-        </Badge>
-      </button>
+      {/* The menu sits beside the row's button rather than inside it: a button
+          cannot contain another, and the two do different things. */}
+      <div className="group/student flex items-center rounded-md hover:bg-muted">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+          <UserAvatar
+            userId={student.id}
+            name={student.name}
+            avatarId={student.avatarId}
+            size="sm"
+          />
+          <span className="truncate font-medium">{student.name}</span>
+          <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
+            {student.files.length}
+          </Badge>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                // Quiet until the row is pointed at or reached by keyboard, so
+                // a long register is not a column of dots. A touch screen has
+                // no hover to wait for, so it is always shown there.
+                className="mr-1 shrink-0 text-muted-foreground lg:opacity-0 lg:focus-visible:opacity-100 lg:group-hover/student:opacity-100 lg:data-popup-open:opacity-100"
+              />
+            }
+            aria-label={`Actions for ${student.name}`}
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem variant="destructive" onClick={() => onRemove(student)}>
+              <UserMinus />
+              Remove from class
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {open && (
         <ul className="ml-4 border-l border-border pl-2">
           {student.files.length === 0 ? (

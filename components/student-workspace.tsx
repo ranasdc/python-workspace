@@ -9,6 +9,7 @@ import { HtmlPreview } from "@/components/ide/html-preview"
 import { ShareMenu } from "@/components/ide/share-menu"
 import { CollapsiblePanel, useCollapsiblePanel } from "@/components/ide/collapsible-panel"
 import { useFullscreen } from "@/components/ide/fullscreen"
+import { IdeSplit } from "@/components/ide/ide-split"
 import { buildPreviewDocument, type PreviewBuild } from "@/lib/ide/html-document"
 import { parseMarkedLines } from "@/lib/ide/line-diff"
 import {
@@ -744,9 +745,19 @@ export function StudentWorkspace({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
-          <div className="min-h-0 border-b border-border lg:border-b-0 lg:border-r">
-            {activeFile ? (
+        <IdeSplit
+          className="flex-1"
+          userId={userId}
+          scope="student"
+          outputLabel={isWeb ? "Preview" : "Output"}
+          // The preview has its own full-screen control; this one is the
+          // console's.
+          allowMaximize={!isWeb}
+          // Pressing Run reopens a collapsed output, so a program never prints
+          // — or waits for input — where the pupil cannot see it.
+          revealOn={isWeb ? runId : status === "running"}
+          editor={
+            activeFile ? (
               <CodeEditor
                 value={draft}
                 onChange={handleEditorChange}
@@ -761,10 +772,10 @@ export function StudentWorkspace({
                   Create a file to begin coding.
                 </div>
               </div>
-            )}
-          </div>
-          <div className="flex min-h-0 flex-col">
-            {isWeb ? (
+            )
+          }
+          output={
+            isWeb ? (
               <HtmlPreview build={previewDoc} runId={runId} />
             ) : (
               <>
@@ -790,9 +801,9 @@ export function StudentWorkspace({
                   />
                 )}
               </>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
         {/* Teacher feedback on the open file, updated in real time. The height
             is the dock's own business: with nothing to say it costs a single

@@ -1,5 +1,6 @@
 "use client"
 
+import { IdeOutputControls } from "@/components/ide/ide-split"
 import { Button } from "@/components/ui/button"
 import type { RunStatus } from "@/hooks/use-pyodide"
 import { cn } from "@/lib/utils"
@@ -56,17 +57,22 @@ export function PythonConsole({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[color-mix(in_oklch,var(--card),var(--foreground)_4%)]">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+      <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs font-medium text-muted-foreground">
         <Terminal className="h-3.5 w-3.5" />
         Output
-        {showPrompt ? (
-          <span className="ml-auto flex items-center gap-1.5 text-primary">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-            Waiting for input
-          </span>
-        ) : (
-          <RuntimeIndicator status={runtimeStatus} />
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {showPrompt ? (
+            <span className="flex items-center gap-1.5 text-primary">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Waiting for input
+            </span>
+          ) : (
+            <RuntimeIndicator status={runtimeStatus} />
+          )}
+          {/* Supplied by the IDE layout this console sits in. Rendered on its
+              own, the console has nothing to collapse into and shows none. */}
+          <IdeOutputControls />
+        </div>
       </div>
       {runtimeError ? (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6">
@@ -159,7 +165,7 @@ function RuntimeIndicator({ status }: { status?: RunStatus }) {
 
   if (status === "loading") {
     return (
-      <span className="ml-auto flex items-center gap-1.5">
+      <span className="flex items-center gap-1.5">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
         Loading Python
       </span>
@@ -168,7 +174,7 @@ function RuntimeIndicator({ status }: { status?: RunStatus }) {
 
   if (status === "running") {
     return (
-      <span className="ml-auto flex items-center gap-1.5 text-primary">
+      <span className="flex items-center gap-1.5 text-primary">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
         Running
       </span>
@@ -176,7 +182,7 @@ function RuntimeIndicator({ status }: { status?: RunStatus }) {
   }
 
   return (
-    <span className="ml-auto flex items-center gap-1.5">
+    <span className="flex items-center gap-1.5">
       <span className="h-1.5 w-1.5 rounded-full bg-chart-3" aria-hidden="true" />
       Python ready
     </span>
