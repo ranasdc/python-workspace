@@ -270,6 +270,11 @@ export async function saveFile(fileId: number, content: string) {
     .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
   if (!file) throw new Error("File not found")
 
+  // Reading a class's files already requires being enrolled in it; writing has
+  // to as well, or a student removed from a class could keep editing its work
+  // from a tab they still had open.
+  await assertEnrolled(student.id, file.classId)
+
   await db
     .update(codeFiles)
     .set({
@@ -293,6 +298,10 @@ export async function deleteFile(fileId: number) {
     .from(codeFiles)
     .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
   if (!file) throw new Error("File not found")
+
+  // Work kept after a student leaves a class is a record, and stays one: only
+  // someone still enrolled can delete from it.
+  await assertEnrolled(student.id, file.classId)
 
   // A teacher-assigned file is part of the class work and is not the student's
   // to delete.

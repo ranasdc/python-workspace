@@ -2,14 +2,14 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { InviteCodes } from "@/components/school/invite-codes"
-import { removeSchoolMember, type getSchoolOverview } from "@/app/actions/schools"
+import { SchoolPeople } from "@/components/school/school-people"
+import type { getSchoolOverview } from "@/app/actions/schools"
 import { openBillingPortal } from "@/app/actions/billing"
 import {
   PLANS,
@@ -41,8 +41,7 @@ export function SchoolDashboard({
   /** The interval chosen on the pricing page, if the reader came from there. */
   preselectedInterval?: BillingInterval
 }) {
-  const { school, plan, seats, members, codes, isAdmin, entitlement } = overview
-  const router = useRouter()
+  const { school, plan, seats, roster, codes, isAdmin, entitlement } = overview
   const [busy, setBusy] = useState<string | null>(null)
 
   // One shared rule decides what this plan supports, so the button offered here
@@ -62,19 +61,6 @@ export function SchoolDashboard({
     // re-prices, and it is what the server action checks before charging.
     stripeManaged: Boolean(plan?.tierChangeable),
   })
-
-  async function run(key: string, fn: () => Promise<unknown>, success: string) {
-    setBusy(key)
-    try {
-      await fn()
-      toast.success(success)
-      router.refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong")
-    } finally {
-      setBusy(null)
-    }
-  }
 
   async function handlePortal() {
     setBusy("portal")
@@ -137,6 +123,11 @@ export function SchoolDashboard({
           )}
         </section>
       )}
+
+      {/* Who is in the school comes before how it is billed: School Teachers
+          first, then Classes and Students directly beneath. Only the prompt to
+          choose a plan sits above them, and only while there is no plan. */}
+      {isAdmin && roster && <SchoolPeople schoolId={school.id} roster={roster} />}
 
       {planActive && plan && (
         <section className="rounded-lg border border-border bg-card p-6">
@@ -251,40 +242,6 @@ export function SchoolDashboard({
       )}
 
       {isAdmin && <InviteCodes schoolId={school.id} codes={codes} />}
-
-      {isAdmin && (
-        <section className="rounded-lg border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold">Members</h2>
-          <ul className="mt-4 divide-y divide-border">
-            {members.map((member) => (
-              <li key={member.userId} className="flex flex-wrap items-center gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{member.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{member.email}</p>
-                </div>
-                <Badge variant="secondary">{member.role.replace("_", " ")}</Badge>
-                {member.role !== "school_admin" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto text-destructive"
-                    disabled={busy === `remove-${member.userId}`}
-                    onClick={() =>
-                      run(
-                        `remove-${member.userId}`,
-                        () => removeSchoolMember(school.id, member.userId),
-                        "Member removed",
-                      )
-                    }
-                  >
-                    Remove
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }

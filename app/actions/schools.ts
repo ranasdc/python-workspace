@@ -4,16 +4,19 @@ import { randomBytes } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
 import { MAX_INVITE_DAYS, MAX_INVITE_USES } from "@/lib/invite-codes"
-import { and, count, eq, sql } from "drizzle-orm"
+import { and, count, eq, inArray, sql } from "drizzle-orm"
 
 import { db, pool } from "@/lib/db"
 import {
+  classes,
+  enrollments,
   inviteCodes,
   schoolMembers,
   schoolSubscriptions,
   schools,
   user,
 } from "@/lib/db/schema"
+import { buildSchoolRoster } from "@/lib/school-roster"
 import { requireUser } from "@/lib/session"
 import {
   getEntitlement,
@@ -467,23 +470,9 @@ export async function getSchoolOverview() {
     admin: seatRows.find((r) => r.role === "school_admin")?.used ?? 0,
   }
 
-  // Member list and invite codes are administrative data — admins only.
-  const members = isAdmin
-    ? await db
-        .select({
-          userId: schoolMembers.userId,
-          role: schoolMembers.role,
-          joinedAt: schoolMembers.joinedAt,
-          name: user.name,
-          email: user.email,
-        })
-        .from(schoolMembers)
-        .innerJoin(user, eq(user.id, schoolMembers.userId))
-        .where(
-          and(eq(schoolMembers.schoolId, schoolId), eq(schoolMembers.status, "active")),
-        )
-        .orderBy(schoolMembers.role, user.name)
-    : []
+  // Who is in the school, and its invite codes, are administrative data —
+  // admins only.
+  const roster = isAdmin ? await loadSchoolRoster(schoolId) : null
 
   // Each code carries the name of the administrator who issued it and how many
   // people are currently attributed to it, so the management view can be read
@@ -512,7 +501,68 @@ export async function getSchoolOverview() {
         .orderBy(sql`${inviteCodes.createdAt} desc`)
     : []
 
-  return { school, plan, seats, members, codes, isAdmin, entitlement }
+  return { school, plan, seats, roster, codes, isAdmin, entitlement }
+}
+
+/**
+ * The school's teachers, and its classes with the students enrolled in each.
+ *
+ * Not exported, so it is not a callable action: the only way in is through
+ * `getSchoolOverview`, which has already established that the caller
+ * administers this school. Every query below is scoped to that one school id —
+ * members by `school_member.schoolId`, classes by `class.schoolId`, enrolments
+ * by those classes — so nothing from another school can be reached from here.
+ */
+async function loadSchoolRoster(schoolId: number) {
+  const [members, schoolClasses] = await Promise.all([
+    // Membership, not class ownership, is what makes someone a teacher of the
+    // school: a teacher who has redeemed the invite code is listed whether or
+    // not a class exists for them yet.
+    db
+      .select({
+        userId: schoolMembers.userId,
+        role: schoolMembers.role,
+        joinedAt: schoolMembers.joinedAt,
+        invitedByCodeId: schoolMembers.invitedByCodeId,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+      })
+      .from(schoolMembers)
+      .innerJoin(user, eq(user.id, schoolMembers.userId))
+      .where(and(eq(schoolMembers.schoolId, schoolId), eq(schoolMembers.status, "active"))),
+    // A personal workspace is modelled as a class but is one learner's private
+    // storage, so it is never a class of the school.
+    db
+      .select({
+        id: classes.id,
+        name: classes.name,
+        teacherId: classes.teacherId,
+        teacherName: user.name,
+      })
+      .from(classes)
+      .leftJoin(user, eq(user.id, classes.teacherId))
+      .where(and(eq(classes.schoolId, schoolId), eq(classes.isPersonal, false))),
+  ])
+
+  const classIds = schoolClasses.map((cls) => cls.id)
+  const enrolments = classIds.length
+    ? await db
+        .select({
+          classId: enrollments.classId,
+          studentId: enrollments.studentId,
+          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+        })
+        .from(enrollments)
+        .innerJoin(user, eq(user.id, enrollments.studentId))
+        .where(inArray(enrollments.classId, classIds))
+    : []
+
+  return buildSchoolRoster({ members, classes: schoolClasses, enrolments })
 }
 
 

@@ -45,11 +45,12 @@ import {
   saveLibraryFile,
   deleteLibraryFile,
   deleteLibraryFolder,
-  distributeFile,
-  distributeFolder,
 } from "@/app/actions/library"
+import { distributeFile, distributeFolder } from "@/app/actions/distribution"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { DistributeDialog, type DistributeClassOption } from "@/components/distribute-dialog"
+import { IdeSplit } from "@/components/ide/ide-split"
 import { TaskWorkspace } from "@/components/tasks/task-workspace"
 import { toast } from "sonner"
 import {
@@ -93,11 +94,7 @@ type LibFolder = {
 }
 type LibraryData = { folders: LibFolder[]; rootFiles: LibFile[] }
 
-type ClassOption = {
-  id: number
-  name: string
-  students: { id: string; name: string; email: string }[]
-}
+type ClassOption = DistributeClassOption
 
 export function TeacherLibrary({
   userId,
@@ -347,39 +344,48 @@ export function TeacherLibrary({
                 />
                 <DistributeDialog
                   classes={classes}
-                  label={`Distribute ${selected.name}`}
-                  onConfirm={(classId, studentId) => distributeFile(selected.id, classId, studentId)}
+                  itemName={selected.name}
+                  itemKind="file"
+                  onConfirm={(classId, recipients) =>
+                    distributeFile(selected.id, classId, recipients)
+                  }
                 />
               </div>
             </div>
-            <div className="grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
-              <div className="min-h-0 border-b border-border lg:border-b-0 lg:border-r">
+            <IdeSplit
+              className="flex-1"
+              userId={userId}
+              scope="teacher-library"
+              outputLabel={isWeb ? "Preview" : "Output"}
+              allowMaximize={!isWeb}
+              revealOn={isWeb ? runId : status === "running"}
+              editor={
                 <CodeEditor
                   value={draft}
                   onChange={handleChange}
                   mode={editorModeFor(selected.name)}
                 />
-              </div>
-              <div className="flex min-h-0 flex-col">
-                {isWeb ? (
+              }
+              output={
+                isWeb ? (
                   <HtmlPreview build={previewDoc} runId={runId} />
                 ) : (
                   <div className="min-h-0 flex-1">
-                  <PythonConsole
-                    lines={consoleLines}
-                    running={status === "running"}
-                    awaitingInput={awaitingInput}
-                    interactive={interactive}
-                    onSubmitInput={handleSubmitInput}
-                    runtimeStatus={status}
-                    runtimeError={loadError}
-                    runtimeErrorDetail={loadErrorDetail}
-                    onRetryRuntime={retry}
-                  />
+                    <PythonConsole
+                      lines={consoleLines}
+                      running={status === "running"}
+                      awaitingInput={awaitingInput}
+                      interactive={interactive}
+                      onSubmitInput={handleSubmitInput}
+                      runtimeStatus={status}
+                      runtimeError={loadError}
+                      runtimeErrorDetail={loadErrorDetail}
+                      onRetryRuntime={retry}
+                    />
                   </div>
-                )}
-              </div>
-            </div>
+                )
+              }
+            />
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
@@ -455,7 +461,8 @@ function FolderNode({
         )}
         <DistributeDialog
           classes={classes}
-          label={`Distribute folder "${folder.name}"`}
+          itemName={folder.name}
+          itemKind="folder"
           note={
             folder.folders.length > 0
               ? "The folders inside it are sent too, with their files, in the same structure."
@@ -469,7 +476,7 @@ function FolderNode({
               <Send className="h-3.5 w-3.5" />
             </button>
           }
-          onConfirm={(classId, studentId) => distributeFolder(folder.id, classId, studentId)}
+          onConfirm={(classId, recipients) => distributeFolder(folder.id, classId, recipients)}
         />
         <ConfirmDialog
           title="Delete folder?"
@@ -562,7 +569,8 @@ function FileRow({
       </button>
       <DistributeDialog
         classes={classes}
-        label={`Distribute ${file.name}`}
+        itemName={file.name}
+        itemKind="file"
         trigger={
           <button
             className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
@@ -571,7 +579,7 @@ function FileRow({
             <Send className="h-3.5 w-3.5" />
           </button>
         }
-        onConfirm={(classId, studentId) => distributeFile(file.id, classId, studentId)}
+        onConfirm={(classId, recipients) => distributeFile(file.id, classId, recipients)}
       />
       <ConfirmDialog
         title="Delete file?"
@@ -863,123 +871,5 @@ function LibraryLimitUpgrade({
         </Button>
       </DialogFooter>
     </>
-  )
-}
-
-function DistributeDialog({
-  classes,
-  label,
-  note,
-  trigger,
-  onConfirm,
-}: {
-  classes: ClassOption[]
-  label: string
-  /** Extra detail about what is being sent, shown under the title. */
-  note?: string
-  trigger?: React.ReactNode
-  onConfirm: (classId: number, studentId: string | null) => Promise<{ delivered: number; recipients: number }>
-}) {
-  const [open, setOpen] = useState(false)
-  const [classId, setClassId] = useState<string>(classes[0] ? String(classes[0].id) : "")
-  const [recipient, setRecipient] = useState<string>("all")
-  const [busy, setBusy] = useState(false)
-
-  const activeClass = classes.find((c) => String(c.id) === classId) ?? null
-
-  async function submit() {
-    if (!classId) {
-      toast.error("Create a class first")
-      return
-    }
-    setBusy(true)
-    try {
-      const res = await onConfirm(Number(classId), recipient === "all" ? null : recipient)
-      if (res.delivered === 0) {
-        toast.info("Nothing new delivered — recipients already have these files")
-      } else {
-        toast.success(`Delivered ${res.delivered} file${res.delivered === 1 ? "" : "s"} to ${res.recipients} student${res.recipients === 1 ? "" : "s"}`)
-      }
-      setOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not distribute")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          (trigger as React.ReactElement) ?? (
-            <Button size="sm" variant="outline">
-              <Send className="mr-1.5 h-4 w-4" /> Distribute
-            </Button>
-          )
-        }
-      />
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{label}</DialogTitle>
-        </DialogHeader>
-        {note && <p className="text-sm text-muted-foreground text-pretty">{note}</p>}
-        {classes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            You need at least one class before you can distribute files.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="dist-class">Class</Label>
-              <select
-                id="dist-class"
-                value={classId}
-                onChange={(e) => {
-                  setClassId(e.target.value)
-                  setRecipient("all")
-                }}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {classes.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="dist-recipient">Send to</Label>
-              <select
-                id="dist-recipient"
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">
-                  All students{activeClass ? ` (${activeClass.students.length})` : ""}
-                </option>
-                {activeClass?.students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              {activeClass && activeClass.students.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No students have joined this class yet.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy || classes.length === 0}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Send className="mr-1.5 h-4 w-4" /> Distribute
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }

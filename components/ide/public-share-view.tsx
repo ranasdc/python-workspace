@@ -6,6 +6,7 @@ import { toast } from "sonner"
 
 import { CodeEditor } from "@/components/code-editor"
 import { HtmlPreview } from "@/components/ide/html-preview"
+import { IdeSplit } from "@/components/ide/ide-split"
 import { PythonConsole, type ConsoleLine } from "@/components/python-console"
 import { RunStopButton } from "@/components/run-stop-button"
 import { Button } from "@/components/ui/button"
@@ -165,34 +166,47 @@ function ConsoleShare({ fileName, bundle }: PaneProps) {
         <DownloadButton fileName={fileName} bundle={bundle} />
       </div>
 
-      <div className="grid min-h-0 gap-4 lg:h-[70vh] lg:grid-cols-2">
-        <Pane className="h-[50vh] lg:h-auto">
-          <FileTabs
-            bundle={bundle}
-            openName={openName}
-            onOpen={(name) => {
-              setOpenName(name)
-              // Output belongs to the file that produced it.
-              setLines([])
-            }}
-          />
-          <EditorPane bundle={bundle} openName={openName} />
-        </Pane>
-
-        <Pane className="h-[32vh] lg:h-auto">
-        <PythonConsole
-          lines={lines}
-          running={status === "running"}
-          awaitingInput={awaitingInput}
-          interactive={interactive}
-          onSubmitInput={handleSubmitInput}
-          runtimeStatus={status}
-          runtimeError={loadError}
-          runtimeErrorDetail={loadErrorDetail}
-          onRetryRuntime={retry}
-        />
-        </Pane>
-      </div>
+      <IdeSplit
+        // A share page scrolls, so the split is given a height of its own to
+        // divide between the two panels.
+        className="h-[84vh] min-h-[28rem] lg:h-[70vh]"
+        // A visitor has no account; their layout is remembered for this
+        // browser alone.
+        userId="visitor"
+        scope="share"
+        variant="cards"
+        allowMaximize
+        revealOn={status === "running"}
+        editor={
+          <Pane className="h-full">
+            <FileTabs
+              bundle={bundle}
+              openName={openName}
+              onOpen={(name) => {
+                setOpenName(name)
+                // Output belongs to the file that produced it.
+                setLines([])
+              }}
+            />
+            <EditorPane bundle={bundle} openName={openName} />
+          </Pane>
+        }
+        output={
+          <Pane className="h-full">
+            <PythonConsole
+              lines={lines}
+              running={status === "running"}
+              awaitingInput={awaitingInput}
+              interactive={interactive}
+              onSubmitInput={handleSubmitInput}
+              runtimeStatus={status}
+              runtimeError={loadError}
+              runtimeErrorDetail={loadErrorDetail}
+              onRetryRuntime={retry}
+            />
+          </Pane>
+        }
+      />
     </div>
   )
 }

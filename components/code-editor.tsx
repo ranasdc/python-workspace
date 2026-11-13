@@ -85,6 +85,18 @@ export function CodeEditor({
     syncScroll()
   }, [value, syncScroll])
 
+  // Resizing the pane can change how far the textarea is able to scroll, and
+  // the browser clamps its position without firing a scroll event. Without
+  // this the highlighted layer and the gutter would be left pointing at lines
+  // the caret is no longer on.
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => syncScroll())
+    observer.observe(textarea)
+    return () => observer.disconnect()
+  }, [syncScroll])
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (readOnly || !onChange) return
     const el = e.currentTarget
