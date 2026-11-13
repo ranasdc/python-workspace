@@ -56,6 +56,7 @@ import { toast } from "sonner"
 import {
   Plus,
   FileCode,
+  FilePlus,
   Trash2,
   Loader2,
   Check,
@@ -789,10 +790,29 @@ export function StudentWorkspace({
               />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-                <div className="flex flex-col items-center gap-2">
-                  <FolderPlus className="h-8 w-8 text-muted-foreground/60" />
-                  Create a file to begin coding.
-                </div>
+                {activeClass ? (
+                  <NewFileDialog
+                    language={language}
+                    onCreate={(name) => handleCreateFile(name, null)}
+                    trigger={
+                      <button
+                        type="button"
+                        className="group flex flex-col items-center gap-2 rounded-lg px-6 py-5 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <FilePlus
+                          className="h-8 w-8 text-muted-foreground/60 transition-colors group-hover:text-primary"
+                          aria-hidden="true"
+                        />
+                        Create a file to begin coding.
+                      </button>
+                    }
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <Users className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
+                    Select a class to begin coding.
+                  </div>
+                )}
               </div>
             )
           }
