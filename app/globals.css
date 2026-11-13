@@ -180,7 +180,9 @@
   --pc-gutter-fg: #adadad;
   --pc-text: #080808;
   --pc-caret: #000000;
-  --pc-selection: #a6d2ff;
+  /* Must stay translucent: the selection is painted by the textarea, which
+     sits on top of the highlighted code, so an opaque colour hides the code. */
+  --pc-selection: rgb(0 112 255 / 0.3);
   background-color: var(--pc-bg);
   font-family: var(--font-mono);
 }
@@ -205,6 +207,9 @@ textarea.pycharm-code {
 }
 textarea.pycharm-code::selection {
   background: var(--pc-selection);
+  /* Keeps the textarea's own glyphs hidden while selected, so a browser that
+     recolours selected text cannot draw a second copy over the code. */
+  color: transparent;
 }
 textarea.pycharm-code::placeholder {
   color: #9aa0a6;
