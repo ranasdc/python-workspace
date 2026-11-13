@@ -3,9 +3,7 @@
 import { useId, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronDown, ChevronRight, MoreHorizontal, Search, UserMinus } from "lucide-react"
-import { toast } from "sonner"
 
-import { removeSchoolMember } from "@/app/actions/schools"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,8 +13,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { RemoveMemberDialog, type RemovalTarget } from "@/components/school/remove-member-dialog"
 import {
+  classesAttendedBy,
+  classesTaughtBy,
   matchesPerson,
+  type RosterPerson,
   type SchoolRoster,
   type SchoolStudent,
   type SchoolTeacher,
@@ -66,44 +68,62 @@ function SearchField({
  * membership, whether they teach five classes or none. A student belongs to
  * classes — they are listed under each one they are enrolled in.
  */
-export function SchoolPeople({ schoolId, roster }: { schoolId: number; roster: SchoolRoster }) {
+export function SchoolPeople({
+  schoolId,
+  schoolName,
+  roster,
+}: {
+  schoolId: number
+  schoolName: string
+  roster: SchoolRoster
+}) {
   const router = useRouter()
-  const [removing, setRemoving] = useState<string | null>(null)
+  // Nothing is removed from here. Choosing Remove only opens the confirmation,
+  // and the confirmation is the only thing that calls the server.
+  const [target, setTarget] = useState<RemovalTarget | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
-  async function removeFromSchool(userId: string, name: string) {
-    if (removing) return
-    setRemoving(userId)
-    try {
-      await removeSchoolMember(schoolId, userId)
-      toast.success(`${name} was removed from the school`)
-      router.refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong")
-    } finally {
-      setRemoving(null)
-    }
+  function askToRemove(person: RosterPerson, kind: RemovalTarget["kind"]) {
+    setTarget({
+      id: person.id,
+      name: person.displayName,
+      email: person.email,
+      kind,
+      classes:
+        kind === "teacher"
+          ? classesTaughtBy(roster, person.id)
+          : classesAttendedBy(roster, person.id),
+    })
+    setConfirming(true)
   }
 
   return (
     <>
       <TeachersSection
         teachers={roster.teachers}
-        removing={removing}
-        onRemove={removeFromSchool}
+        onRemove={(teacher) => askToRemove(teacher, "teacher")}
       />
-      <ClassesSection roster={roster} removing={removing} onRemove={removeFromSchool} />
+      <ClassesSection roster={roster} onRemove={(student) => askToRemove(student, "student")} />
+      <RemoveMemberDialog
+        schoolId={schoolId}
+        schoolName={schoolName}
+        target={target}
+        open={confirming}
+        onOpenChange={setConfirming}
+        // Re-reads the roster and the seat counts from the server, so the
+        // lists and totals show the membership as it now stands.
+        onRemoved={() => router.refresh()}
+      />
     </>
   )
 }
 
 function TeachersSection({
   teachers,
-  removing,
   onRemove,
 }: {
   teachers: SchoolTeacher[]
-  removing: string | null
-  onRemove: (userId: string, name: string) => void
+  onRemove: (teacher: SchoolTeacher) => void
 }) {
   const headingId = useId()
   const [query, setQuery] = useState("")
@@ -162,8 +182,8 @@ function TeachersSection({
                   variant="ghost"
                   size="sm"
                   className="text-destructive"
-                  disabled={removing !== null}
-                  onClick={() => onRemove(teacher.id, teacher.displayName)}
+                  aria-label={`Remove ${teacher.displayName} from the school`}
+                  onClick={() => onRemove(teacher)}
                 >
                   Remove
                 </Button>
@@ -185,12 +205,10 @@ type Group = {
 
 function ClassesSection({
   roster,
-  removing,
   onRemove,
 }: {
   roster: SchoolRoster
-  removing: string | null
-  onRemove: (userId: string, name: string) => void
+  onRemove: (student: SchoolStudent) => void
 }) {
   const headingId = useId()
   const filterId = useId()
@@ -344,6 +362,13 @@ function ClassesSection({
                                 {student.email}
                               </p>
                             </div>
+                            {!student.isSchoolMember && (
+                              // Enrolled in the class but holding no seat in the
+                              // school, so there is no membership to remove.
+                              <Badge variant="outline" className="shrink-0 font-normal">
+                                Not a school member
+                              </Badge>
+                            )}
                             {student.isSchoolMember && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger
@@ -352,7 +377,6 @@ function ClassesSection({
                                       variant="ghost"
                                       size="icon-xs"
                                       className="shrink-0 text-muted-foreground"
-                                      disabled={removing !== null}
                                     />
                                   }
                                   aria-label={`Actions for ${student.displayName}`}
@@ -362,7 +386,7 @@ function ClassesSection({
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem
                                     variant="destructive"
-                                    onClick={() => onRemove(student.id, student.displayName)}
+                                    onClick={() => onRemove(student)}
                                   >
                                     <UserMinus />
                                     Remove from school

@@ -240,6 +240,12 @@ export const studentFolders = pgTable("student_folder", {
   // pre-existing row, so the Python IDE sees exactly what it saw before.
   language: text("language").notNull().default("python"),
   assignedByTeacher: boolean("assignedByTeacher").notNull().default(false),
+  // The library folder this one is a distributed copy of, so renaming or
+  // deleting the original reaches every copy. Null for a student's own folders.
+  sourceLibraryFolderId: integer("sourceLibraryFolderId"),
+  // Set when the teacher deleted the original. The row is kept but every read
+  // skips it. Null = live.
+  withdrawnAt: timestamp("withdrawnAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -264,6 +270,10 @@ export const codeFiles = pgTable("code_file", {
   // the original: the task lives once, on the library file, and every copy
   // reads it live. Null for a student's own files.
   sourceLibraryFileId: integer("sourceLibraryFileId"),
+  // Set when the teacher deleted the library file this copy came from. The row
+  // and the student's work in it are kept, but every read skips it, so the
+  // student no longer sees the file. Null = live.
+  withdrawnAt: timestamp("withdrawnAt"),
   // ----- Teacher corrections -----
   // Set when a teacher edits this pupil's code directly. A correction is always
   // attributed, never silent. The name is denormalised (as on file_comment) so

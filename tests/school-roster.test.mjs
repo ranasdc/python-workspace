@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { buildSchoolRoster, matchesPerson, toPerson } from "../lib/school-roster.ts"
+import {
+  buildSchoolRoster,
+  classesAttendedBy,
+  classesTaughtBy,
+  matchesPerson,
+  toPerson,
+} from "../lib/school-roster.ts"
 
 function member(userId, role, extra = {}) {
   return {
@@ -285,5 +291,68 @@ describe("names and search", () => {
     assert.ok(matchesPerson(person, "a.byron@"))
     assert.ok(matchesPerson(person, ""))
     assert.ok(!matchesPerson(person, "lovelace"))
+  })
+})
+
+describe("Removal confirmation", () => {
+  const roster = buildSchoolRoster({
+    members: [
+      member("head", "school_admin"),
+      member("ms-ada", "teacher"),
+      member("mr-bell", "teacher"),
+      member("sam", "student"),
+      member("kim", "student"),
+    ],
+    classes: [cls(1, "Year 8", "ms-ada"), cls(2, "Year 9", "ms-ada"), cls(3, "Year 10", "mr-bell")],
+    enrolments: [enrolment(1, "sam"), enrolment(1, "kim"), enrolment(3, "sam")],
+  })
+
+  it("names every class a teacher teaches, with how many students each holds", () => {
+    assert.deepEqual(classesTaughtBy(roster, "ms-ada"), [
+      { id: 1, name: "Year 8", studentCount: 2 },
+      { id: 2, name: "Year 9", studentCount: 0 },
+    ])
+  })
+
+  it("names no classes for a teacher who has none, or for someone else's", () => {
+    assert.deepEqual(classesTaughtBy(roster, "head"), [])
+    assert.deepEqual(classesTaughtBy(roster, "sam"), [])
+  })
+
+  it("names the classes a student is enrolled in, and only those", () => {
+    assert.deepEqual(
+      classesAttendedBy(roster, "sam").map((c) => c.name),
+      ["Year 8", "Year 10"],
+    )
+    assert.deepEqual(
+      classesAttendedBy(roster, "kim").map((c) => c.name),
+      ["Year 8"],
+    )
+    assert.deepEqual(classesAttendedBy(roster, "ms-ada"), [])
+  })
+
+  it("drops a removed member from the lists and the counts, and nothing else", () => {
+    // What the dashboard is given after a removal: the same school, read again
+    // without the removed teacher's and student's membership rows.
+    const after = buildSchoolRoster({
+      members: [member("head", "school_admin"), member("mr-bell", "teacher"), member("kim", "student")],
+      classes: [cls(1, "Year 8", "ms-ada"), cls(2, "Year 9", "ms-ada"), cls(3, "Year 10", "mr-bell")],
+      enrolments: [enrolment(1, "sam"), enrolment(1, "kim"), enrolment(3, "sam")],
+    })
+
+    assert.equal(roster.totals.teachers, 3)
+    assert.equal(after.totals.teachers, 2)
+    assert.ok(!after.teachers.some((t) => t.id === "ms-ada"))
+
+    // Her classes are still there, still hers, and still hold their students.
+    assert.equal(after.totals.classes, 3)
+    const year8 = after.classes.find((c) => c.id === 1)
+    assert.deepEqual(year8.teacher, { id: "ms-ada", name: "ms-ada", isSchoolMember: false })
+    assert.equal(year8.students.length, 2)
+
+    // The removed student keeps their enrolments but no longer holds a seat.
+    const sam = year8.students.find((s) => s.id === "sam")
+    assert.equal(sam.isSchoolMember, false)
+    assert.equal(year8.students.find((s) => s.id === "kim").isSchoolMember, true)
   })
 })

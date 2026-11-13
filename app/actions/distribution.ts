@@ -1,6 +1,6 @@
 "use server"
 
-import { and, eq, inArray, sql } from "drizzle-orm"
+import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 import { db } from "@/lib/db"
@@ -112,15 +112,32 @@ async function copyFilesToStudents(
     .where(and(inArray(libraryFiles.id, fileIds), eq(libraryFiles.teacherId, teacherId)))
   if (sourceFiles.length === 0) return 0
 
+  // Withdrawn copies are skipped: they are hidden records of a deleted
+  // original, and must not stop a new file of the same name being delivered.
   const existing = await tx
     .select({
       studentId: codeFiles.studentId,
       name: codeFiles.name,
       folderId: codeFiles.folderId,
+      sourceLibraryFileId: codeFiles.sourceLibraryFileId,
     })
     .from(codeFiles)
-    .where(and(eq(codeFiles.classId, classId), inArray(codeFiles.studentId, recipientIds)))
+    .where(
+      and(
+        eq(codeFiles.classId, classId),
+        inArray(codeFiles.studentId, recipientIds),
+        isNull(codeFiles.withdrawnAt),
+      ),
+    )
   const taken = new Set(existing.map((e) => `${e.studentId}::${e.folderId ?? "root"}::${e.name}`))
+  // A copy is recognised by the original it came from as well as by its name.
+  // After a rename, a student whose copy had to keep its old name still holds
+  // this file, and must not be sent a second copy of it.
+  const held = new Set(
+    existing
+      .filter((e) => e.sourceLibraryFileId !== null)
+      .map((e) => `${e.studentId}::${e.folderId ?? "root"}::${e.sourceLibraryFileId}`),
+  )
 
   const rows: (typeof codeFiles.$inferInsert)[] = []
 
@@ -129,6 +146,7 @@ async function copyFilesToStudents(
       const folderId = folderIdFor ? folderIdFor(student, file.folderId) : null
       const key = `${student}::${folderId ?? "root"}::${file.name}`
       if (taken.has(key)) continue
+      if (held.has(`${student}::${folderId ?? "root"}::${file.id}`)) continue
       // Two library files with one name, in folders that land in the same
       // place, would otherwise both be written in this single pass.
       taken.add(key)
@@ -248,6 +266,9 @@ export async function distributeFolder(
                 eq(studentFolders.language, folder.language),
                 eq(studentFolders.assignedByTeacher, true),
                 inArray(studentFolders.studentId, recipientIds),
+                // A withdrawn folder is a hidden record, never a place to put
+                // new work.
+                isNull(studentFolders.withdrawnAt),
               ),
             )
         : []
@@ -256,10 +277,22 @@ export async function distributeFolder(
     // not the "Week 1" at the top of the class.
     const placeKey = (student: string, parentId: number | null, name: string) =>
       `${student}::${parentId ?? "root"}::${name}`
+    // A copy that records which library folder it came from is found by that
+    // first, so it is still recognised after either side has been renamed.
+    const originKey = (student: string, parentId: number | null, sourceId: number) =>
+      `${student}::${parentId ?? "root"}::${sourceId}`
     const assignedAt = new Map<string, number>()
+    const copiedAt = new Map<string, number>()
+    const unlinked = new Set<number>()
     for (const f of assigned) {
       const key = placeKey(f.studentId, f.parentId, f.name)
       if (!assignedAt.has(key)) assignedAt.set(key, f.id)
+      if (f.sourceLibraryFolderId === null) {
+        unlinked.add(f.id)
+      } else {
+        const origin = originKey(f.studentId, f.parentId, f.sourceLibraryFolderId)
+        if (!copiedAt.has(origin)) copiedAt.set(origin, f.id)
+      }
     }
 
     // Library folder id -> student id -> that student's copy of the folder.
@@ -267,6 +300,9 @@ export async function distributeFolder(
     for (const source of sourceFolders) {
       const copies = new Map<string, number>()
       const missing: { studentId: string; parentId: number | null }[] = []
+      // Folders handed out before copies recorded their origin, matched here by
+      // name. They are linked now, so a later rename or delete reaches them.
+      const adopt: number[] = []
 
       for (const student of recipientIds) {
         // The folder being distributed lands at the top of the class, wherever
@@ -275,9 +311,28 @@ export async function distributeFolder(
           source.id === folderId || source.parentId === null
             ? null
             : (copyOf.get(source.parentId)?.get(student) ?? null)
-        const existing = assignedAt.get(placeKey(student, parentCopy, source.name))
-        if (existing !== undefined) copies.set(student, existing)
-        else missing.push({ studentId: student, parentId: parentCopy })
+        const existing =
+          copiedAt.get(originKey(student, parentCopy, source.id)) ??
+          assignedAt.get(placeKey(student, parentCopy, source.name))
+        if (existing === undefined) {
+          missing.push({ studentId: student, parentId: parentCopy })
+          continue
+        }
+        copies.set(student, existing)
+        if (unlinked.delete(existing)) adopt.push(existing)
+      }
+
+      for (let start = 0; start < adopt.length; start += INSERT_BATCH) {
+        await tx
+          .update(studentFolders)
+          .set({ sourceLibraryFolderId: source.id })
+          .where(
+            and(
+              inArray(studentFolders.id, adopt.slice(start, start + INSERT_BATCH)),
+              eq(studentFolders.classId, classId),
+              isNull(studentFolders.sourceLibraryFolderId),
+            ),
+          )
       }
 
       for (let start = 0; start < missing.length; start += INSERT_BATCH) {
@@ -291,12 +346,14 @@ export async function distributeFolder(
               name: source.name,
               language: source.language,
               assignedByTeacher: true,
+              sourceLibraryFolderId: source.id,
             })),
           )
           .returning()
         for (const c of created) {
           copies.set(c.studentId, c.id)
           assignedAt.set(placeKey(c.studentId, c.parentId, c.name), c.id)
+          copiedAt.set(originKey(c.studentId, c.parentId, source.id), c.id)
         }
       }
 

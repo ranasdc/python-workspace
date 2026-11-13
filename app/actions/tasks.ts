@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq, sql } from "drizzle-orm"
+import { and, desc, eq, isNull, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 import { db } from "@/lib/db"
@@ -276,7 +276,9 @@ export async function getTaskForStudentFile(fileId: number): Promise<StudentTask
   const [file] = await db
     .select()
     .from(codeFiles)
-    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, me.id)))
+    .where(
+      and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, me.id), isNull(codeFiles.withdrawnAt)),
+    )
   if (!file || file.sourceLibraryFileId === null) return null
 
   // Columns are listed rather than selecting the row and picking fields

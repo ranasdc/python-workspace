@@ -17,7 +17,7 @@ import {
   assertCanCreateFolder,
   requireTeacherCapability,
 } from "@/lib/entitlements"
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import {
   normaliseFileName,
@@ -63,6 +63,7 @@ export async function getStudentFiles(classId: number, languageInput: LanguageId
           eq(studentFolders.classId, classId),
           eq(studentFolders.studentId, student.id),
           eq(studentFolders.language, language),
+          isNull(studentFolders.withdrawnAt),
         ),
       )
       .orderBy(asc(studentFolders.name)),
@@ -74,6 +75,7 @@ export async function getStudentFiles(classId: number, languageInput: LanguageId
           eq(codeFiles.classId, classId),
           eq(codeFiles.studentId, student.id),
           eq(codeFiles.language, language),
+          isNull(codeFiles.withdrawnAt),
         ),
       )
       .orderBy(asc(codeFiles.name)),
@@ -141,6 +143,7 @@ export async function createFile(
           eq(studentFolders.studentId, student.id),
           eq(studentFolders.classId, classId),
           eq(studentFolders.language, language),
+          isNull(studentFolders.withdrawnAt),
         ),
       )
     if (!folder) throw new Error("Folder not found")
@@ -197,6 +200,7 @@ export async function createStudentFolder(
           eq(studentFolders.classId, classId),
           eq(studentFolders.studentId, student.id),
           eq(studentFolders.language, language),
+          isNull(studentFolders.withdrawnAt),
         ),
       )
     const depth = folderDepth(siblings, parentId)
@@ -221,7 +225,13 @@ export async function deleteStudentFolder(folderId: number) {
   const [folder] = await db
     .select()
     .from(studentFolders)
-    .where(and(eq(studentFolders.id, folderId), eq(studentFolders.studentId, student.id)))
+    .where(
+      and(
+        eq(studentFolders.id, folderId),
+        eq(studentFolders.studentId, student.id),
+        isNull(studentFolders.withdrawnAt),
+      ),
+    )
   if (!folder) throw new Error("Folder not found")
 
   // Work handed down by a teacher belongs to the assignment, not the student,
@@ -243,6 +253,7 @@ export async function deleteStudentFolder(folderId: number) {
         eq(studentFolders.studentId, student.id),
         eq(studentFolders.classId, folder.classId),
         eq(studentFolders.language, folder.language),
+        isNull(studentFolders.withdrawnAt),
       ),
     )
   const doomed = subtreeFolderIds(owned, folderId)
@@ -251,9 +262,18 @@ export async function deleteStudentFolder(folderId: number) {
   }
 
   await db.transaction(async (tx) => {
+    // A folder handed over after its teacher's files were withdrawn can still
+    // hold those withdrawn copies. They are records, not the student's files,
+    // so they are left in place rather than deleted along with the folder.
     await tx
       .delete(codeFiles)
-      .where(and(inArray(codeFiles.folderId, doomed), eq(codeFiles.studentId, student.id)))
+      .where(
+        and(
+          inArray(codeFiles.folderId, doomed),
+          eq(codeFiles.studentId, student.id),
+          isNull(codeFiles.withdrawnAt),
+        ),
+      )
     await tx
       .delete(studentFolders)
       .where(and(inArray(studentFolders.id, doomed), eq(studentFolders.studentId, student.id)))
@@ -267,7 +287,15 @@ export async function saveFile(fileId: number, content: string) {
   const [file] = await db
     .select()
     .from(codeFiles)
-    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
+    .where(
+      and(
+        eq(codeFiles.id, fileId),
+        eq(codeFiles.studentId, student.id),
+        // A file the teacher has withdrawn is no longer the student's to edit
+        // or delete, even from a tab that still had it open.
+        isNull(codeFiles.withdrawnAt),
+      ),
+    )
   if (!file) throw new Error("File not found")
 
   // Reading a class's files already requires being enrolled in it; writing has
@@ -296,7 +324,15 @@ export async function deleteFile(fileId: number) {
   const [file] = await db
     .select()
     .from(codeFiles)
-    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, student.id)))
+    .where(
+      and(
+        eq(codeFiles.id, fileId),
+        eq(codeFiles.studentId, student.id),
+        // A file the teacher has withdrawn is no longer the student's to edit
+        // or delete, even from a tab that still had it open.
+        isNull(codeFiles.withdrawnAt),
+      ),
+    )
   if (!file) throw new Error("File not found")
 
   // Work kept after a student leaves a class is a record, and stays one: only
@@ -350,7 +386,13 @@ export async function getClassTree(classId: number, languageInput: LanguageId = 
     ? await db
         .select()
         .from(codeFiles)
-        .where(and(eq(codeFiles.classId, classId), eq(codeFiles.language, language)))
+        .where(
+          and(
+            eq(codeFiles.classId, classId),
+            eq(codeFiles.language, language),
+            isNull(codeFiles.withdrawnAt),
+          ),
+        )
         .orderBy(desc(codeFiles.updatedAt))
     : []
 
@@ -362,6 +404,7 @@ export async function getClassTree(classId: number, languageInput: LanguageId = 
           and(
             eq(studentFolders.classId, classId),
             eq(studentFolders.language, language),
+            isNull(studentFolders.withdrawnAt),
           ),
         )
         .orderBy(asc(studentFolders.name))
@@ -391,7 +434,10 @@ export async function getClassTree(classId: number, languageInput: LanguageId = 
 
 // Load a file and verify the teacher owns the class it belongs to.
 async function requireTeacherForFile(teacherId: string, fileId: number) {
-  const [file] = await db.select().from(codeFiles).where(eq(codeFiles.id, fileId))
+  const [file] = await db
+    .select()
+    .from(codeFiles)
+    .where(and(eq(codeFiles.id, fileId), isNull(codeFiles.withdrawnAt)))
   if (!file) throw new Error("File not found")
   const [cls] = await db
     .select()
@@ -406,7 +452,10 @@ async function requireTeacherForFile(teacherId: string, fileId: number) {
 export async function getFileComments(fileId: number) {
   const me = await requireUser()
 
-  const [file] = await db.select().from(codeFiles).where(eq(codeFiles.id, fileId))
+  const [file] = await db
+    .select()
+    .from(codeFiles)
+    .where(and(eq(codeFiles.id, fileId), isNull(codeFiles.withdrawnAt)))
   if (!file) throw new Error("File not found")
 
   if (file.studentId !== me.id) {
@@ -463,7 +512,7 @@ export async function getFileComments(fileId: number) {
   .select({ studentId: codeFiles.studentId })
   .from(fileComments)
   .innerJoin(codeFiles, eq(codeFiles.id, fileComments.fileId))
-  .where(eq(fileComments.id, commentId))
+  .where(and(eq(fileComments.id, commentId), isNull(codeFiles.withdrawnAt)))
   .limit(1)
   
   if (!row) throw new Error("Comment not found")

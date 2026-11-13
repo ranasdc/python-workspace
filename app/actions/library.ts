@@ -23,7 +23,6 @@ import {
   canHoldSubfolder,
   folderDepth,
   FOLDER_DEPTH_MESSAGE,
-  subtreeFolderIds,
 } from "@/lib/ide/folder-tree"
 
 // Capability comes from the entitlement engine, not from the session's `role`
@@ -141,34 +140,6 @@ export async function createLibraryFolder(
   return { ok: true, folder: created }
 }
 
-export async function deleteLibraryFolder(folderId: number) {
-  const teacher = await requireTeacher()
-
-  // Remove the folder with everything inside it: its files, its subfolders and
-  // their files. Only this teacher's rows are read, so the subtree can never
-  // reach into a colleague's library.
-  const owned = await db
-    .select({
-      id: libraryFolders.id,
-      parentId: libraryFolders.parentId,
-      name: libraryFolders.name,
-    })
-    .from(libraryFolders)
-    .where(eq(libraryFolders.teacherId, teacher.id))
-  const doomed = subtreeFolderIds(owned, folderId)
-
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(libraryFiles)
-      .where(and(inArray(libraryFiles.folderId, doomed), eq(libraryFiles.teacherId, teacher.id)))
-    await tx
-      .delete(libraryFolders)
-      .where(and(inArray(libraryFolders.id, doomed), eq(libraryFolders.teacherId, teacher.id)))
-  })
-  revalidatePath("/teacher")
-  return { ok: true }
-}
-
 // ---------- Files ----------
 
 export type CreateLibraryFileResult =
@@ -236,14 +207,5 @@ export async function saveLibraryFile(fileId: number, content: string) {
     .update(libraryFiles)
     .set({ content, updatedAt: new Date() })
     .where(and(eq(libraryFiles.id, fileId), eq(libraryFiles.teacherId, teacher.id)))
-  return { ok: true }
-}
-
-export async function deleteLibraryFile(fileId: number) {
-  const teacher = await requireTeacher()
-  await db
-    .delete(libraryFiles)
-    .where(and(eq(libraryFiles.id, fileId), eq(libraryFiles.teacherId, teacher.id)))
-  revalidatePath("/teacher")
   return { ok: true }
 }

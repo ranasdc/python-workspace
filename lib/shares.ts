@@ -108,7 +108,9 @@ async function loadCodeSource(fileId: number): Promise<LoadedSource | null> {
       folderId: codeFiles.folderId,
     })
     .from(codeFiles)
-    .where(eq(codeFiles.id, fileId))
+    // A withdrawn copy is no longer the student's to show, so a link to it
+    // stops resolving, the same as for a deleted file.
+    .where(and(eq(codeFiles.id, fileId), isNull(codeFiles.withdrawnAt)))
     .limit(1)
 
   if (!file) return null
@@ -121,6 +123,7 @@ async function loadCodeSource(fileId: number): Promise<LoadedSource | null> {
         eq(codeFiles.classId, file.classId),
         eq(codeFiles.studentId, file.studentId),
         eq(codeFiles.language, file.language),
+        isNull(codeFiles.withdrawnAt),
         // A null folderId means the class root, which `eq` cannot express.
         file.folderId === null
           ? isNull(codeFiles.folderId)

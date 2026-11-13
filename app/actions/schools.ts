@@ -358,19 +358,88 @@ export async function joinSchoolWithCode(formData: FormData) {
   }
 }
 
-export async function removeSchoolMember(schoolId: number, userId: string) {
-  const admin = await requireSchoolAdmin(schoolId)
-  if (userId === admin.user.id) throw new Error("You cannot remove yourself")
+export type RemoveSchoolMemberResult =
+  | { ok: true; alreadyRemoved: boolean; role: string }
+  | { ok: false; message: string }
 
-  await db
+/**
+ * Take a teacher or student out of a school.
+ *
+ * This ends one thing: the `school_member` row linking this person to this
+ * school, which is set to "removed" rather than deleted. It is deliberately
+ * not either of the two operations it is easily mistaken for:
+ *
+ * - It is not removing a student from a class. Enrolments are untouched; that
+ *   is `removeStudentFromClass`, and belongs to the class teacher.
+ * - It is not deleting an account. The user row, their login, their files,
+ *   submissions, feedback, classes and library are never read or written here.
+ *
+ * Because only the row for this school is updated, nothing the person holds
+ * anywhere else can be affected.
+ *
+ * Refusals are returned rather than thrown, so the confirmation dialog can
+ * show the reason: a thrown Server Action error is redacted in production.
+ */
+export async function removeSchoolMember(
+  schoolId: number,
+  userId: string,
+): Promise<RemoveSchoolMemberResult> {
+  if (!Number.isInteger(schoolId) || schoolId <= 0) {
+    return { ok: false, message: "School not found." }
+  }
+  if (typeof userId !== "string" || userId.length === 0) {
+    return { ok: false, message: "That person could not be found." }
+  }
+
+  // Authority is established here, from the caller's own membership row, for
+  // the school named in the request. An administrator of another school fails
+  // this check however the request was built, and the confirmation dialog
+  // plays no part in it.
+  let admin: Awaited<ReturnType<typeof requireSchoolAdmin>>
+  try {
+    admin = await requireSchoolAdmin(schoolId)
+  } catch {
+    return { ok: false, message: "You don't have permission to manage this school." }
+  }
+
+  if (userId === admin.user.id) {
+    return { ok: false, message: "You can't remove yourself from the school." }
+  }
+
+  const [member] = await db
+    .select({ role: schoolMembers.role, status: schoolMembers.status })
+    .from(schoolMembers)
+    .where(and(eq(schoolMembers.schoolId, admin.schoolId), eq(schoolMembers.userId, userId)))
+    .limit(1)
+  if (!member) {
+    return { ok: false, message: "That person is not a member of this school." }
+  }
+
+  // The dashboard offers no way to remove an administrator, and the server
+  // agrees with it: otherwise a hand-built request could leave a school with
+  // nobody able to manage it.
+  if (isSchoolAdminRole(member.role as Parameters<typeof isSchoolAdminRole>[0])) {
+    return { ok: false, message: "A school administrator can't be removed here." }
+  }
+
+  // Conditional on the row still being active, so a double-click or a retry
+  // changes nothing the second time and is reported as already done.
+  const removed = await db
     .update(schoolMembers)
     .set({ status: "removed" })
     .where(
-      and(eq(schoolMembers.schoolId, admin.schoolId), eq(schoolMembers.userId, userId)),
+      and(
+        eq(schoolMembers.schoolId, admin.schoolId),
+        eq(schoolMembers.userId, userId),
+        eq(schoolMembers.status, "active"),
+      ),
     )
+    .returning({ id: schoolMembers.id })
 
   revalidatePath("/school")
-  return { ok: true }
+  revalidatePath("/teacher")
+  revalidatePath("/student")
+  return { ok: true, alreadyRemoved: removed.length === 0, role: member.role }
 }
 
 export async function getSchoolOverview() {

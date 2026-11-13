@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { and, eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { aiHelpUnlocks, classes, codeFiles } from "@/lib/db/schema"
@@ -27,7 +27,9 @@ export async function resolveAiHelpForFile(userId: string, fileId: number) {
     })
     .from(codeFiles)
     .innerJoin(classes, eq(classes.id, codeFiles.classId))
-    .where(and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, userId)))
+    .where(
+      and(eq(codeFiles.id, fileId), eq(codeFiles.studentId, userId), isNull(codeFiles.withdrawnAt)),
+    )
     .limit(1)
   if (!row) throw new AccessError("File not found.")
 
